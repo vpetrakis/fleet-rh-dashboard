@@ -1,0 +1,65 @@
+# =========================
+# FRONTEND (Next.js / Node)
+# =========================
+# dependencies
+/frontend/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/frontend/coverage
+
+# next.js
+/frontend/.next/
+/frontend/out/
+
+# production
+/frontend/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files
+.env*.local
+.env
+
+# =========================
+# BACKEND (Python / FastAPI)
+# =========================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+/backend/venv/
+/backend/env/
+/backend/.venv/
+env/
+venv/
+ENV/
+
+# Database files
+*.sqlite3
+*.db
+
+# Document parsing temp files
+*.tmp
+~$*.doc
+~$*.docx
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
