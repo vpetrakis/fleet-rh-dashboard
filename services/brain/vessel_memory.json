@@ -1,0 +1,755 @@
+{
+  "status": "success",
+  "vessel": "MV ALEXIS",
+  "is_fallback": true,
+  "config": {
+    "me_cyls": 5,
+    "dg_count": 3,
+    "aux_cyls": 6
+  },
+  "integrity": 89,
+  "diagnostics": [
+    {
+      "severity": "critical",
+      "section": "Gen 1",
+      "component": "Fuel Valves",
+      "slot": 1,
+      "hours": 2397,
+      "limit": 1200,
+      "pct": 199.8,
+      "message": "OVERDUE by 1,197 hrs (200% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "Gen 1",
+      "component": "Fuel Valves",
+      "slot": 2,
+      "hours": 2397,
+      "limit": 1200,
+      "pct": 199.8,
+      "message": "OVERDUE by 1,197 hrs (200% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "Gen 1",
+      "component": "Fuel Valves",
+      "slot": 3,
+      "hours": 2397,
+      "limit": 1200,
+      "pct": 199.8,
+      "message": "OVERDUE by 1,197 hrs (200% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "Gen 1",
+      "component": "Fuel Valves",
+      "slot": 4,
+      "hours": 2397,
+      "limit": 1200,
+      "pct": 199.8,
+      "message": "OVERDUE by 1,197 hrs (200% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "Gen 1",
+      "component": "Fuel Valves",
+      "slot": 5,
+      "hours": 2397,
+      "limit": 1200,
+      "pct": 199.8,
+      "message": "OVERDUE by 1,197 hrs (200% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "DG General",
+      "component": "L.O. Cooler",
+      "slot": 1,
+      "hours": 7225,
+      "limit": 4000,
+      "pct": 180.6,
+      "message": "OVERDUE by 3,225 hrs (181% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "DG General",
+      "component": "L.O. Cooler",
+      "slot": 3,
+      "hours": 6615,
+      "limit": 4000,
+      "pct": 165.4,
+      "message": "OVERDUE by 2,615 hrs (165% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "DG General",
+      "component": "Air Cooler",
+      "slot": 3,
+      "hours": 6419,
+      "limit": 4000,
+      "pct": 160.5,
+      "message": "OVERDUE by 2,419 hrs (160% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "DG General",
+      "component": "L.O. Cooler",
+      "slot": 2,
+      "hours": 5980,
+      "limit": 4000,
+      "pct": 149.5,
+      "message": "OVERDUE by 1,980 hrs (150% of limit)"
+    },
+    {
+      "severity": "critical",
+      "section": "DG General",
+      "component": "Cooling Water Pump",
+      "slot": 3,
+      "hours": 5952,
+      "limit": 5000,
+      "pct": 119.0,
+      "message": "OVERDUE by 952 hrs (119% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Connecting Rod",
+      "slot": 1,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Connecting Rod",
+      "slot": 2,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Connecting Rod",
+      "slot": 3,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Connecting Rod",
+      "slot": 4,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Connecting Rod",
+      "slot": 5,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Crank Pin Bearing",
+      "slot": 1,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Crank Pin Bearing",
+      "slot": 2,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Crank Pin Bearing",
+      "slot": 3,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Crank Pin Bearing",
+      "slot": 4,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 1",
+      "component": "Crank Pin Bearing",
+      "slot": 5,
+      "hours": 9872,
+      "limit": 10000,
+      "pct": 98.7,
+      "message": "Due in 128 hrs (99% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "DG General",
+      "component": "Alternator",
+      "slot": 3,
+      "hours": 4901,
+      "limit": 5000,
+      "pct": 98.0,
+      "message": "Due in 99 hrs (98% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "DG General",
+      "component": "Thrust Bearing",
+      "slot": 1,
+      "hours": 9557,
+      "limit": 10000,
+      "pct": 95.6,
+      "message": "Due in 443 hrs (96% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 2",
+      "component": "Connecting Rod",
+      "slot": 1,
+      "hours": 9230,
+      "limit": 10000,
+      "pct": 92.3,
+      "message": "Due in 770 hrs (92% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 2",
+      "component": "Connecting Rod",
+      "slot": 2,
+      "hours": 9230,
+      "limit": 10000,
+      "pct": 92.3,
+      "message": "Due in 770 hrs (92% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 2",
+      "component": "Connecting Rod",
+      "slot": 3,
+      "hours": 9230,
+      "limit": 10000,
+      "pct": 92.3,
+      "message": "Due in 770 hrs (92% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 2",
+      "component": "Connecting Rod",
+      "slot": 4,
+      "hours": 9230,
+      "limit": 10000,
+      "pct": 92.3,
+      "message": "Due in 770 hrs (92% of limit)"
+    },
+    {
+      "severity": "warning",
+      "section": "Gen 2",
+      "component": "Connecting Rod",
+      "slot": 5,
+      "hours": 9230,
+      "limit": 10000,
+      "pct": 92.3,
+      "message": "Due in 770 hrs (92% of limit)"
+    }
+  ],
+  "matrices": {
+    "main_engine": [
+      {
+        "component": "CYLINDER COVER",
+        "limit": 16000,
+        "hours": [
+          "2040",
+          "2040",
+          "2040",
+          "2040",
+          "2350"
+        ]
+      },
+      {
+        "component": "PISTON ASSEMBLY",
+        "limit": 16000,
+        "hours": [
+          "2040",
+          "2040",
+          "2040",
+          "2040",
+          "2350"
+        ]
+      },
+      {
+        "component": "STUFFING BOX",
+        "limit": 16000,
+        "hours": [
+          "3444",
+          "3719",
+          "3719",
+          "3719",
+          "3719"
+        ]
+      },
+      {
+        "component": "PISTON CROWN",
+        "limit": 32000,
+        "hours": [
+          "3444",
+          "2040",
+          "3719",
+          "3719",
+          "3719"
+        ]
+      },
+      {
+        "component": "CYLINDER LINER",
+        "limit": 32000,
+        "hours": [
+          "3444",
+          "2040",
+          "3719",
+          "3719",
+          "3719"
+        ]
+      },
+      {
+        "component": "EXHAUST VALVE",
+        "limit": 16000,
+        "hours": [
+          "-",
+          "-",
+          "-",
+          "-",
+          "-"
+        ]
+      },
+      {
+        "component": "STARTING VALVE",
+        "limit": 12000,
+        "hours": [
+          "3719",
+          "3719",
+          "3719",
+          "3719",
+          "3719"
+        ]
+      },
+      {
+        "component": "SAFETY VALVE",
+        "limit": 12000,
+        "hours": [
+          "3287",
+          "3287",
+          "3287",
+          "3287",
+          "3287"
+        ]
+      },
+      {
+        "component": "FUEL VALVES",
+        "limit": 8000,
+        "hours": [
+          "2901",
+          "881",
+          "2901",
+          "2901",
+          "2901"
+        ]
+      },
+      {
+        "component": "FUEL PUMP",
+        "limit": 16000,
+        "hours": [
+          "3719",
+          "3719",
+          "3719",
+          "3719",
+          "3719"
+        ]
+      },
+      {
+        "component": "PLUNGER AND BARREL",
+        "limit": 32000,
+        "hours": [
+          "3719",
+          "3719",
+          "3719",
+          "3719",
+          "3719"
+        ]
+      },
+      {
+        "component": "FUEL PUMP SUCTION VALVE",
+        "limit": 8000,
+        "hours": [
+          "3719",
+          "3719",
+          "3719",
+          "3719",
+          "3719"
+        ]
+      },
+      {
+        "component": "FUEL PUMP PUNCTURE VALVE",
+        "limit": 8000,
+        "hours": [
+          "3719",
+          "3719",
+          "3719",
+          "3719",
+          "3719"
+        ]
+      },
+      {
+        "component": "CROSSHEAD BEARINGS",
+        "limit": 32000,
+        "hours": [
+          "25436",
+          "7820",
+          "25436",
+          "25436",
+          "25436"
+        ]
+      },
+      {
+        "component": "BOTTOM END BEARINGS",
+        "limit": 32000,
+        "hours": [
+          "25436",
+          "7820",
+          "25436",
+          "25436",
+          "25436"
+        ]
+      },
+      {
+        "component": "MAIN BEARINGS",
+        "limit": 32000,
+        "hours": [
+          "25436",
+          "7820",
+          "25436",
+          "25436",
+          "25436"
+        ]
+      }
+    ],
+    "dg_general": [
+      {
+        "component": "Turbocharger",
+        "limit": 5000,
+        "hours": [
+          "2765",
+          "72",
+          "2151"
+        ]
+      },
+      {
+        "component": "Air Cooler",
+        "limit": 4000,
+        "hours": [
+          "2765",
+          "1851",
+          "6419"
+        ]
+      },
+      {
+        "component": "L.O. Cooler",
+        "limit": 4000,
+        "hours": [
+          "7225",
+          "5980",
+          "6615"
+        ]
+      },
+      {
+        "component": "Cooling Water Pump",
+        "limit": 5000,
+        "hours": [
+          "2765",
+          "101",
+          "5952"
+        ]
+      },
+      {
+        "component": "F.W. Cooler",
+        "limit": 4000,
+        "hours": [
+          "523",
+          "32",
+          "503"
+        ]
+      },
+      {
+        "component": "L.O. Renewal",
+        "limit": 1500,
+        "hours": [
+          "283",
+          "101",
+          "362"
+        ]
+      },
+      {
+        "component": "Alternator",
+        "limit": 5000,
+        "hours": [
+          "1881",
+          "288",
+          "4901"
+        ]
+      },
+      {
+        "component": "Thrust Bearing",
+        "limit": 10000,
+        "hours": [
+          "9557",
+          "8520",
+          "5952"
+        ]
+      }
+    ],
+    "aux_engine": [
+      {
+        "component": "Cylinder Head",
+        "limit": 5000,
+        "dg_hours": [
+          [
+            "2765",
+            "2765",
+            "2765",
+            "2765",
+            "2765",
+            "-"
+          ],
+          [
+            "1398",
+            "1398",
+            "1398",
+            "1398",
+            "1398",
+            "-"
+          ],
+          [
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "-"
+          ]
+        ]
+      },
+      {
+        "component": "Piston",
+        "limit": 10000,
+        "dg_hours": [
+          [
+            "2765",
+            "2765",
+            "2765",
+            "2765",
+            "2765",
+            "-"
+          ],
+          [
+            "1398",
+            "1398",
+            "1398",
+            "1398",
+            "1398",
+            "-"
+          ],
+          [
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "-"
+          ]
+        ]
+      },
+      {
+        "component": "Connecting Rod",
+        "limit": 10000,
+        "dg_hours": [
+          [
+            "9872",
+            "9872",
+            "9872",
+            "9872",
+            "9872",
+            "-"
+          ],
+          [
+            "9230",
+            "9230",
+            "9230",
+            "9230",
+            "9230",
+            "-"
+          ],
+          [
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "-"
+          ]
+        ]
+      },
+      {
+        "component": "Cylinder Liners",
+        "limit": 10000,
+        "dg_hours": [
+          [
+            "2765",
+            "2765",
+            "2765",
+            "2765",
+            "2765",
+            "-"
+          ],
+          [
+            "1398",
+            "1398",
+            "1398",
+            "1398",
+            "1398",
+            "-"
+          ],
+          [
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "-"
+          ]
+        ]
+      },
+      {
+        "component": "Fuel Valves",
+        "limit": 1200,
+        "dg_hours": [
+          [
+            "2397",
+            "2397",
+            "2397",
+            "2397",
+            "2397",
+            "-"
+          ],
+          [
+            "664",
+            "664",
+            "664",
+            "664",
+            "664",
+            "-"
+          ],
+          [
+            "362",
+            "362",
+            "362",
+            "362",
+            "362",
+            "-"
+          ]
+        ]
+      },
+      {
+        "component": "Fuel Pumps",
+        "limit": 5000,
+        "dg_hours": [
+          [
+            "2765",
+            "2765",
+            "2765",
+            "2765",
+            "2765",
+            "-"
+          ],
+          [
+            "664",
+            "664",
+            "664",
+            "664",
+            "664",
+            "-"
+          ],
+          [
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "-"
+          ]
+        ]
+      },
+      {
+        "component": "Crank Pin Bearing",
+        "limit": 10000,
+        "dg_hours": [
+          [
+            "9872",
+            "9872",
+            "9872",
+            "9872",
+            "9872",
+            "-"
+          ],
+          [
+            "72",
+            "72",
+            "72",
+            "72",
+            "72",
+            "-"
+          ],
+          [
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "2151",
+            "-"
+          ]
+        ]
+      }
+    ]
+  },
+  "_upload": {
+    "original_filename": "TEC04-00_RUNNING_HOURS_MONTHLY_REPORT.doc",
+    "bytes": 254464,
+    "uploaded_at": "2026-04-03T09:15:23.094151+00:00"
+  },
+  "_saved_at": "2026-04-03T09:15:23.094167+00:00"
+}
