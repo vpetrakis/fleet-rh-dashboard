@@ -110,7 +110,7 @@ st.markdown("""
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
-# --- 2. FORENSIC TELEMETRY DATA PIPELINE (100% DATA INTEGRITY) ---
+# --- 2. FORENSIC TELEMETRY STREAM ENGINE (100% LINEAR CELL MAPPING) ---
 def clean_extracted_number(val) -> float:
     if pd.isna(val) or val == "" or val == "-":
         return 0.0
@@ -135,6 +135,7 @@ def clean_extracted_number(val) -> float:
         return 0.0
 
 def execute_stream_ingestion(file_bytes) -> tuple:
+    """Decodes report stream linearly by tracking index fields relative to cell delimiters."""
     text = file_bytes.decode('utf-8', errors='ignore')
     
     vessel, date_str = "UNKNOWN ASSET", "UNKNOWN DATE"
@@ -143,9 +144,13 @@ def execute_stream_ingestion(file_bytes) -> tuple:
     d_m = re.search(r"Date:\s*([\d\s\w]+)", text, re.IGNORECASE)
     if d_m: date_str = d_m.group(1).strip()
 
+    # Split cleanly by Word binary cell tokens, stripping noise and preserving positions
+    raw_tokens = text.split('\x07')
+    tokens = [t.replace('\r', '').replace('\n', '').strip() for t in raw_tokens]
+
     records = []
     
-    # 1. Main Engine Structural Definition Tables
+    # 1. Main Engine Flat Mapping Framework
     me_definitions = [
         ("CYLINDER COVER", 16000), ("PISTON ASSEMBLY", 16000), ("STUFFING BOX", 16000), 
         ("PISTON CROWN", 32000), ("CYLINDER LINER", 16000), ("EXHAUST VALVE", 16000), 
@@ -155,63 +160,96 @@ def execute_stream_ingestion(file_bytes) -> tuple:
     ]
     
     for comp, periodicity in me_definitions:
-        block = re.search(rf"{re.escape(comp)}\x07.*?\x072\x07([^\x0d]+)", text, re.DOTALL | re.IGNORECASE)
-        if block:
-            tokens = [t.strip() for t in block.group(1).split('\x07') if t.strip()]
-            for idx, h_val in enumerate(tokens[:7]):
-                records.append({
-                    "Subsystem": "MAIN ENGINE", "Component Group": comp, "Location Unit": f"Cyl No.{idx+1}",
-                    "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(h_val)
-                })
+        for idx, token in enumerate(tokens):
+            if token.upper() == comp:
+                # Scan stream forward for the subsequent row's sequence hours value marker
+                scan_idx = idx + 1
+                while scan_idx < len(tokens) and tokens[scan_idx] != '2':
+                    scan_idx += 1
+                
+                if scan_idx < len(tokens) and tokens[scan_idx] == '2':
+                    # Extract positions sequentially across all 7 cylinders
+                    for cyl in range(7):
+                        if scan_idx + 1 + cyl < len(tokens):
+                            hrs_val = tokens[scan_idx + 1 + cyl]
+                            records.append({
+                                "Subsystem": "MAIN ENGINE", "Component Group": comp, "Location Unit": f"Cyl No.{cyl+1}",
+                                "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(hrs_val)
+                            })
+                break
 
-    # 2. Auxiliary Engine Structural Definition Tables
+    # 2. Auxiliary Engine Flat Mapping Framework
     aux_definitions = [
         ("Cylinder Head", 12000), ("Piston", 10000), ("Connecting Rod", 10000), 
-        ("Cylinder Liners", 10000), ("Fuel Valves (1)", 2000), ("Fuel Pumps", 5000),
+        ("Cylinder Liners", 10000), ("Fuel Valves", 2000), ("Fuel Pumps", 5000),
         ("Crank Pin Bearing", 12000), ("Main Bearing", 12000), ("Adjust Valve Head Clearance", 1200)
     ]
     
     for comp, periodicity in aux_definitions:
-        block = re.search(rf"{re.escape(comp)}\x07.*?\x072\x07([^\x0d]+)", text, re.DOTALL | re.IGNORECASE)
-        if block:
-            tokens = [t.strip() for t in block.group(1).split('\x07') if t.strip()]
-            for i in range(1, 4):
-                for cyl in range(6):
-                    token_idx = ((i - 1) * 6) + cyl
-                    if token_idx < len(tokens):
-                        records.append({
-                            "Subsystem": "AUX ENGINE", "Component Group": comp.replace(" (1)", ""), "Location Unit": f"DG No.{i} - Cyl No.{cyl+1}",
-                            "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(tokens[token_idx])
-                        })
+        for idx, token in enumerate(tokens):
+            if comp.upper() in token.upper():
+                scan_idx = idx + 1
+                while scan_idx < len(tokens) and tokens[scan_idx] != '2':
+                    scan_idx += 1
+                
+                if scan_idx < len(tokens) and tokens[scan_idx] == '2':
+                    # Flat extraction maps across all 3 Diesel Generators (6 Cylinders per unit)
+                    for i in range(1, 4):
+                        for cyl in range(6):
+                            token_offset = ((i - 1) * 6) + cyl
+                            if scan_idx + 1 + token_offset < len(tokens):
+                                hrs_val = tokens[scan_idx + 1 + token_offset]
+                                records.append({
+                                    "Subsystem": "AUX ENGINE", "Component Group": comp.upper(), "Location Unit": f"DG No.{i} - Cyl No.{cyl+1}",
+                                    "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(hrs_val)
+                                })
+                break
 
-    # 3. Other Equipment Sub-Matrix Definitions
+    # 3. Other Equipment Sub-Matrix Framework
     misc_definitions = [
         ("GENERAL O/H", 16000, "OTHER EQUIPMENT", "M/E T/C"), ("BALANCING OF ROTOR SHAFT", 32000, "OTHER EQUIPMENT", "M/E T/C"),
         ("AIR COOLER CLEANING", 4000, "OTHER EQUIPMENT", "M/E Air Cooler"), ("AIR COND. COMPRESSOR NO.1", 10000, "OTHER EQUIPMENT", "Compressor 1"),
         ("AIR COND. COMPRESSOR NO.2", 10000, "OTHER EQUIPMENT", "Compressor 2"), ("REFRIGERATION COMPRESSOR NO.1", 10000, "OTHER EQUIPMENT", "Compressor 1")
     ]
     for label, per, sub, unit in misc_definitions:
-        m = re.search(rf"{re.escape(label)}\x07.*?\x07([\d\.\,\s\[\]]+)\x07", text, re.IGNORECASE)
-        if m:
-            records.append({
-                "Subsystem": sub, "Component Group": label, "Location Unit": unit,
-                "Baseline Interval (Hrs)": float(per), "Current Running Hours": clean_extracted_number(m.group(1))
-            })
+        for idx, token in enumerate(tokens):
+            if label.upper() in token.upper():
+                scan_idx = idx + 1
+                hrs_val = "0"
+                if scan_idx < len(tokens):
+                    t1 = tokens[scan_idx]
+                    if any(m in t1.upper() for m in ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "/"]):
+                        if scan_idx + 1 < len(tokens):
+                            hrs_val = tokens[scan_idx + 1]
+                    else:
+                        if scan_idx + 1 < len(tokens):
+                            t2 = tokens[scan_idx + 1]
+                            if any(m in t2.upper() for m in ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "/"]):
+                                if scan_idx + 2 < len(tokens):
+                                    hrs_val = tokens[scan_idx + 2]
+                            else:
+                                hrs_val = t2
+                
+                records.append({
+                    "Subsystem": sub, "Component Group": label, "Location Unit": unit,
+                    "Baseline Interval (Hrs)": float(per), "Current Running Hours": clean_extracted_number(hrs_val)
+                })
+                break
 
     return vessel, date_str, pd.DataFrame(records)
 
-# --- 3. FRONTEND LAYOUT CONSOLE DESIGN ---
+# --- 3. FRONTEND NAVIGATION CONTROL DECK ---
 st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Running Hours Intelligence</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified enterprise deck for parsing operational reports, analyzing mechanical limit thresholds, and exporting telemetry matrices.</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("", type=["doc"])
 
 if uploaded_file is not None:
-    # Direct raw extraction pass without intermediate steps
+    # Execute structural linear extraction pass
     vessel_name, report_date, df = execute_stream_ingestion(uploaded_file.read())
     
     if not df.empty:
-        # Vectorized life-cycle consumed calculation
+        # Dynamic calculations off the clean generated matrix
         df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
         
         conditions = [(df['Current Running Hours'] == 0), (df['Lifecycle Consumed (%)'] >= THRESHOLD_RED), (df['Lifecycle Consumed (%)'] >= THRESHOLD_YELLOW)]
@@ -247,7 +285,7 @@ if uploaded_file is not None:
             </div>
         """, unsafe_allow_html=True)
 
-        # --- RECONFIGURED CLUSTER VIEWS: MAIN MATRIX SEPARATIONS ---
+        # --- SECTOR DATA TAB DECKS ---
         tab1, tab2, tab3 = st.tabs(["⚙️ Main Engine Matrix", "⚡ Aux Engine Matrix", "🛠️ Other Equipment Matrix"])
         
         ui_table_config = {
@@ -256,7 +294,7 @@ if uploaded_file is not None:
             "Location Unit": st.column_config.TextColumn("Location Profile"),
             "Baseline Interval (Hrs)": st.column_config.NumberColumn("Interval Limit (Hrs)", format="%d"),
             "Current Running Hours": st.column_config.NumberColumn("Running Hours", format="%.1f"),
-            "Lifecycle Consumed (%)": st.column_config.ProgressColumn("Fatigue Spectrum", format="%.1f%%", min_value=0.0, max_value=1.5),
+            "Lifecycle Consumed (%)": st.column_config.ProgressColumn("Fatigue Curve", format="%.1f%%", min_value=0.0, max_value=1.5),
             "Status": st.column_config.TextColumn("Diagnostic Condition State")
         }
 
@@ -266,16 +304,13 @@ if uploaded_file is not None:
             return ''
 
         with tab1:
-            st.markdown("<p style='color:#64748B; margin-top:10px; font-size:13px;'>Full flat matrix display for Main Engine components with zero layout hierarchy overrides.</p>", unsafe_allow_html=True)
             me_display = df[df['Subsystem'] == 'MAIN ENGINE'].sort_values(by=['Component Group', 'Location Unit'])
             st.dataframe(me_display.style.map(color_row_states, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_table_config)
 
         with tab2:
-            st.markdown("<p style='color:#64748B; margin-top:10px; font-size:13px;'>Full matrix distribution dataset for active prime movers and auxiliary diesel generators.</p>", unsafe_allow_html=True)
             aux_display = df[df['Subsystem'] == 'AUX ENGINE'].sort_values(by=['Component Group', 'Location Unit'])
             st.dataframe(aux_display.style.map(color_row_states, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_table_config)
 
         with tab3:
-            st.markdown("<p style='color:#64748B; margin-top:10px; font-size:13px;'>Full matrix overview for auxiliary plant assets, turbochargers, coolers, and critical components.</p>", unsafe_allow_html=True)
             misc_display = df[df['Subsystem'] == 'OTHER EQUIPMENT'].sort_values(by=['Component Group', 'Location Unit'])
             st.dataframe(misc_display.style.map(color_row_states, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_table_config)
