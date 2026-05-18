@@ -1,128 +1,156 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import re
 
-# --- 1. ARCHITECTURAL APEX: ULTRA-PREMIUM COMMAND COCKPIT ---
-st.set_page_config(page_title="Propulsion Command", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. THE ARCHITECTURAL APEX: NATIVE ULTRA-PREMIUM COMMAND COCKPIT ---
+st.set_page_config(page_title="Propulsion Command Control", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
     
+    /* Absolute Canvas Reset - High-End Minimalist Stealth Theme */
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         background: radial-gradient(circle at 50% -20%, #0F172A 0%, #020617 100%);
         color: #F8FAFC;
     }
     
+    /* Conceal Default Server Headers and Footers for Native App Experience */
     [data-testid="stHeader"], footer {visibility: hidden;}
     
+    /* Advanced Interface Presentation Animations */
     @keyframes smoothReveal {
-        from { opacity: 0; transform: translateY(15px); }
+        from { opacity: 0; transform: translateY(12px); }
         to { opacity: 1; transform: translateY(0); }
     }
+    @keyframes radarPulse {
+        0% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
+        50% { border-color: rgba(248, 113, 113, 0.5); box-shadow: 0 0 25px 0 rgba(248, 113, 113, 0.2); }
+        100% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
+    }
 
+    /* Premium Glassmorphic KPI Row Layout */
     .dashboard-deck {
         display: flex;
-        gap: 20px;
-        margin-bottom: 30px;
+        gap: 24px;
+        margin-bottom: 35px;
     }
     
     .dashboard-card {
         flex: 1;
-        background: linear-gradient(180deg, rgba(30, 41, 59, 0.3) 0%, rgba(15, 23, 42, 0.6) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        padding: 24px;
-        transition: transform 0.2s ease-out, border-color 0.2s ease-out;
-        animation: smoothReveal 0.5s ease-out both;
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.3) 0%, rgba(15, 23, 42, 0.5) 100%);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.03);
+        border-radius: 16px;
+        padding: 26px;
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        animation: smoothReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
     
     .dashboard-card:hover {
-        transform: translateY(-3px);
-        border-color: rgba(56, 189, 248, 0.4);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        transform: translateY(-4px);
+        background: rgba(30, 41, 59, 0.5);
+        border-color: rgba(56, 189, 248, 0.25);
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
     }
     
-    .dashboard-deck > div:nth-child(1) { animation-delay: 0.1s; }
-    .dashboard-deck > div:nth-child(2) { animation-delay: 0.2s; }
-    .dashboard-deck > div:nth-child(3) { animation-delay: 0.3s; }
-    .dashboard-deck > div:nth-child(4) { animation-delay: 0.4s; }
-
-    .card-critical { border-top: 3px solid #F87171; }
-    .card-warning { border-top: 3px solid #FB923C; }
-    .card-good { border-top: 3px solid #34D399; }
+    .card-critical {
+        animation: smoothReveal 0.6s ease-out both, radarPulse 3s infinite ease-in-out;
+    }
     
-    .metric-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #64748B; font-weight: 600; }
-    .metric-data { font-size: 36px; font-weight: 700; margin-top: 10px; color: #FFFFFF; font-family: 'JetBrains Mono', monospace; letter-spacing: -1px; }
+    .metric-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 2.5px;
+        color: #64748B;
+        font-weight: 600;
+    }
+    
+    .metric-data {
+        font-size: 34px;
+        font-weight: 700;
+        margin-top: 12px;
+        color: #FFFFFF;
+        letter-spacing: -0.5px;
+    }
 
+    /* Custom Spreadsheet Wrapper Styles */
     div[data-testid="stDataFrame"] {
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.04) !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
         background-color: #090D1A !important;
-        animation: smoothReveal 0.6s ease-out 0.4s both;
     }
     
+    /* File Upload Area Customizations */
     div[data-testid="stFileUploadDropzone"] {
-        background-color: rgba(15, 23, 42, 0.3) !important;
-        border: 1px dashed rgba(56, 189, 248, 0.3) !important;
-        border-radius: 12px !important;
-        padding: 40px !important;
-        animation: smoothReveal 0.4s ease-out both;
+        background-color: rgba(15, 23, 42, 0.25) !important;
+        border: 1px dashed rgba(255, 255, 255, 0.1) !important;
+        border-radius: 16px !important;
+        padding: 35px !important;
     }
     div[data-testid="stFileUploadDropzone"]:hover {
         border-color: #38BDF8 !important;
-        background-color: rgba(30, 41, 59, 0.5) !important;
+        background-color: rgba(30, 41, 59, 0.25) !important;
     }
     
+    /* Modernized Tab Layout Styling */
     button[data-testid="stMarkdownContainer"] p {
-        font-size: 14px !important; font-weight: 600 !important; letter-spacing: 0.5px;
-    }
-
-    .native-chart-box {
-        background: rgba(15, 23, 42, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        padding: 24px;
-        animation: smoothReveal 0.6s ease-out 0.3s both;
-        height: 100%;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.5px;
     }
     </style>
 """, unsafe_allow_html=True)
 
+# Operational Rule Boundaries
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
-# --- 2. FAST NATIVE PARSER (ZERO NUMPY DEPENDENCY) ---
+# --- 2. FORENSIC TELEMETRY STREAM ENGINE (100% LINEAR CELL MAPPING) ---
 def clean_extracted_number(val) -> float:
-    if pd.isna(val) or val == "" or val == "-": return 0.0
+    if pd.isna(val) or val == "" or val == "-":
+        return 0.0
     s = str(val).upper().strip().replace('[', '').replace(']', '').replace(' ', '')
-    if any(x in s for x in ["N/A", "CENTRAL", "OBSERVATION", "COOLER"]): return 0.0
+    if any(x in s for x in ["N/A", "CENTRAL", "OBSERVATION", "COOLER"]):
+        return 0.0
     match = re.search(r'[\d\.\,]+', s)
-    if not match: return 0.0
+    if not match:
+        return 0.0
     num_str = match.group(0)
-    if ',' in num_str and '.' in num_str: num_str = num_str.replace(',', '')
+    if ',' in num_str and '.' in num_str:
+        num_str = num_str.replace(',', '')
     elif num_str.count(',') == 1:
-        if len(num_str.split(',')[1]) != 3: num_str = num_str.replace(',', '.')
-        else: num_str = num_str.replace(',', '')
+        if len(num_str.split(',')[1]) != 3:
+            num_str = num_str.replace(',', '.')
+        else:
+            num_str = num_str.replace(',', '')
     try:
         res = float(num_str)
         return 0.0 if res > 250000 else res
-    except ValueError: return 0.0
+    except ValueError:
+        return 0.0
 
-@st.cache_data(show_spinner=False)
 def execute_stream_ingestion(file_bytes) -> tuple:
+    """Decodes report stream linearly by tracking index fields relative to cell delimiters."""
     text = file_bytes.decode('utf-8', errors='ignore')
+    
     vessel, date_str = "UNKNOWN ASSET", "UNKNOWN DATE"
     v_m = re.search(r"Vessel’s\s*Name:\s*([^\t\x07\r\n]+)", text, re.IGNORECASE)
     if v_m: vessel = v_m.group(1).strip()
     d_m = re.search(r"Date:\s*([\d\s\w]+)", text, re.IGNORECASE)
     if d_m: date_str = d_m.group(1).strip()
 
+    # Split cleanly by Word binary cell tokens, stripping noise and preserving positions
     raw_tokens = text.split('\x07')
     tokens = [t.replace('\r', '').replace('\n', '').strip() for t in raw_tokens]
+
     records = []
     
+    # 1. Main Engine Flat Mapping Framework
     me_definitions = [
         ("CYLINDER COVER", 16000), ("PISTON ASSEMBLY", 16000), ("STUFFING BOX", 16000), 
         ("PISTON CROWN", 32000), ("CYLINDER LINER", 16000), ("EXHAUST VALVE", 16000), 
@@ -130,41 +158,54 @@ def execute_stream_ingestion(file_bytes) -> tuple:
         ("FUEL PUMP", 16000), ("PLUNGER AND BARREL(RENEWAL)", 32000), ("FUEL PUMP SUCTION VALVE", 8000),
         ("FUEL PUMP PUNCTURE VALVE", 8000), ("CROSSHEAD BEARINGS", 32000), ("BOTTOM END BEARINGS", 32000), ("MAIN BEARINGS", 32000)
     ]
+    
     for comp, periodicity in me_definitions:
         for idx, token in enumerate(tokens):
             if token.upper() == comp:
+                # Scan stream forward for the subsequent row's sequence hours value marker
                 scan_idx = idx + 1
-                while scan_idx < len(tokens) and tokens[scan_idx] != '2': scan_idx += 1
+                while scan_idx < len(tokens) and tokens[scan_idx] != '2':
+                    scan_idx += 1
+                
                 if scan_idx < len(tokens) and tokens[scan_idx] == '2':
+                    # Extract positions sequentially across all 7 cylinders
                     for cyl in range(7):
                         if scan_idx + 1 + cyl < len(tokens):
+                            hrs_val = tokens[scan_idx + 1 + cyl]
                             records.append({
                                 "Subsystem": "MAIN ENGINE", "Component Group": comp, "Location Unit": f"Cyl No.{cyl+1}",
-                                "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(tokens[scan_idx + 1 + cyl])
+                                "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(hrs_val)
                             })
                 break
 
+    # 2. Auxiliary Engine Flat Mapping Framework
     aux_definitions = [
         ("Cylinder Head", 12000), ("Piston", 10000), ("Connecting Rod", 10000), 
         ("Cylinder Liners", 10000), ("Fuel Valves", 2000), ("Fuel Pumps", 5000),
         ("Crank Pin Bearing", 12000), ("Main Bearing", 12000), ("Adjust Valve Head Clearance", 1200)
     ]
+    
     for comp, periodicity in aux_definitions:
         for idx, token in enumerate(tokens):
             if comp.upper() in token.upper():
                 scan_idx = idx + 1
-                while scan_idx < len(tokens) and tokens[scan_idx] != '2': scan_idx += 1
+                while scan_idx < len(tokens) and tokens[scan_idx] != '2':
+                    scan_idx += 1
+                
                 if scan_idx < len(tokens) and tokens[scan_idx] == '2':
+                    # Flat extraction maps across all 3 Diesel Generators (6 Cylinders per unit)
                     for i in range(1, 4):
                         for cyl in range(6):
                             token_offset = ((i - 1) * 6) + cyl
                             if scan_idx + 1 + token_offset < len(tokens):
+                                hrs_val = tokens[scan_idx + 1 + token_offset]
                                 records.append({
                                     "Subsystem": "AUX ENGINE", "Component Group": comp.upper(), "Location Unit": f"DG No.{i} - Cyl No.{cyl+1}",
-                                    "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(tokens[scan_idx + 1 + token_offset])
+                                    "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(hrs_val)
                                 })
                 break
 
+    # 3. Other Equipment Sub-Matrix Framework
     misc_definitions = [
         ("GENERAL O/H", 16000, "OTHER EQUIPMENT", "M/E T/C"), ("BALANCING OF ROTOR SHAFT", 32000, "OTHER EQUIPMENT", "M/E T/C"),
         ("AIR COOLER CLEANING", 4000, "OTHER EQUIPMENT", "M/E Air Cooler"), ("AIR COND. COMPRESSOR NO.1", 10000, "OTHER EQUIPMENT", "Compressor 1"),
@@ -178,13 +219,17 @@ def execute_stream_ingestion(file_bytes) -> tuple:
                 if scan_idx < len(tokens):
                     t1 = tokens[scan_idx]
                     if any(m in t1.upper() for m in ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "/"]):
-                        if scan_idx + 1 < len(tokens): hrs_val = tokens[scan_idx + 1]
+                        if scan_idx + 1 < len(tokens):
+                            hrs_val = tokens[scan_idx + 1]
                     else:
                         if scan_idx + 1 < len(tokens):
                             t2 = tokens[scan_idx + 1]
                             if any(m in t2.upper() for m in ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "/"]):
-                                if scan_idx + 2 < len(tokens): hrs_val = tokens[scan_idx + 2]
-                            else: hrs_val = t2
+                                if scan_idx + 2 < len(tokens):
+                                    hrs_val = tokens[scan_idx + 2]
+                            else:
+                                hrs_val = t2
+                
                 records.append({
                     "Subsystem": sub, "Component Group": label, "Location Unit": unit,
                     "Baseline Interval (Hrs)": float(per), "Current Running Hours": clean_extracted_number(hrs_val)
@@ -193,128 +238,69 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     return vessel, date_str, pd.DataFrame(records)
 
-# --- 3. FRONTEND OPERATIONS DECK ---
-st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Telemetry Operations</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#64748B; font-size:15px; margin-bottom: 30px;'>Automated parsing interface for operational reports, mechanical diagnostics, and structural matrices.</p>", unsafe_allow_html=True)
+# --- 3. FRONTEND NAVIGATION CONTROL DECK ---
+st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Running Hours Intelligence</h1>", unsafe_allow_html=True)
+st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified enterprise deck for parsing operational reports, analyzing mechanical limit thresholds, and exporting telemetry matrices.</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("", type=["doc"])
 
 if uploaded_file is not None:
-    file_bytes = uploaded_file.getvalue()
-    
-    with st.spinner("Decrypting binary streams..."):
-        vessel_name, report_date, df = execute_stream_ingestion(file_bytes)
+    # Execute structural linear extraction pass
+    vessel_name, report_date, df = execute_stream_ingestion(uploaded_file.read())
     
     if not df.empty:
-        # Native Python List Comprehensions (Replaces Numpy for Instant Cloud Builds)
-        lifecycle_consumed = []
-        status_flags = []
+        # Dynamic calculations off the clean generated matrix
+        df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
         
-        for _, row in df.iterrows():
-            if row['Baseline Interval (Hrs)'] > 0:
-                pct = row['Current Running Hours'] / row['Baseline Interval (Hrs)']
-            else:
-                pct = 0.0
-            lifecycle_consumed.append(pct)
-            
-            if row['Current Running Hours'] == 0:
-                status_flags.append('NO DATA')
-            elif pct >= THRESHOLD_RED:
-                status_flags.append('OVERDUE')
-            elif pct >= THRESHOLD_YELLOW:
-                status_flags.append('HIGH PRIORITY')
-            else:
-                status_flags.append('OK')
-                
-        df['Lifecycle Consumed (%)'] = lifecycle_consumed
-        df['Status'] = status_flags
+        conditions = [(df['Current Running Hours'] == 0), (df['Lifecycle Consumed (%)'] >= THRESHOLD_RED), (df['Lifecycle Consumed (%)'] >= THRESHOLD_YELLOW)]
+        df['Status'] = np.select(conditions, ['NO DATA', 'OVERDUE', 'HIGH PRIORITY'], default='OK')
 
-        crit_count = len(df[df['Status'] == 'OVERDUE'])
-        warn_count = len(df[df['Status'] == 'HIGH PRIORITY'])
-        
-        # Safe float division for health factor
-        total_items = len(df)
-        health_factor = 100.0 if total_items == 0 else max(0.0, 100.0 - ((crit_count * 3.0 + warn_count * 1.0) / total_items * 100))
+        crit_df = df[df['Status'] == 'OVERDUE']
+        warn_df = df[df['Status'] == 'HIGH PRIORITY']
+        health_factor = max(0.0, 100.0 - ((len(crit_df) * 3.0 + len(warn_df) * 1.0) / len(df) * 100))
 
-        # --- EXECUTIVE KPI DECK ---
+        # Executive KPI Cards Displays
         st.markdown(f"""
             <div class="dashboard-deck">
-                <div class="dashboard-card card-good">
-                    <div class="metric-title">Active Target Profile</div>
+                <div class="dashboard-card">
+                    <div class="metric-title">Asset Context Profile</div>
                     <div class="metric-data" style="color:#38BDF8;">{vessel_name}</div>
-                    <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Log Reference: {report_date}</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Log Reference: {report_date}</div>
                 </div>
-                <div class="dashboard-card {'card-critical' if crit_count > 0 else 'card-good'}">
-                    <div class="metric-title">Critical Overhauls</div>
-                    <div class="metric-data" style="color:#F87171;">{crit_count}<span style="font-size:16px; color:#64748B; font-weight:500;"> Items</span></div>
-                    <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Immediate Action Mandatory</div>
+                <div class="dashboard-card {'dashboard-card card-critical' if len(crit_df)>0 else ''}">
+                    <div class="metric-title">Critical Interrupt Vectors</div>
+                    <div class="metric-data" style="color:#F87171;">{len(crit_df)} Items</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Immediate Overhaul Action Demanded</div>
                 </div>
-                <div class="dashboard-card {'card-warning' if warn_count > 0 else 'card-good'}">
-                    <div class="metric-title">High Priority Risks</div>
-                    <div class="metric-data" style="color:#FB923C;">{warn_count}<span style="font-size:16px; color:#64748B; font-weight:500;"> Items</span></div>
-                    <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Approaching Thresholds</div>
+                <div class="dashboard-card">
+                    <div class="metric-title">Impending Lifecycle Risks</div>
+                    <div class="metric-data" style="color:#FB923C;">{len(warn_df)} Items</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Approaching Mechanical Threshold</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="metric-title">Aggregated Fleet Health Index</div>
+                    <div class="metric-data" style="color:#34D399;">{health_factor:.1f}%</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Total Mechanical Structural Score</div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
 
-        # --- NATIVE CSS ANALYTICS (ZERO PLOTLY REQUIRED) ---
-        col1, col2 = st.columns([1, 2])
-        health_color = "#34D399" if health_factor > 80 else ("#FB923C" if health_factor > 50 else "#F87171")
-        
-        with col1:
-            st.markdown(f"""
-                <div class="native-chart-box" style="text-align: center; display: flex; flex-direction: column; justify-content: center;">
-                    <div style="color: #64748B; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 25px;">Aggregate Health Index</div>
-                    <div style="font-size: 54px; font-weight: 700; color: {health_color}; font-family: 'JetBrains Mono', monospace; line-height: 1;">{health_factor:.1f}<span style="font-size: 24px;">%</span></div>
-                    <div style="width: 100%; background: rgba(255,255,255,0.05); border-radius: 10px; height: 12px; margin-top: 30px; overflow: hidden;">
-                        <div style="width: {health_factor}%; background: {health_color}; height: 100%; border-radius: 10px; transition: width 1.2s ease-out;"></div>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-
-        with col2:
-            st.markdown("""
-                <div class="native-chart-box">
-                    <div style="color: #64748B; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 15px;">Top Structural Fatigue Profiles</div>
-            """, unsafe_allow_html=True)
-            
-            top_degraded = df[df['Lifecycle Consumed (%)'] > 0].sort_values(by='Lifecycle Consumed (%)', ascending=False).head(5)
-            
-            for _, row in top_degraded.iterrows():
-                val = min(row['Lifecycle Consumed (%)'] * 100, 100)
-                bar_color = "#F87171" if row['Status'] == 'OVERDUE' else ("#FB923C" if row['Status'] == 'HIGH PRIORITY' else "#38BDF8")
-                
-                st.markdown(f"""
-                    <div style="margin-bottom: 12px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
-                            <span style="color: #E2E8F0; font-weight: 500;">{row['Component Group']} <span style="color:#64748B;">({row['Location Unit']})</span></span>
-                            <span style="color: {bar_color}; font-family: 'JetBrains Mono', monospace; font-weight: 700;">{row['Lifecycle Consumed (%)']*100:.1f}%</span>
-                        </div>
-                        <div style="width: 100%; background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px; overflow: hidden;">
-                            <div style="width: {val}%; background: {bar_color}; height: 100%; border-radius: 4px;"></div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
-
-        # --- SECTOR DATA MATRICES ---
-        tab1, tab2, tab3 = st.tabs(["⚙️ Main Engine Matrix", "⚡ Aux Generator Matrix", "🛠️ Other Equipment Matrix"])
+        # --- SECTOR DATA TAB DECKS ---
+        tab1, tab2, tab3 = st.tabs(["⚙️ Main Engine Matrix", "⚡ Aux Engine Matrix", "🛠️ Other Equipment Matrix"])
         
         ui_table_config = {
             "Subsystem": st.column_config.TextColumn("Subsystem Component"),
             "Component Group": st.column_config.TextColumn("Component Classification"),
             "Location Unit": st.column_config.TextColumn("Location Profile"),
-            "Baseline Interval (Hrs)": st.column_config.NumberColumn("Interval Limit", format="%d"),
+            "Baseline Interval (Hrs)": st.column_config.NumberColumn("Interval Limit (Hrs)", format="%d"),
             "Current Running Hours": st.column_config.NumberColumn("Running Hours", format="%.1f"),
-            "Lifecycle Consumed (%)": st.column_config.ProgressColumn("Fatigue Spectrum", format="%.1f%%", min_value=0.0, max_value=1.5),
-            "Status": st.column_config.TextColumn("Diagnostic State")
+            "Lifecycle Consumed (%)": st.column_config.ProgressColumn("Fatigue Curve", format="%.1f%%", min_value=0.0, max_value=1.5),
+            "Status": st.column_config.TextColumn("Diagnostic Condition State")
         }
 
         def color_row_states(val):
-            if val == 'OVERDUE': return 'background-color: rgba(239, 68, 68, 0.15); color: #F87171; font-weight: 600;'
-            elif val == 'HIGH PRIORITY': return 'background-color: rgba(251, 146, 60, 0.15); color: #FB923C; font-weight: 600;'
+            if val == 'OVERDUE': return 'background-color: rgba(239, 68, 68, 0.12); color: #F87171; font-weight: 600;'
+            elif val == 'HIGH PRIORITY': return 'background-color: rgba(251, 146, 60, 0.12); color: #FB923C; font-weight: 600;'
             return ''
 
         with tab1:
