@@ -2,121 +2,107 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import re
-import plotly.graph_objects as go
-import plotly.express as px
 
-# --- 1. THE PINNACLE OF UI ARCHITECTURE: STEALTH ANIMATIONS & GLASSMORPHISM ---
-st.set_page_config(page_title="Propulsion Command OS", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. THE ARCHITECTURAL APEX: NATIVE ULTRA-PREMIUM COMMAND COCKPIT ---
+st.set_page_config(page_title="Propulsion Command Control", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
     
-    /* Global Canvas Reset - Ultra-Dark Space Theme */
+    /* Absolute Canvas Reset - High-End Minimalist Stealth Theme */
     html, body, [data-testid="stAppViewContainer"] {
-        font-family: 'Inter', sans-serif;
-        background: radial-gradient(circle at 50% 0%, #0B1121 0%, #02040A 100%);
-        color: #E2E8F0;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background: radial-gradient(circle at 50% -20%, #0F172A 0%, #020617 100%);
+        color: #F8FAFC;
     }
     
     [data-testid="stHeader"], footer {visibility: hidden;}
     
-    /* --- ADVANCED KEYFRAME ANIMATIONS --- */
-    @keyframes staggeredFadeUp {
-        0% { opacity: 0; transform: translateY(30px) scale(0.98); }
-        100% { opacity: 1; transform: translateY(0) scale(1); }
+    /* Advanced Interface Presentation Animations */
+    @keyframes smoothReveal {
+        from { opacity: 0; transform: translateY(20px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
     }
-    
-    @keyframes holographicPulse {
-        0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); border-color: rgba(56, 189, 248, 0.4); }
-        50% { box-shadow: 0 0 20px 0 rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.8); }
-        100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); border-color: rgba(56, 189, 248, 0.4); }
-    }
-
-    @keyframes criticalRadar {
-        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); }
-        50% { box-shadow: 0 0 30px 5px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 1); }
-        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); }
+    @keyframes radarPulse {
+        0% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
+        50% { border-color: rgba(248, 113, 113, 0.5); box-shadow: 0 0 25px 0 rgba(248, 113, 113, 0.2); }
+        100% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
     }
 
-    @keyframes scanline {
-        0% { transform: translateY(-100%); }
-        100% { transform: translateY(100%); }
-    }
-
-    /* --- GLASSMORPHIC KPI CARDS WITH STAGGERED ENTRANCE --- */
+    /* Premium Glassmorphic KPI Row Layout */
     .dashboard-deck {
         display: flex;
-        gap: 20px;
+        gap: 24px;
         margin-bottom: 30px;
     }
     
-    .kpi-card {
+    .dashboard-card {
         flex: 1;
-        position: relative;
-        overflow: hidden;
-        background: linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.3) 0%, rgba(15, 23, 42, 0.5) 100%);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 16px;
-        padding: 24px;
+        padding: 26px;
         transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        animation: staggeredFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation: smoothReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
     
-    .kpi-card:hover {
-        transform: translateY(-8px);
-        background: linear-gradient(145deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+    .dashboard-card:hover {
+        transform: translateY(-4px);
+        background: rgba(30, 41, 59, 0.5);
         border-color: rgba(56, 189, 248, 0.3);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
     }
     
-    /* Staggering the animation delays for a cascading load effect */
+    /* Cascading Animation Delays */
     .dashboard-deck > div:nth-child(1) { animation-delay: 0.1s; }
     .dashboard-deck > div:nth-child(2) { animation-delay: 0.2s; }
     .dashboard-deck > div:nth-child(3) { animation-delay: 0.3s; }
     .dashboard-deck > div:nth-child(4) { animation-delay: 0.4s; }
 
-    .card-critical { animation: staggeredFadeUp 0.7s ease-out 0.2s both, criticalRadar 2.5s infinite ease-in-out; }
-    .card-active { animation: staggeredFadeUp 0.7s ease-out 0.1s both, holographicPulse 3s infinite ease-in-out; }
-
-    .kpi-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #94A3B8; font-weight: 600; }
-    .kpi-value { font-size: 38px; font-weight: 700; margin-top: 8px; color: #FFFFFF; font-family: 'JetBrains Mono', monospace; letter-spacing: -1px; }
+    .card-critical { animation: smoothReveal 0.6s ease-out 0.2s both, radarPulse 3s infinite ease-in-out; }
     
-    /* --- CUSTOM UPLOAD ZONE --- */
-    div[data-testid="stFileUploadDropzone"] {
-        background: rgba(15, 23, 42, 0.3) !important;
-        border: 2px dashed rgba(56, 189, 248, 0.2) !important;
-        border-radius: 16px !important;
-        padding: 40px !important;
-        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        animation: staggeredFadeUp 0.8s ease-out both;
-    }
-    div[data-testid="stFileUploadDropzone"]:hover {
-        border-color: #38BDF8 !important;
-        background: rgba(15, 23, 42, 0.6) !important;
-        box-shadow: 0 0 30px rgba(56, 189, 248, 0.15) !important;
-    }
+    .metric-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #64748B; font-weight: 600; }
+    .metric-data { font-size: 38px; font-weight: 700; margin-top: 8px; color: #FFFFFF; font-family: 'JetBrains Mono', monospace; letter-spacing: -1px; }
 
-    /* --- DATAFRAME & TABS STYLING --- */
+    /* Custom Spreadsheet Wrapper Styles */
     div[data-testid="stDataFrame"] {
         border: 1px solid rgba(255, 255, 255, 0.05) !important;
         border-radius: 12px !important;
-        background: #090D1A !important;
-        animation: staggeredFadeUp 0.9s ease-out 0.5s both;
-    }
-    button[data-testid="stMarkdownContainer"] p {
-        font-size: 15px !important; font-weight: 600 !important; color: #E2E8F0;
+        overflow: hidden !important;
+        background-color: #090D1A !important;
+        animation: smoothReveal 0.8s ease-out 0.5s both;
     }
     
-    .chart-container {
-        animation: staggeredFadeUp 0.8s ease-out 0.4s both;
+    /* File Upload Area Customizations */
+    div[data-testid="stFileUploadDropzone"] {
+        background-color: rgba(15, 23, 42, 0.3) !important;
+        border: 1px dashed rgba(56, 189, 248, 0.2) !important;
+        border-radius: 16px !important;
+        padding: 40px !important;
+        animation: smoothReveal 0.6s ease-out both;
+    }
+    div[data-testid="stFileUploadDropzone"]:hover {
+        border-color: #38BDF8 !important;
+        background-color: rgba(30, 41, 59, 0.4) !important;
+        box-shadow: 0 0 30px rgba(56, 189, 248, 0.1);
+    }
+    
+    /* Modernized Tab Layout Styling */
+    button[data-testid="stMarkdownContainer"] p {
+        font-size: 14px !important; font-weight: 600 !important; letter-spacing: 0.5px;
+    }
+    
+    /* Custom Native Chart Container */
+    .native-chart-box {
         background: rgba(15, 23, 42, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 16px;
-        padding: 15px;
-        margin-bottom: 30px;
+        padding: 24px;
+        animation: smoothReveal 0.7s ease-out 0.4s both;
+        height: 100%;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -124,7 +110,7 @@ st.markdown("""
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
-# --- 2. FORENSIC TELEMETRY ENGINE (100% INTEGRITY PRESERVED) ---
+# --- 2. FORENSIC TELEMETRY STREAM ENGINE (100% LINEAR CELL MAPPING) ---
 def clean_extracted_number(val) -> float:
     if pd.isna(val) or val == "" or val == "-": return 0.0
     s = str(val).upper().strip().replace('[', '').replace(']', '').replace(' ', '')
@@ -223,7 +209,7 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     return vessel, date_str, pd.DataFrame(records)
 
-# --- 3. FRONTEND UI & ANIMATED VISUALIZATION MODULES ---
+# --- 3. FRONTEND NAVIGATION CONTROL DECK ---
 st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1.5px;'>Vessel Telemetry Operations</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:#64748B; font-size:15px; margin-bottom: 30px;'>Drag legacy telemetry blocks below for automated ingestion, live visual diagnostics, and component structural analysis.</p>", unsafe_allow_html=True)
 
@@ -245,79 +231,67 @@ if uploaded_file is not None:
         # --- ANIMATED KPI DECK ---
         st.markdown(f"""
             <div class="dashboard-deck">
-                <div class="kpi-card card-active">
-                    <div class="kpi-title">Active Target Profile</div>
-                    <div class="kpi-value" style="color:#38BDF8;">{vessel_name}</div>
+                <div class="dashboard-card">
+                    <div class="metric-title">Active Target Profile</div>
+                    <div class="metric-data" style="color:#38BDF8;">{vessel_name}</div>
                     <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Log Reference: {report_date}</div>
                 </div>
-                <div class="kpi-card {'card-critical' if len(crit_df)>0 else ''}">
-                    <div class="kpi-title">Critical Overhauls</div>
-                    <div class="kpi-value" style="color:#F87171;">{len(crit_df)}<span style="font-size:16px; color:#64748B;"> Items</span></div>
+                <div class="dashboard-card {'card-critical' if len(crit_df)>0 else ''}">
+                    <div class="metric-title">Critical Overhauls</div>
+                    <div class="metric-data" style="color:#F87171;">{len(crit_df)}<span style="font-size:16px; color:#64748B; font-weight:500;"> Items</span></div>
                     <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Immediate Action Mandatory</div>
                 </div>
-                <div class="kpi-card">
-                    <div class="kpi-title">High Priority Risks</div>
-                    <div class="kpi-value" style="color:#FB923C;">{len(warn_df)}<span style="font-size:16px; color:#64748B;"> Items</span></div>
+                <div class="dashboard-card">
+                    <div class="metric-title">High Priority Risks</div>
+                    <div class="metric-data" style="color:#FB923C;">{len(warn_df)}<span style="font-size:16px; color:#64748B; font-weight:500;"> Items</span></div>
                     <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Approaching Absolute Threshold</div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
 
-        # --- INTERACTIVE 3D/CANVAS PLOTLY VISUALIZATIONS ---
-        col_gauge, col_bar = st.columns([1, 2])
+        # --- NATIVE CSS VISUALIZATIONS (ZERO DEPENDENCIES) ---
+        col1, col2 = st.columns([1, 2])
         
-        with col_gauge:
-            st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
-            # High-end Animated Gauge Chart
-            fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=health_factor,
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Aggregate Health Index", 'font': {'size': 18, 'color': '#94A3B8'}},
-                number={'suffix': "%", 'font': {'size': 40, 'color': '#FFFFFF'}},
-                gauge={
-                    'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                    'bar': {'color': "#34D399" if health_factor > 80 else ("#FB923C" if health_factor > 50 else "#F87171")},
-                    'bgcolor': "rgba(0,0,0,0)",
-                    'borderwidth': 2,
-                    'bordercolor': "rgba(255,255,255,0.1)",
-                    'steps': [
-                        {'range': [0, 50], 'color': 'rgba(239, 68, 68, 0.2)'},
-                        {'range': [50, 80], 'color': 'rgba(251, 146, 60, 0.2)'},
-                        {'range': [80, 100], 'color': 'rgba(52, 211, 153, 0.2)'}],
-                }
-            ))
-            fig_gauge.update_layout(paper_bgcolor="rgba(0,0,0,0)", font={'color': "#F8FAFC", 'family': "Inter"}, height=280, margin=dict(l=20, r=20, t=50, b=20))
-            st.plotly_chart(fig_gauge, use_container_width=True)
+        # Color Logic for Health Bar
+        health_color = "#34D399" if health_factor > 80 else ("#FB923C" if health_factor > 50 else "#F87171")
+        
+        with col1:
+            st.markdown(f"""
+                <div class="native-chart-box" style="text-align: center; display: flex; flex-direction: column; justify-content: center;">
+                    <div style="color: #94A3B8; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 25px;">Aggregate Health Index</div>
+                    <div style="font-size: 54px; font-weight: 700; color: {health_color}; font-family: 'JetBrains Mono', monospace; line-height: 1;">{health_factor:.1f}<span style="font-size: 24px;">%</span></div>
+                    <div style="width: 100%; background: rgba(255,255,255,0.05); border-radius: 10px; height: 12px; margin-top: 30px; overflow: hidden; border: 1px solid rgba(255,255,255,0.02);">
+                        <div style="width: {health_factor}%; background: {health_color}; height: 100%; border-radius: 10px; box-shadow: 0 0 15px {health_color}; transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("""
+                <div class="native-chart-box">
+                    <div style="color: #94A3B8; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 15px;">Top Structural Fatigue Profiles</div>
+            """, unsafe_allow_html=True)
+            
+            top_degraded = df[df['Lifecycle Consumed (%)'] > 0].sort_values(by='Lifecycle Consumed (%)', ascending=False).head(5)
+            
+            for _, row in top_degraded.iterrows():
+                val = min(row['Lifecycle Consumed (%)'] * 100, 100) # Cap at 100% for bar
+                bar_color = "#F87171" if row['Status'] == 'OVERDUE' else ("#FB923C" if row['Status'] == 'HIGH PRIORITY' else "#38BDF8")
+                
+                st.markdown(f"""
+                    <div style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                            <span style="color: #E2E8F0; font-weight: 500;">{row['Component Group']} <span style="color:#64748B;">({row['Location Unit']})</span></span>
+                            <span style="color: {bar_color}; font-family: 'JetBrains Mono', monospace; font-weight: 700;">{row['Lifecycle Consumed (%)']*100:.1f}%</span>
+                        </div>
+                        <div style="width: 100%; background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px; overflow: hidden;">
+                            <div style="width: {val}%; background: {bar_color}; height: 100%; border-radius: 4px;"></div>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with col_bar:
-            st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
-            # Advanced Degradation Bar Chart
-            top_degraded = df[df['Lifecycle Consumed (%)'] > 0].sort_values(by='Lifecycle Consumed (%)', ascending=False).head(8)
-            
-            # Map colors dynamically based on status
-            color_discrete_map = {'OVERDUE': '#F87171', 'HIGH PRIORITY': '#FB923C', 'OK': '#38BDF8'}
-            
-            fig_bar = px.bar(
-                top_degraded, 
-                x='Lifecycle Consumed (%)', 
-                y='Component Group', 
-                color='Status',
-                orientation='h',
-                color_discrete_map=color_discrete_map,
-                title="Top Structural Fatigue Profiles",
-                hover_data=['Location Unit', 'Current Running Hours']
-            )
-            fig_bar.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
-                font={'color': "#94A3B8", 'family': "Inter"},
-                height=280, margin=dict(l=10, r=20, t=40, b=20),
-                xaxis=dict(tickformat=".0%", gridcolor="rgba(255,255,255,0.05)"),
-                yaxis=dict(autorange="reversed")
-            )
-            st.plotly_chart(fig_bar, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
 
         # --- SECTOR DATA MATRICES ---
         tab1, tab2, tab3 = st.tabs(["⚙️ Main Engine Flat Matrix", "⚡ Aux Generator Plant Matrix", "🛠️ Ext. Equipment Matrix"])
