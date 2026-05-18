@@ -3,12 +3,12 @@ import pandas as pd
 import numpy as np
 import re
 
-# --- 1. THE PINNACLE OF DESIGN: STEALTH LUXURY SAAS INTERFACE ---
+# --- 1. THE PINNACLE OF LUXURY DESIGN: STEALTH SAAS CANVASES ---
 st.set_page_config(page_title="Propulsion Command Control", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
     
     /* Absolute System Canvas Reset */
     html, body, [data-testid="stAppViewContainer"] {
@@ -17,21 +17,21 @@ st.markdown("""
         color: #F8FAFC;
     }
     
-    /* Hide Default Streamlit Elements for a Pure Native App Feel */
+    /* Hide Default Out-of-the-box Header and Footers */
     [data-testid="stHeader"], footer {visibility: hidden;}
     
-    /* Animation Framework */
-    @keyframes subtleReveal {
+    /* Advanced Interface Animations */
+    @keyframes smoothReveal {
         from { opacity: 0; transform: translateY(12px); }
         to { opacity: 1; transform: translateY(0); }
     }
     @keyframes radarPulse {
-        0% { border-color: rgba(248, 113, 113, 0.2); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.2); }
-        50% { border-color: rgba(248, 113, 113, 0.6); box-shadow: 0 0 25px 0 rgba(248, 113, 113, 0.25); }
-        100% { border-color: rgba(248, 113, 113, 0.2); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.2); }
+        0% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
+        50% { border-color: rgba(248, 113, 113, 0.5); box-shadow: 0 0 25px 0 rgba(248, 113, 113, 0.2); }
+        100% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
     }
 
-    /* Premium Control Deck Grid Layout */
+    /* Executive Glassmorphic KPI Row Layout */
     .dashboard-deck {
         display: flex;
         gap: 24px;
@@ -40,10 +40,10 @@ st.markdown("""
     
     .dashboard-card {
         flex: 1;
-        background: linear-gradient(180deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.3) 0%, rgba(15, 23, 42, 0.5) 100%);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.03);
         border-radius: 16px;
         padding: 26px;
         transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -52,9 +52,9 @@ st.markdown("""
     
     .dashboard-card:hover {
         transform: translateY(-4px);
-        background: rgba(30, 41, 59, 0.6);
-        border-color: rgba(56, 189, 248, 0.3);
-        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+        background: rgba(30, 41, 59, 0.5);
+        border-color: rgba(56, 189, 248, 0.25);
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
     }
     
     .card-critical {
@@ -70,47 +70,51 @@ st.markdown("""
     }
     
     .metric-data {
-        font-size: 36px;
+        font-size: 34px;
         font-weight: 700;
         margin-top: 12px;
         color: #FFFFFF;
         letter-spacing: -0.5px;
     }
     
-    /* Sleek Native Typography Elements */
-    .mono-value {
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 600;
+    /* Immersive Core Audit Grid Wrapper (Eliminating Cheap/Plain Looks) */
+    .ledger-frame {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.6) 0%, rgba(2, 6, 23, 0.4) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-left: 4px solid #38BDF8; /* Precision Cyan Focus Accent */
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 35px;
+        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3);
+        animation: subtleReveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
 
-    /* Streamlit Form Input & Component Modifications */
+    /* Target Native Streamlit Spreadsheet Elements via Advanced CSS Injectors */
+    div[data-testid="stDataEditor"] {
+        border: 1px solid rgba(255, 255, 255, 0.03) !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+        background-color: #090D1A !important;
+    }
+    
+    /* Clean custom layouts for files */
     div[data-testid="stFileUploadDropzone"] {
-        background-color: rgba(15, 23, 42, 0.3) !important;
-        border: 1px dashed rgba(255, 255, 255, 0.12) !important;
+        background-color: rgba(15, 23, 42, 0.25) !important;
+        border: 1px dashed rgba(255, 255, 255, 0.1) !important;
         border-radius: 16px !important;
         padding: 35px !important;
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    
     div[data-testid="stFileUploadDropzone"]:hover {
         border-color: #38BDF8 !important;
-        background-color: rgba(30, 41, 59, 0.3) !important;
+        background-color: rgba(30, 41, 59, 0.25) !important;
     }
     
-    /* Tabs Interface Polish */
+    /* Format table headers for premium look */
     button[data-testid="stMarkdownContainer"] p {
         font-size: 14px !important;
         font-weight: 600 !important;
         letter-spacing: 0.5px;
-    }
-    
-    /* Clean Layout Containers */
-    .section-wrapper {
-        background: rgba(15, 23, 42, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.03);
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 25px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -118,7 +122,7 @@ st.markdown("""
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
-# --- 2. FORENSIC BACKEND TELEMETRY ENGINE (REPLACES VBA PARSING RULES) ---
+# --- 2. FORENSIC BACKEND TELEMETRY ENGINE (100% DATA INTEGRITY MAPPING) ---
 def clean_extracted_number(val) -> float:
     if pd.isna(val) or val == "" or val == "-":
         return 0.0
@@ -205,9 +209,9 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     return vessel, date_str, pd.DataFrame(records)
 
-# --- 3. CORE FRONTEND SYSTEM CONTROLS ---
+# --- 3. CORE CONTROL DECK FRONTEND UI ---
 st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Running Hours Intelligence</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified operating deck for log ingestion, data auditing, and telemetry validation.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified operating platform for telemetry ingestion, validation auditing, and life-cycle analytics.</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("", type=["doc"])
 
@@ -219,26 +223,36 @@ if uploaded_file is not None:
         st.session_state.report_date = report_date
         st.session_state.uploaded_file_name = uploaded_file.name
 
-    # --- NATIVE INGESTION GUARD: IMMERSIVE MAIN LAYOUT FLOW ---
-    st.markdown("<div class='section-wrapper'>", unsafe_allow_html=True)
-    st.markdown("<h3 style='color:#FFFFFF; margin-top:0px; margin-bottom:4px; font-size:16px; font-weight:600;'>🛠️ Real-Time Telemetry Audit Ledger</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#64748B; font-size:12px; margin-bottom:16px;'>Data firewall active. Review or manually overwrite parsed machinery metrics directly inside the inline grid grid below before downstream dashboard rendering.</p>", unsafe_allow_html=True)
+    # --- LUXURY LEDGER INTEGRATION (ELIMINATING "ANTI-AESTHETIC" CHEAP SPREADSHEETS) ---
+    st.markdown("""
+        <div class="ledger-frame">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div>
+                    <h3 style="color:#FFFFFF; margin:0px; font-size:15px; font-weight:600; letter-spacing: -0.2px;">🛠️ Real-Time Telemetry Audit Gate</h3>
+                    <p style="color:#64748B; margin:2px 0 0 0; font-size:12px;">Active hardware parser firewall. You can overwrite values inline before downstream computation vectors commit.</p>
+                </div>
+                <div style="background: rgba(56, 189, 248, 0.1); color: #38BDF8; font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-family: monospace;">
+                    LIVE INGESTION MATRIX
+                </div>
+            </div>
+    """, unsafe_allow_html=True)
     
     verified_df = st.data_editor(
         st.session_state.raw_df,
         use_container_width=True,
         hide_index=True,
+        label_visibility="collapsed",  # Hide default cheap label syntax
         column_config={
             "Subsystem": st.column_config.TextColumn("Machinery Subsystem", disabled=True),
             "Component Group": st.column_config.TextColumn("Equipment Group", disabled=True),
-            "Location Unit": st.column_config.TextColumn("Location Location", disabled=True),
-            "Baseline Interval (Hrs)": st.column_config.NumberColumn("Maintenance Limit", format="%d"),
-            "Current Running Hours": st.column_config.NumberColumn("Running Hours (Editable Field)", format="%.1f")
+            "Location Unit": st.column_config.TextColumn("Location Profile", disabled=True),
+            "Baseline Interval (Hrs)": st.column_config.NumberColumn("Maintenance Interval", format="%d"),
+            "Current Running Hours": st.column_config.NumberColumn("Running Hours (Editable)", format="%.1f")
         }
     )
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Process core computations live on the adjusted inline frame
+    # Process computations live against the refined, verified dataframe output
     if not verified_df.empty:
         df = verified_df.copy()
         df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
@@ -250,23 +264,23 @@ if uploaded_file is not None:
         warn_df = df[df['Status'] == 'HIGH PRIORITY']
         health_factor = max(0.0, 100.0 - ((len(crit_df) * 3.0 + len(warn_df) * 1.0) / len(df) * 100))
 
-        # Executive Glassmorphic Metric Display Row
+        # Executive Glassmorphic Metric Display Card Deck Row
         st.markdown(f"""
             <div class="dashboard-deck">
                 <div class="dashboard-card">
-                    <div class="metric-title">Asset Target Profile</div>
+                    <div class="metric-title">Asset Context Profile</div>
                     <div class="metric-data" style="color:#38BDF8;">{st.session_state.vessel_name}</div>
                     <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Log Reference: {st.session_state.report_date}</div>
                 </div>
                 <div class="dashboard-card {'dashboard-card card-critical' if len(crit_df)>0 else ''}">
-                    <div class="metric-title">Critical Interrupt vectors</div>
+                    <div class="metric-title">Critical Interrupts</div>
                     <div class="metric-data" style="color:#F87171;">{len(crit_df)} Items</div>
                     <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Immediate Overhaul Action Demanded</div>
                 </div>
                 <div class="dashboard-card">
                     <div class="metric-title">Impending Lifecycle Risks</div>
                     <div class="metric-data" style="color:#FB923C;">{len(warn_df)} Items</div>
-                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Approaching Mechanical Limitation</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Approaching Mechanical Threshold</div>
                 </div>
                 <div class="dashboard-card">
                     <div class="metric-title">Aggregated Fleet Health Index</div>
@@ -276,7 +290,7 @@ if uploaded_file is not None:
             </div>
         """, unsafe_allow_html=True)
 
-        # --- CATEGORIZED SYSTEM TAB DECK ---
+        # --- CATEGORIZED ADVANCED PROPULSION TAB CORES ---
         tab1, tab2, tab3 = st.tabs(["🔥 Risk Exceptions Matrix", "🔩 Main Plant Hierarchy", "⚡ Auxiliary Generation Plant"])
         
         ui_table_config = {
