@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import re
 
-# --- 1. THE ARCHITECTURAL APEX: NATIVE ULTRA-PREMIUM COMMAND COCKPIT ---
+# --- 1. ARCHITECTURAL APEX: HIGH-PERFORMANCE STEALTH THEME ---
 st.set_page_config(page_title="Propulsion Command Control", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -19,90 +19,59 @@ st.markdown("""
     
     [data-testid="stHeader"], footer {visibility: hidden;}
     
-    /* Advanced Interface Presentation Animations */
+    /* Optimized Hardware-Accelerated Animations */
     @keyframes smoothReveal {
-        from { opacity: 0; transform: translateY(20px) scale(0.98); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    @keyframes radarPulse {
-        0% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
-        50% { border-color: rgba(248, 113, 113, 0.5); box-shadow: 0 0 25px 0 rgba(248, 113, 113, 0.2); }
-        100% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Premium Glassmorphic KPI Row Layout */
+    /* Premium Glassmorphic KPI Row Layout (Optimized for low browser strain) */
     .dashboard-deck {
         display: flex;
-        gap: 24px;
-        margin-bottom: 30px;
+        gap: 20px;
+        margin-bottom: 25px;
     }
     
     .dashboard-card {
         flex: 1;
-        background: linear-gradient(180deg, rgba(30, 41, 59, 0.3) 0%, rgba(15, 23, 42, 0.5) 100%);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.7) 100%);
         border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 16px;
-        padding: 26px;
-        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        animation: smoothReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+        border-radius: 12px;
+        padding: 24px;
+        transition: transform 0.2s ease-out, border-color 0.2s ease-out;
+        animation: smoothReveal 0.4s ease-out both;
     }
     
     .dashboard-card:hover {
-        transform: translateY(-4px);
-        background: rgba(30, 41, 59, 0.5);
+        transform: translateY(-2px);
         border-color: rgba(56, 189, 248, 0.3);
-        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
     }
     
-    /* Cascading Animation Delays */
-    .dashboard-deck > div:nth-child(1) { animation-delay: 0.1s; }
-    .dashboard-deck > div:nth-child(2) { animation-delay: 0.2s; }
-    .dashboard-deck > div:nth-child(3) { animation-delay: 0.3s; }
-    .dashboard-deck > div:nth-child(4) { animation-delay: 0.4s; }
-
-    .card-critical { animation: smoothReveal 0.6s ease-out 0.2s both, radarPulse 3s infinite ease-in-out; }
+    .card-critical { border-left: 4px solid #F87171; }
+    .card-warning { border-left: 4px solid #FB923C; }
+    .card-good { border-left: 4px solid #34D399; }
     
     .metric-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #64748B; font-weight: 600; }
-    .metric-data { font-size: 38px; font-weight: 700; margin-top: 8px; color: #FFFFFF; font-family: 'JetBrains Mono', monospace; letter-spacing: -1px; }
+    .metric-data { font-size: 36px; font-weight: 700; margin-top: 10px; color: #FFFFFF; font-family: 'JetBrains Mono', monospace; letter-spacing: -1px; }
 
     /* Custom Spreadsheet Wrapper Styles */
     div[data-testid="stDataFrame"] {
         border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        border-radius: 12px !important;
-        overflow: hidden !important;
+        border-radius: 8px !important;
         background-color: #090D1A !important;
-        animation: smoothReveal 0.8s ease-out 0.5s both;
     }
     
     /* File Upload Area Customizations */
     div[data-testid="stFileUploadDropzone"] {
         background-color: rgba(15, 23, 42, 0.3) !important;
-        border: 1px dashed rgba(56, 189, 248, 0.2) !important;
-        border-radius: 16px !important;
-        padding: 40px !important;
-        animation: smoothReveal 0.6s ease-out both;
-    }
-    div[data-testid="stFileUploadDropzone"]:hover {
-        border-color: #38BDF8 !important;
-        background-color: rgba(30, 41, 59, 0.4) !important;
-        box-shadow: 0 0 30px rgba(56, 189, 248, 0.1);
+        border: 1px dashed rgba(56, 189, 248, 0.3) !important;
+        border-radius: 12px !important;
+        padding: 30px !important;
     }
     
     /* Modernized Tab Layout Styling */
     button[data-testid="stMarkdownContainer"] p {
         font-size: 14px !important; font-weight: 600 !important; letter-spacing: 0.5px;
-    }
-    
-    /* Custom Native Chart Container */
-    .native-chart-box {
-        background: rgba(15, 23, 42, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 16px;
-        padding: 24px;
-        animation: smoothReveal 0.7s ease-out 0.4s both;
-        height: 100%;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -110,7 +79,7 @@ st.markdown("""
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
-# --- 2. FORENSIC TELEMETRY STREAM ENGINE (100% LINEAR CELL MAPPING) ---
+# --- 2. FORENSIC TELEMETRY STREAM ENGINE (CACHED FOR ZERO LOADING LAG) ---
 def clean_extracted_number(val) -> float:
     if pd.isna(val) or val == "" or val == "-": return 0.0
     s = str(val).upper().strip().replace('[', '').replace(']', '').replace(' ', '')
@@ -127,8 +96,11 @@ def clean_extracted_number(val) -> float:
         return 0.0 if res > 250000 else res
     except ValueError: return 0.0
 
+@st.cache_data(show_spinner=False)
 def execute_stream_ingestion(file_bytes) -> tuple:
+    """Decodes report stream linearly. Cached to prevent infinite reloading."""
     text = file_bytes.decode('utf-8', errors='ignore')
+    
     vessel, date_str = "UNKNOWN ASSET", "UNKNOWN DATE"
     v_m = re.search(r"Vessel’s\s*Name:\s*([^\t\x07\r\n]+)", text, re.IGNORECASE)
     if v_m: vessel = v_m.group(1).strip()
@@ -210,17 +182,22 @@ def execute_stream_ingestion(file_bytes) -> tuple:
     return vessel, date_str, pd.DataFrame(records)
 
 # --- 3. FRONTEND NAVIGATION CONTROL DECK ---
-st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1.5px;'>Vessel Telemetry Operations</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#64748B; font-size:15px; margin-bottom: 30px;'>Drag legacy telemetry blocks below for automated ingestion, live visual diagnostics, and component structural analysis.</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Running Hours Intelligence</h1>", unsafe_allow_html=True)
+st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified enterprise deck for parsing operational reports, analyzing mechanical limit thresholds, and exporting telemetry matrices.</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("", type=["doc"])
 
 if uploaded_file is not None:
-    with st.spinner("Decrypting binary streams and rendering telemetry matrices..."):
-        vessel_name, report_date, df = execute_stream_ingestion(uploaded_file.read())
+    # Use getvalue() to prevent file pointer memory exhaustion
+    file_bytes = uploaded_file.getvalue()
+    
+    with st.spinner("Processing telemetry streams..."):
+        vessel_name, report_date, df = execute_stream_ingestion(file_bytes)
     
     if not df.empty:
+        # Dynamic calculations
         df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
+        
         conditions = [(df['Current Running Hours'] == 0), (df['Lifecycle Consumed (%)'] >= THRESHOLD_RED), (df['Lifecycle Consumed (%)'] >= THRESHOLD_YELLOW)]
         df['Status'] = np.select(conditions, ['NO DATA', 'OVERDUE', 'HIGH PRIORITY'], default='OK')
 
@@ -228,73 +205,34 @@ if uploaded_file is not None:
         warn_df = df[df['Status'] == 'HIGH PRIORITY']
         health_factor = max(0.0, 100.0 - ((len(crit_df) * 3.0 + len(warn_df) * 1.0) / len(df) * 100))
 
-        # --- ANIMATED KPI DECK ---
+        # Executive KPI Cards Displays
         st.markdown(f"""
             <div class="dashboard-deck">
-                <div class="dashboard-card">
-                    <div class="metric-title">Active Target Profile</div>
+                <div class="dashboard-card card-good">
+                    <div class="metric-title">Asset Context Profile</div>
                     <div class="metric-data" style="color:#38BDF8;">{vessel_name}</div>
-                    <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Log Reference: {report_date}</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Log Reference: {report_date}</div>
                 </div>
                 <div class="dashboard-card {'card-critical' if len(crit_df)>0 else ''}">
-                    <div class="metric-title">Critical Overhauls</div>
-                    <div class="metric-data" style="color:#F87171;">{len(crit_df)}<span style="font-size:16px; color:#64748B; font-weight:500;"> Items</span></div>
-                    <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Immediate Action Mandatory</div>
+                    <div class="metric-title">Critical Interrupt Vectors</div>
+                    <div class="metric-data" style="color:#F87171;">{len(crit_df)}</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Immediate Overhaul Action Demanded</div>
                 </div>
-                <div class="dashboard-card">
-                    <div class="metric-title">High Priority Risks</div>
-                    <div class="metric-data" style="color:#FB923C;">{len(warn_df)}<span style="font-size:16px; color:#64748B; font-weight:500;"> Items</span></div>
-                    <div style="color:#475569; font-size:12px; margin-top:8px; font-weight:600;">Approaching Absolute Threshold</div>
+                <div class="dashboard-card {'card-warning' if len(warn_df)>0 else ''}">
+                    <div class="metric-title">Impending Lifecycle Risks</div>
+                    <div class="metric-data" style="color:#FB923C;">{len(warn_df)}</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Approaching Mechanical Threshold</div>
+                </div>
+                <div class="dashboard-card {'card-good' if health_factor > 80 else 'card-warning'}">
+                    <div class="metric-title">Aggregated Fleet Health Index</div>
+                    <div class="metric-data" style="color:#34D399;">{health_factor:.1f}%</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Total Mechanical Structural Score</div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
 
-        # --- NATIVE CSS VISUALIZATIONS (ZERO DEPENDENCIES) ---
-        col1, col2 = st.columns([1, 2])
-        
-        # Color Logic for Health Bar
-        health_color = "#34D399" if health_factor > 80 else ("#FB923C" if health_factor > 50 else "#F87171")
-        
-        with col1:
-            st.markdown(f"""
-                <div class="native-chart-box" style="text-align: center; display: flex; flex-direction: column; justify-content: center;">
-                    <div style="color: #94A3B8; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 25px;">Aggregate Health Index</div>
-                    <div style="font-size: 54px; font-weight: 700; color: {health_color}; font-family: 'JetBrains Mono', monospace; line-height: 1;">{health_factor:.1f}<span style="font-size: 24px;">%</span></div>
-                    <div style="width: 100%; background: rgba(255,255,255,0.05); border-radius: 10px; height: 12px; margin-top: 30px; overflow: hidden; border: 1px solid rgba(255,255,255,0.02);">
-                        <div style="width: {health_factor}%; background: {health_color}; height: 100%; border-radius: 10px; box-shadow: 0 0 15px {health_color}; transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);"></div>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-
-        with col2:
-            st.markdown("""
-                <div class="native-chart-box">
-                    <div style="color: #94A3B8; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 15px;">Top Structural Fatigue Profiles</div>
-            """, unsafe_allow_html=True)
-            
-            top_degraded = df[df['Lifecycle Consumed (%)'] > 0].sort_values(by='Lifecycle Consumed (%)', ascending=False).head(5)
-            
-            for _, row in top_degraded.iterrows():
-                val = min(row['Lifecycle Consumed (%)'] * 100, 100) # Cap at 100% for bar
-                bar_color = "#F87171" if row['Status'] == 'OVERDUE' else ("#FB923C" if row['Status'] == 'HIGH PRIORITY' else "#38BDF8")
-                
-                st.markdown(f"""
-                    <div style="margin-bottom: 12px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
-                            <span style="color: #E2E8F0; font-weight: 500;">{row['Component Group']} <span style="color:#64748B;">({row['Location Unit']})</span></span>
-                            <span style="color: {bar_color}; font-family: 'JetBrains Mono', monospace; font-weight: 700;">{row['Lifecycle Consumed (%)']*100:.1f}%</span>
-                        </div>
-                        <div style="width: 100%; background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px; overflow: hidden;">
-                            <div style="width: {val}%; background: {bar_color}; height: 100%; border-radius: 4px;"></div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-
-        # --- SECTOR DATA MATRICES ---
-        tab1, tab2, tab3 = st.tabs(["⚙️ Main Engine Flat Matrix", "⚡ Aux Generator Plant Matrix", "🛠️ Ext. Equipment Matrix"])
+        # --- SECTOR DATA TAB DECKS ---
+        tab1, tab2, tab3 = st.tabs(["⚙️ Main Engine Matrix", "⚡ Aux Engine Matrix", "🛠️ Other Equipment Matrix"])
         
         ui_table_config = {
             "Subsystem": st.column_config.TextColumn("Subsystem Component"),
