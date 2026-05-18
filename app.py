@@ -2,87 +2,150 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import re
-import io
 
-# --- 1. CONFIGURATION & 10/10 AESTHETICS ---
-st.set_page_config(page_title="Fleet RH Dashboard", page_icon="🚢", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. THE ARCHITECTURAL FRONTEND MASTERPIECE (CUSTOM CSS & ANIMATIONS) ---
+st.set_page_config(page_title="Marine Operations Control", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
 
-# Injecting Custom CSS for Premium Executive Look
 st.markdown("""
     <style>
-    /* Metric Cards */
-    div[data-testid="metric-container"] {
-        background-color: #ffffff;
-        border: 1px solid #e0e0e0;
-        padding: 5% 5% 5% 10%;
-        border-radius: 8px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        border-left: 5px solid #1f77b4;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    /* Global Canvas Reset */
+    html, body, [data-testid="stAppViewContainer"] {
+        font-family: 'Inter', sans-serif;
+        background-color: #0B132B; /* Deep Navy Maritime Background */
+        color: #F4F6F9;
     }
     
-    /* Status Badges */
-    .badge-overdue { background-color: #ffcccc; color: #cc0000; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; }
-    .badge-warning { background-color: #fff2cc; color: #b38600; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; }
-    .badge-ok { background-color: #cce5ff; color: #004085; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 14px; }
+    /* Sidebar Styling Override */
+    [data-testid="stSidebar"] {
+        background-color: #1C2541;
+        border-right: 1px solid #3A506B;
+    }
+
+    /* CSS Keyframe Animations */
+    @keyframes slideUpFade {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulseCritical {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(255, 75, 75, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
+    }
+    @keyframes glowPulse {
+        0% { border-color: #3A506B; }
+        50% { border-color: #5BC0BE; }
+        100% { border-color: #3A506B; }
+    }
+
+    /* Executive Glassmorphic KPI Cards */
+    .kpi-deck {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 25px;
+        animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    .kpi-card {
+        flex: 1;
+        background: linear-gradient(145deg, #1C2541, #131A33);
+        border: 1px solid #3A506B;
+        border-radius: 14px;
+        padding: 24px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .kpi-card:hover {
+        transform: translateY(-6px);
+        border-color: #5BC0BE;
+        box-shadow: 0 12px 40px 0 rgba(91, 192, 190, 0.2);
+    }
+    .kpi-label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: #9A9EAB;
+        font-weight: 600;
+    }
+    .kpi-value {
+        font-size: 36px;
+        font-weight: 700;
+        margin-top: 10px;
+        color: #FFFFFF;
+    }
     
-    /* Headers */
-    h1, h2, h3 { color: #2c3e50; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    /* Live Pulsing Indicator Dots */
+    .indicator-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    .dot-critical { background-color: #FF4B4B; animation: pulseCritical 2s infinite; }
+    .dot-warning { background-color: #FFAA00; }
+    .dot-nominal { background-color: #00E676; }
+
+    /* Custom File Upload Drag & Drop Interface Wrapper */
+    div[data-testid="stFileUploadDropzone"] {
+        background-color: #1C2541 !important;
+        border: 2px dashed #3A506B !important;
+        border-radius: 12px !important;
+        padding: 30px !important;
+        animation: glowPulse 4s infinite ease-in-out;
+        transition: all 0.3s ease;
+    }
+    div[data-testid="stFileUploadDropzone"]:hover {
+        border-color: #5BC0BE !important;
+        background-color: #222C4E !important;
+    }
+
+    /* Tabs Customization */
+    button[data-testid="stMarkdownContainer"] {
+        color: #FFFFFF !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
-# --- 2. THE BULLETPROOF BACKEND ---
+# --- 2. FORTRAN BACKEND DATA PIPELINE ---
 def extract_numeric_value(text: str) -> float:
-    """Ultra-resilient numeric extractor. Strips out all text, brackets, and fixes regional commas."""
     if not isinstance(text, str):
         return 0.0
-    
     cleaned = text.strip().replace('[', '').replace(']', '').replace(' ', '')
     if any(ignore in cleaned.upper() for ignore in ["N/A", "CENTRAL", "OBSERVATION", "-", "COOLER"]):
         return 0.0
-        
-    # Regex to capture only numeric patterns and decimal/comma separators
     match = re.search(r'[\d\.\,]+', cleaned)
     if not match:
         return 0.0
-        
     num_str = match.group(0)
-    
-    # Handle European vs US formats safely
     if ',' in num_str and '.' in num_str:
-        num_str = num_str.replace(',', '')  # 1,234.56 -> 1234.56
+        num_str = num_str.replace(',', '')
     elif num_str.count(',') == 1:
         parts = num_str.split(',')
-        if len(parts[1]) != 3:  # If not exactly 3 digits after comma, it's a decimal (e.g., 100,5)
+        if len(parts[1]) != 3:
             num_str = num_str.replace(',', '.')
         else:
-            num_str = num_str.replace(',', '') # It's a thousands separator (e.g., 10,000)
-
+            num_str = num_str.replace(',', '')
     try:
         return float(num_str)
     except ValueError:
         return 0.0
 
 def parse_legacy_doc_stream(raw_bytes) -> tuple:
-    """Decodes binary .doc files and hunts for \x07 cell delimiters."""
-    # Decode ignoring binary garbage
     text = raw_bytes.decode('utf-8', errors='ignore')
-    
-    # Structural Metadata Extraction
     vessel = "UNKNOWN VESSEL"
     date_str = "UNKNOWN DATE"
     
     v_match = re.search(r"Vessel’s\s*Name:\s*([^\t\x07\r\n]+)", text, re.IGNORECASE)
     if v_match: vessel = v_match.group(1).strip()
-        
     d_match = re.search(r"Date:\s*([\d\s\w]+)", text, re.IGNORECASE)
     if d_match: date_str = d_match.group(1).strip()
 
     parsed_records = []
     
-    # 1. Main Engine Logic (Vertical Pair Reading)
     me_patterns = [
         ("CYLINDER COVER", 16000), ("PISTON ASSEMBLY", 16000), ("STUFFING BOX", 16000), 
         ("PISTON CROWN", 32000), ("CYLINDER LINER", 0), ("EXHAUST VALVE", 16000), 
@@ -91,20 +154,17 @@ def parse_legacy_doc_stream(raw_bytes) -> tuple:
     ]
     
     for comp, periodicity in me_patterns:
-        # Look for the component name, followed by any junk, then the '2' marker, then the hours row
         comp_block = re.search(rf"{re.escape(comp)}\x07.*?\x072\x07([^\x0d]+)", text, re.DOTALL | re.IGNORECASE)
         if comp_block:
             hours_line = comp_block.group(1)
             hours_tokens = [t.strip() for t in hours_line.split('\x07') if t.strip()]
-            
-            for idx, h_val in enumerate(hours_tokens[:7]):  # Max 7 cylinders for Main Engine
+            for idx, h_val in enumerate(hours_tokens[:7]):
                 hrs = extract_numeric_value(h_val)
                 parsed_records.append({
                     "Component": comp, "System": "MAIN ENGINE", "Unit": f"Cyl No.{idx+1}",
                     "Periodicity": periodicity, "Running Hours": hrs
                 })
 
-    # 2. Auxiliary Engines Logic (Horizontal Reading across 3 Engines)
     aux_patterns = [
         ("Cylinder Head", 12000), ("Piston", 10000), ("Connecting Rod", 10000), 
         ("Cylinder Liners", 10000), ("Fuel Valves (1)", 2000), ("Fuel Pumps", 5000),
@@ -116,10 +176,9 @@ def parse_legacy_doc_stream(raw_bytes) -> tuple:
         if aux_block:
             hours_line = aux_block.group(1)
             hours_tokens = [t.strip() for t in hours_line.split('\x07') if t.strip()]
-            
-            for i in range(1, 4): # D/G 1, 2, 3
+            for i in range(1, 4):
                 start_idx = (i - 1) * 6
-                for cyl in range(6): # 6 Cylinders per Aux Engine
+                for cyl in range(6):
                     token_idx = start_idx + cyl
                     if token_idx < len(hours_tokens):
                         hrs = extract_numeric_value(hours_tokens[token_idx])
@@ -128,12 +187,9 @@ def parse_legacy_doc_stream(raw_bytes) -> tuple:
                             "Periodicity": periodicity, "Running Hours": hrs
                         })
 
-    # 3. Create DataFrame and Calculate Status
     df = pd.DataFrame(parsed_records)
     if not df.empty:
-        # Avoid division by zero
         df['% Used'] = np.where(df['Periodicity'] > 0, df['Running Hours'] / df['Periodicity'], 0.0)
-        
         conditions = [
             (df['Running Hours'] == 0) | (df['Periodicity'] == 0),
             (df['% Used'] >= THRESHOLD_RED),
@@ -144,91 +200,95 @@ def parse_legacy_doc_stream(raw_bytes) -> tuple:
         
     return vessel, date_str, df
 
-def convert_df_to_csv(df):
-    """Converts dataframe to a CSV for downloading."""
-    return df.to_csv(index=False).encode('utf-8')
+# --- 3. SIDEBAR NAVIGATION CONSOLE ---
+with st.sidebar:
+    st.markdown("<h2 style='color:#5BC0BE;'>🛰️ Fleet Control</h2>", unsafe_allow_html=True)
+    st.markdown("---")
+    selected_view = st.radio("Navigation Window", ["Operations Dashboard", "System Live Logs", "Fleet Risk Map"])
+    st.markdown("---")
+    st.markdown("### Operational Settings")
+    dynamic_red = st.slider("Overdue Limit (%)", 80, 120, 100) / 100.0
 
-# --- 3. FRONTEND DASHBOARD ---
-st.title("🚢 Fleet Running Hours Intelligence")
-st.write("Upload a legacy `.doc` report to instantly extract, validate, and visualize fleet diagnostics.")
+# --- 4. CONTROL TOWER INTERFACE ---
+if selected_view == "Operations Dashboard":
+    st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px;'>⚓ Fleet Running Hours Intelligence</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#9A9EAB;'>Drag and drop raw text telemetry logs to evaluate degradation profiles.</p>", unsafe_allow_html=True)
+    
+    uploaded_file = st.file_uploader("", type=["doc"])
 
-uploaded_file = st.file_uploader("Upload Vessel Report (.doc)", type=["doc"])
-
-if uploaded_file is not None:
-    with st.spinner('Parsing binary document structures...'):
+    if uploaded_file is not None:
         file_bytes = uploaded_file.read()
         vessel_name, report_date, data_df = parse_legacy_doc_stream(file_bytes)
         
-    if data_df.empty:
-        st.error("🚨 Extraction Failed: Could not locate table structures in this document. Ensure the file follows the standard format.")
-    else:
-        st.success(f"Successfully extracted {len(data_df)} records from {vessel_name}.")
-        
-        # --- TOP ROW: KPI METRICS ---
-        st.markdown(f"### {vessel_name} | <span style='font-size:18px; color:gray;'>Report Date: {report_date}</span>", unsafe_allow_html=True)
-        
-        overdue_df = data_df[data_df['Status'] == 'OVERDUE']
-        warning_df = data_df[data_df['Status'] == 'HIGH PRIORITY']
-        
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Components Monitored", f"{len(data_df)}")
-        c2.metric("Critical Overdue Items", f"{len(overdue_df)}", delta="Action Required", delta_color="inverse")
-        c3.metric("High Priority Warnings", f"{len(warning_df)}", delta="Approaching Limit", delta_color="off")
-        
-        # Health Score Calculation
-        health_score = 100 - ((len(overdue_df) * 2 + len(warning_df)) / len(data_df) * 100)
-        c4.metric("Vessel Health Score", f"{health_score:.1f}%")
+        if not data_df.empty:
+            # Re-evaluate limits dynamically based on sidebar slider inputs
+            data_df['% Used'] = np.where(data_df['Periodicity'] > 0, data_df['Running Hours'] / data_df['Periodicity'], 0.0)
+            conditions = [
+                (data_df['Running Hours'] == 0),
+                (data_df['% Used'] >= dynamic_red),
+                (data_df['% Used'] >= THRESHOLD_YELLOW)
+            ]
+            data_df['Status'] = np.select(conditions, ['NO DATA', 'OVERDUE', 'HIGH PRIORITY'], default='OK')
 
-        st.divider()
+            overdue_count = len(data_df[data_df['Status'] == 'OVERDUE'])
+            warning_count = len(data_df[data_df['Status'] == 'HIGH PRIORITY'])
+            health_score = max(0.0, 100.0 - ((overdue_count * 2.5 + warning_count * 1.0) / len(data_df) * 100))
 
-        # --- TABBED NAVIGATION ---
-        tab1, tab2 = st.tabs(["⚠️ Action Matrix", "📋 Full Diagnostic Log"])
-        
-        # UI Configuration for the Dataframe columns
-        column_config = {
-            "Component": st.column_config.TextColumn("Engine Component", width="medium"),
-            "System": st.column_config.TextColumn("System", width="medium"),
-            "Unit": st.column_config.TextColumn("Unit", width="small"),
-            "Periodicity": st.column_config.NumberColumn("Periodicity (Hrs)", format="%d"),
-            "Running Hours": st.column_config.NumberColumn("Running Hours", format="%.1f"),
-            "% Used": st.column_config.ProgressColumn(
-                "Lifecycle Used",
-                help="Percentage of component lifecycle consumed",
-                format="%.1f%%",
-                min_value=0,
-                max_value=1,
-            ),
-            "Status": st.column_config.TextColumn("Status")
-        }
-        
-        def highlight_status(val):
-            """Applies color to the dataframe based on status."""
-            if val == 'OVERDUE': return 'background-color: #ffcccc; color: #cc0000; font-weight: bold'
-            elif val == 'HIGH PRIORITY': return 'background-color: #fff2cc; color: #b38600; font-weight: bold'
-            elif val == 'OK': return 'color: #004085;'
-            return 'color: #6c757d;'
+            # HTML Injection for High-End Animated Metric Deck
+            st.markdown(f"""
+                <div class="kpi-deck">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Target Asset Context</div>
+                        <div class="kpi-value" style="color:#5BC0BE;">{vessel_name}</div>
+                        <div style="color:#9A9EAB; font-size:12px; margin-top:5px;">Log Reference: {report_date}</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label"><span class="indicator-dot dot-critical"></span>Critical Interrupts</div>
+                        <div class="kpi-value" style="color:#FF4B4B;">{overdue_count} Items</div>
+                        <div style="color:#9A9EAB; font-size:12px; margin-top:5px;">Immediate Overhaul Action Required</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label"><span class="indicator-dot dot-warning"></span>Impending Interventions</div>
+                        <div class="kpi-value" style="color:#FFAA00;">{warning_count} Items</div>
+                        <div style="color:#9A9EAB; font-size:12px; margin-top:5px;">Approaching Operational Limit</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Hull Efficiency Status</div>
+                        <div class="kpi-value" style="color:#00E676;">{health_score:.1f}%</div>
+                        <div style="color:#9A9EAB; font-size:12px; margin-top:5px;">Calculated Structural Integrity</div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-        with tab1:
-            st.subheader("High Priority Interventions")
-            action_items = pd.concat([overdue_df, warning_df]).sort_values(by='% Used', ascending=False)
+            # Executive Interactive Filters Matrix
+            tab1, tab2, tab3 = st.tabs(["🔥 Risk Exceptions Matrix", "🔩 Main Propagation Matrix", "⚡ Auxiliary Propulsion Matrix"])
             
-            if not action_items.empty:
-                styled_action = action_items.style.map(highlight_status, subset=['Status'])
-                st.dataframe(styled_action, use_container_width=True, hide_index=True, column_config=column_config)
-            else:
-                st.info("✅ All systems are operating within safe lifecycle thresholds. No immediate action required.")
-                
-        with tab2:
-            st.subheader("Complete Equipment Log")
-            
-            # Add Download Button for Local Backup
-            csv_data = convert_df_to_csv(data_df)
-            st.download_button(
-                label="📥 Download Data as CSV",
-                data=csv_data,
-                file_name=f"{vessel_name.replace(' ', '_')}_RH_Report.csv",
-                mime='text/csv',
-            )
-            
-            styled_full = data_df.style.map(highlight_status, subset=['Status'])
-            st.dataframe(styled_full, use_container_width=True, hide_index=True, column_config=column_config)
+            # Interactive Progress Column Framework Layout Config
+            ui_column_config = {
+                "Component": st.column_config.TextColumn("Component Identifier", width="medium"),
+                "System": st.column_config.TextColumn("Machinery Subsystem", width="medium"),
+                "Unit": st.column_config.TextColumn("Location", width="small"),
+                "Periodicity": st.column_config.NumberColumn("Limit Interval (Hrs)", format="%d"),
+                "Running Hours": st.column_config.NumberColumn("Accumulated Running Hours", format="%.1f"),
+                "% Used": st.column_config.ProgressColumn("Structural Fatigue Curve", format="%.1f%%", min_value=0, max_value=1.5),
+                "Status": st.column_config.TextColumn("Diagnostic State")
+            }
+
+            with tab1:
+                # Filter strictly for action elements sorted by highest degradation curves
+                risk_df = data_df[data_df['Status'].isin(['OVERDUE', 'HIGH PRIORITY'])].sort_values(by='% Used', ascending=False)
+                if not risk_df.empty:
+                    st.dataframe(risk_df, use_container_width=True, hide_index=True, column_config=ui_column_config)
+                else:
+                    st.success("All systems operating within normal degradation profiles.")
+
+            with tab2:
+                # Hierarchical Filtering Strategy: System -> Component -> Unit
+                me_df = data_df[data_df['System'] == 'MAIN ENGINE'].sort_values(by=['Component', 'Unit'])
+                st.dataframe(me_df, use_container_width=True, hide_index=True, column_config=ui_column_config)
+
+            with tab3:
+                aux_df = data_df[data_df['System'].str.contains('AUX')].sort_values(by=['System', 'Component', 'Unit'])
+                st.dataframe(aux_df, use_container_width=True, hide_index=True, column_config=ui_column_config)
+else:
+    st.info("Additional console module selected. Main parsing metrics are contained on the Operations Dashboard.")
