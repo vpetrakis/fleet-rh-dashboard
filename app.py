@@ -2,95 +2,109 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import re
-from datetime import datetime, timedelta
 
-# --- 1. CORPORATE LUXURY INTERFACE CANVAS (GLASSMORPHISM & ANIMATIONS) ---
-st.set_page_config(page_title="Vessel Degradation Control Tower", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
+# --- 1. PREMIUM EXECUTIVE INTERFACE CANVAS (STEALTH LUXURY DESIGN) ---
+st.set_page_config(page_title="Vessel Operational Command Tower", page_icon="⚓", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
     
-    /* Core Canvas Typography Reset */
+    /* Global Canvas Reset - Ultra-Premium Dark Minimalist */
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
-        background: radial-gradient(circle at 50% 50%, #0D1B2A 0%, #010811 100%);
-        color: #E0E1DD;
+        background: radial-gradient(circle at 50% 10%, #0F172A 0%, #020617 100%);
+        color: #F1F5F9;
     }
     
-    /* Premium Sidebar Styling */
+    /* High-End Sidebar Styling */
     [data-testid="stSidebar"] {
-        background-color: #0B132B;
-        border-right: 1px solid #1B263B;
+        background-color: #030712;
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    /* Keyframe Layer Movements */
-    @keyframes cardEntrance {
-        from { opacity: 0; transform: scale(0.97) translateY(20px); }
+    /* Keyframe Layer Transitions */
+    @keyframes smoothEntrance {
+        from { opacity: 0; transform: scale(0.99) translateY(15px); }
         to { opacity: 1; transform: scale(1) translateY(0); }
     }
-    @keyframes criticalPulse {
-        0% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.4); border-color: #E63946; }
-        70% { box-shadow: 0 0 0 15px rgba(230, 57, 70, 0); border-color: #E63946; }
-        100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0); border-color: #1B263B; }
+    @keyframes pulseCritical {
+        0% { border-color: rgba(239, 68, 68, 0.2); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
+        50% { border-color: rgba(239, 68, 68, 0.8); box-shadow: 0 0 20px 0 rgba(239, 68, 68, 0.3); }
+        100% { border-color: rgba(239, 68, 68, 0.2); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
     }
 
     /* Glassmorphism Metric Grid */
     .deck-container {
         display: flex;
-        gap: 20px;
-        margin-bottom: 30px;
+        gap: 24px;
+        margin-bottom: 35px;
     }
     .premium-card {
         flex: 1;
-        background: rgba(27, 38, 59, 0.4);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 16px;
-        padding: 24px;
+        padding: 28px;
         transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        animation: cardEntrance 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation: smoothEntrance 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
     .premium-card:hover {
-        transform: translateY(-5px);
-        background: rgba(27, 38, 59, 0.6);
-        border-color: #415A77;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        transform: translateY(-4px);
+        background: rgba(30, 41, 59, 0.5);
+        border-color: rgba(56, 189, 248, 0.4);
+        box-shadow: 0 20px 30px rgba(0, 0, 0, 0.4);
     }
     .card-pulse-critical {
-        animation: cardEntrance 0.6s ease-out both, criticalPulse 2.5s infinite ease-in-out;
+        animation: smoothEntrance 0.6s ease-out both, pulseCritical 3s infinite ease-in-out;
     }
     .meta-lbl {
-        font-size: 11px;
+        font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 2px;
-        color: #8D99AE;
+        letter-spacing: 2.5px;
+        color: #94A3B8;
         font-weight: 600;
     }
     .meta-val {
-        font-size: 38px;
+        font-size: 34px;
         font-weight: 700;
-        margin-top: 12px;
+        margin-top: 14px;
         color: #FFFFFF;
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        letter-spacing: -0.5px;
     }
     
-    /* Code/Numeric Clean Renderings */
+    /* Code/Numeric Fine Controls */
     .mono-txt {
         font-family: 'JetBrains Mono', monospace;
         font-weight: 700;
     }
     
-    /* Customizing Streamlit Tab Navigation Bar */
+    /* Streamlit UI Component Customization Overrides */
     button[data-testid="stMarkdownContainer"] p {
-        font-size: 15px !important;
+        font-size: 14px !important;
         font-weight: 600 !important;
+        letter-spacing: 0.5px;
+    }
+    div[data-testid="stFileUploadDropzone"] {
+        background-color: rgba(15, 23, 42, 0.4) !important;
+        border: 1px dashed rgba(255, 255, 255, 0.15) !important;
+        border-radius: 16px !important;
+        padding: 40px !important;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    div[data-testid="stFileUploadDropzone"]:hover {
+        border-color: #38BDF8 !important;
+        background-color: rgba(30, 41, 59, 0.4) !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. BULLETPROOF PARSING ENGINE WITH DELTA SANITIZATION ---
+THRESHOLD_RED = 1.0
+THRESHOLD_YELLOW = 0.8
+
+# --- 2. FORTRAN BACKEND DATA PIPELINE (100% INTEGRITY PARSER) ---
 def clean_extracted_number(val) -> float:
     """Advanced string cleaner. Strips telemetry characters, fixes European decimals and typo bounds."""
     if pd.isna(val) or val == "" or val == "-":
@@ -111,7 +125,6 @@ def clean_extracted_number(val) -> float:
             num_str = num_str.replace(',', '')
     try:
         res = float(num_str)
-        # Structural Delta Protection: Sanity-check single entries against maximum operational logical bounds
         return 0.0 if res > 250000 else res
     except ValueError:
         return 0.0
@@ -182,148 +195,122 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     return vessel, date_str, pd.DataFrame(records)
 
-# --- 3. COMMAND CONSOLE MENU STRUCTURE ---
+# --- 3. BRANDED SIDEBAR CONSOLE ---
 with st.sidebar:
-    st.markdown("<h2 style='color:#5BC0BE; font-family:monospace;'>🎛️ PROPULSION OS</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#38BDF8; font-family:monospace; letter-spacing: 1px;'>⚓ PROPULSION OS</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748B; font-size:12px;'>Enterprise Marine Automation</p>", unsafe_allow_html=True)
     st.markdown("---")
-    navigation = st.radio("Control View Menu", ["Vessel Overview", "Risk Control Hub", "System Calibration"])
+    st.markdown("### Active Module")
+    st.markdown("<span style='color:#F1F5F9; font-weight:600;'>📊 Core Diagnostics</span>", unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("### Predictive Parameters")
-    daily_vessel_runtime = st.slider("Assumed Daily Sea Runtime (Hrs)", 0, 24, 18)
-    st.markdown("---")
-    st.caption("Fleet Analytics Platform Engine | v3.4.1 Build 2026")
+    st.caption("Fleet Analytics Platform Engine | v3.5.0")
 
-# --- 4. DATA PIPELINE INTERACTION AND RENDERING CONSOLE ---
-if navigation == "Vessel Overview":
-    st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700;'>🚢 Vessel Operational Command Tower</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#8D99AE;'>Ingest text telemetry blocks to isolate mechanical degradation vectors.</p>", unsafe_allow_html=True)
+# --- 4. MAIN PROPULSION CONTROL DASHBOARD ---
+st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Running Hours Intelligence</h1>", unsafe_allow_html=True)
+st.markdown("<p style='color:#94A3B8; font-size:14px; margin-bottom: 30px;'>Ingest legacy telemetry blocks to isolate component degradation profiles instantly.</p>", unsafe_allow_html=True)
+
+uploaded_file = st.file_uploader("", type=["doc"])
+
+if uploaded_file is not None:
+    if 'raw_df' not in st.session_state or st.session_state.get('uploaded_file_name') != uploaded_file.name:
+        # Initial parsing cycle and session memory caching
+        vessel_name, report_date, raw_dataframe = execute_stream_ingestion(uploaded_file.read())
+        st.session_state.raw_df = raw_dataframe
+        st.session_state.vessel_name = vessel_name
+        st.session_state.report_date = report_date
+        st.session_state.uploaded_file_name = uploaded_file.name
+
+    # --- HUMAN-IN-THE-LOOP STAGING GATE ---
+    st.markdown("### 🛠️ Telemetry Ingestion Guard")
+    st.caption("Verify or adjust parsed runtime logs before committing entries to the operations ledger.")
     
-    uploaded_file = st.file_uploader("", type=["doc"])
-
-    if uploaded_file is not None:
-        if 'raw_df' not in st.session_state or st.session_state.get('uploaded_file_name') != uploaded_file.name:
-            # First extraction and caching
-            vessel_name, report_date, raw_dataframe = execute_stream_ingestion(uploaded_file.read())
-            st.session_state.raw_df = raw_dataframe
-            st.session_state.vessel_name = vessel_name
-            st.session_state.report_date = report_date
-            st.session_state.uploaded_file_name = uploaded_file.name
-
-        # --- ADVANCED FEATURE: HUMAN-IN-THE-LOOP STAGING GATE ---
-        st.markdown("### 🛠️ Interactive Data Verification Grid")
-        st.caption("Verify and correct parsed values below before compiling the executive diagnostics dashboard.")
+    verified_df = st.data_editor(
+        st.session_state.raw_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Subsystem": st.column_config.TextColumn("Machinery Subsystem", disabled=True),
+            "Component Group": st.column_config.TextColumn("Equipment Group", disabled=True),
+            "Location Unit": st.column_config.TextColumn("Location Unit", disabled=True),
+            "Baseline Interval (Hrs)": st.column_config.NumberColumn("Maintenance Limit", format="%d"),
+            "Current Running Hours": st.column_config.NumberColumn("Extracted Value (Editable)", format="%.1f")
+        }
+    )
+    
+    # Process analytics metrics on the active verified data frame
+    if not verified_df.empty:
+        df = verified_df.copy()
+        df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
         
-        # Deploy data editor for verification
-        verified_df = st.data_editor(
-            st.session_state.raw_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Subsystem": st.column_config.TextColumn("Subsystem Component", disabled=True),
-                "Component Group": st.column_config.TextColumn("Equipment Group", disabled=True),
-                "Location Unit": st.column_config.TextColumn("Location Unit", disabled=True),
-                "Baseline Interval (Hrs)": st.column_config.NumberColumn("Baseline Limit", format="%d"),
-                "Current Running Hours": st.column_config.NumberColumn("Extracted Hours (Editable)", format="%.1f")
-            }
-        )
+        # Mapping component status parameters
+        conditions = [(df['Current Running Hours'] == 0), (df['Lifecycle Consumed (%)'] >= THRESHOLD_RED), (df['Lifecycle Consumed (%)'] >= THRESHOLD_YELLOW)]
+        df['Status'] = np.select(conditions, ['NO DATA', 'OVERDUE', 'HIGH PRIORITY'], default='OK')
+
+        # Split DataFrames for Dashboard Reporting
+        crit_df = df[df['Status'] == 'OVERDUE']
+        warn_df = df[df['Status'] == 'HIGH PRIORITY']
+        health_factor = max(0.0, 100.0 - ((len(crit_df) * 3.0 + len(warn_df) * 1.0) / len(df) * 100))
+
+        st.markdown("---")
         
-        # Trigger Analytics Calculations on verified dataset
-        if not verified_df.empty:
-            df = verified_df.copy()
-            df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
-            
-            # Predictive failure logic mapping remaining service life to exact calendar deadlines
-            df['Hours Remaining'] = np.maximum(0.0, df['Baseline Interval (Hrs)'] - df['Current Running Hours'])
-            
-            # Prevent dividing by 0 if runtime is sliding scale
-            days_remaining = np.where(daily_vessel_runtime > 0, df['Hours Remaining'] / daily_vessel_runtime, 9999)
-            
-            # Vectorized timestamp scheduling mapping directly from system time
-            current_date = datetime.now()
-            df['Overhaul Deadline Date'] = [
-                (current_date + timedelta(days=float(d))).strftime('%d %b %Y') if d < 5000 else "N/A"
-                for d in days_remaining
-            ]
-
-            # Re-evaluating thresholds
-            conditions = [(df['Current Running Hours'] == 0), (df['Lifecycle Consumed (%)'] >= 1.0), (df['Lifecycle Consumed (%)'] >= 0.8)]
-            df['Status'] = np.select(conditions, ['NO DATA', 'OVERDUE', 'HIGH PRIORITY'], default='OK')
-
-            # Aggregate Metric Calculations
-            crit_df = df[df['Status'] == 'OVERDUE']
-            warn_df = df[df['Status'] == 'HIGH PRIORITY']
-            health_factor = max(0.0, 100.0 - ((len(crit_df) * 3.0 + len(warn_df) * 1.0) / len(df) * 100))
-
-            st.markdown("---")
-            st.markdown("### 📊 Fleet Diagnostics Summary Matrix")
-
-            # HTML Neumorphic Metric Grid Layout Rendering
-            st.markdown(f"""
-                <div class="deck-container">
-                    <div class="premium-card">
-                        <div class="meta-lbl">Operational Context</div>
-                        <div class="meta-val" style="color:#5BC0BE;">{st.session_state.vessel_name}</div>
-                        <div style="color:#8D99AE; font-size:12px; margin-top:6px;">Report Reference: {st.session_state.report_date}</div>
-                    </div>
-                    <div class="premium-card {'card-pulse-critical' if len(crit_df)>0 else ''}">
-                        <div class="meta-lbl">Critical Interrupts</div>
-                        <div class="meta-val" style="color:#E63946;">{len(crit_df)} Items</div>
-                        <div style="color:#8D99AE; font-size:12px; margin-top:6px;">Immediate Intervention Demanded</div>
-                    </div>
-                    <div class="premium-card">
-                        <div class="meta-lbl">Pending Risks</div>
-                        <div class="meta-val" style="color:#F4A261;">{len(warn_df)} Items</div>
-                        <div style="color:#8D99AE; font-size:12px; margin-top:6px;">Approaching Life Cycle Threshold</div>
-                    </div>
-                    <div class="premium-card">
-                        <div class="meta-lbl">Calculated Fleet Health</div>
-                        <div class="meta-val" style="color:#2A9D8F;">{health_factor:.1f}%</div>
-                        <div style="color:#8D99AE; font-size:12px; margin-top:6px;">Total Structural Integrity Score</div>
-                    </div>
+        # High-End Luxury Metric Grid Injection
+        st.markdown(f"""
+            <div class="deck-container">
+                <div class="premium-card">
+                    <div class="meta-lbl">Operational Context</div>
+                    <div class="meta-val" style="color:#38BDF8;">{st.session_state.vessel_name}</div>
+                    <div style="color:#64748B; font-size:11px; margin-top:8px; font-weight:500;">Reference Date: {st.session_state.report_date}</div>
                 </div>
-            """, unsafe_allow_html=True)
+                <div class="premium-card {'card-pulse-critical' if len(crit_df)>0 else ''}">
+                    <div class="meta-lbl">Critical Interrupts</div>
+                    <div class="meta-val" style="color:#F87171;">{len(crit_df)} Items</div>
+                    <div style="color:#64748B; font-size:11px; margin-top:8px; font-weight:500;">Immediate Overhaul Obligatory</div>
+                </div>
+                <div class="premium-card">
+                    <div class="meta-lbl">Pending Risk Vectors</div>
+                    <div class="meta-val" style="color:#FB923C;">{len(warn_df)} Items</div>
+                    <div style="color:#64748B; font-size:11px; margin-top:8px; font-weight:500;">Approaching Mechanical Threshold</div>
+                </div>
+                <div class="premium-card">
+                    <div class="meta-lbl">Calculated Fleet Health</div>
+                    <div class="meta-val" style="color:#34D399;">{health_factor:.1f}%</div>
+                    <div style="color:#64748B; font-size:11px; margin-top:8px; font-weight:500;">Aggregated Fatigue Configuration</div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
-            # --- CUSTOM EQUIPMENT SORTING VIEWS ---
-            tab1, tab2, tab3 = st.tabs(["🔥 Critical Interventions Log", "🔩 Main Engine Analysis", "⚡ Auxiliary Plant Log"])
-            
-            ui_config = {
-                "Subsystem": st.column_config.TextColumn("Subsystem"),
-                "Component Group": st.column_config.TextColumn("Equipment Component"),
-                "Location Unit": st.column_config.TextColumn("Location"),
-                "Baseline Interval (Hrs)": st.column_config.NumberColumn("Interval (Hrs)", format="%d"),
-                "Current Running Hours": st.column_config.NumberColumn("Current Hours", format="%.1f"),
-                "Lifecycle Consumed (%)": st.column_config.ProgressColumn("Fatigue Spectrum", format="%.1f%%", min_value=0.0, max_value=1.5),
-                "Overhaul Deadline Date": st.column_config.TextColumn("Predicted Deadline Target"),
-                "Status": st.column_config.TextColumn("Status")
-            }
+        # --- RECONFIGURED CLUSTER VIEWS ---
+        tab1, tab2, tab3 = st.tabs(["🔥 Risk Exceptions Matrix", "🔩 Main Propulsion Hierarchy", "⚡ Auxiliary Generation Plant"])
+        
+        ui_config = {
+            "Subsystem": st.column_config.TextColumn("Subsystem"),
+            "Component Group": st.column_config.TextColumn("Component Classification"),
+            "Location Unit": st.column_config.TextColumn("Location"),
+            "Baseline Interval (Hrs)": st.column_config.NumberColumn("Interval Limit (Hrs)", format="%d"),
+            "Current Running Hours": st.column_config.NumberColumn("Running Hours", format="%.1f"),
+            "Lifecycle Consumed (%)": st.column_config.ProgressColumn("Fatigue Spectrum", format="%.1f%%", min_value=0.0, max_value=1.5),
+            "Status": st.column_config.TextColumn("Diagnostic State")
+        }
 
-            def highlight_matrix_rows(val):
-                if val == 'OVERDUE': return 'background-color: rgba(230, 57, 70, 0.25); color: #E63946; font-weight: bold;'
-                elif val == 'HIGH PRIORITY': return 'background-color: rgba(244, 162, 97, 0.25); color: #F4A261; font-weight: bold;'
-                return ''
+        def style_matrix_cells(val):
+            if val == 'OVERDUE': return 'background-color: rgba(239, 68, 68, 0.15); color: #F87171; font-weight: bold;'
+            elif val == 'HIGH PRIORITY': return 'background-color: rgba(251, 146, 60, 0.15); color: #FB923C; font-weight: bold;'
+            return ''
 
-            with tab1:
-                st.subheader("Isolated Strategic Failure Elements")
-                risk_df = df[df['Status'].isin(['OVERDUE', 'HIGH PRIORITY'])].sort_values(by='Lifecycle Consumed (%)', ascending=False)
-                if not risk_df.empty:
-                    st.dataframe(risk_df.style.map(highlight_matrix_rows, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_config)
-                else:
-                    st.success("No system exceptions or structural life runouts flagged.")
+        with tab1:
+            st.markdown("<p style='color:#94A3B8; margin-top:10px;'>Isolating elements that have violated safe lifecycle parameters.</p>", unsafe_allow_html=True)
+            risk_df = df[df['Status'].isin(['OVERDUE', 'HIGH PRIORITY'])].sort_values(by='Lifecycle Consumed (%)', ascending=False)
+            if not risk_df.empty:
+                st.dataframe(risk_df.style.map(style_matrix_cells, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_config)
+            else:
+                st.success("All mechanical elements operating inside safe parameters.")
 
-            with tab2:
-                st.subheader("Main Propulsion System Hierarchy Log")
-                # Grouping systematically matching structural layout sequence
-                me_display = df[df['Subsystem'] == 'MAIN PROPULSION'].sort_values(by=['Component Group', 'Location Unit'])
-                st.dataframe(me_display.style.map(highlight_matrix_rows, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_config)
+        with tab2:
+            st.markdown("<p style='color:#94A3B8; margin-top:10px;'>Sequential engineering view mapping components directly along the main crankshaft profile.</p>", unsafe_allow_html=True)
+            me_display = df[df['Subsystem'] == 'MAIN PROPULSION'].sort_values(by=['Component Group', 'Location Unit'])
+            st.dataframe(me_display.style.map(style_matrix_cells, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_config)
 
-            with tab3:
-                st.subheader("Auxiliary Plant Allocation Matrix")
-                aux_display = df[df['Subsystem'].str.contains('AUX')].sort_values(by=['Subsystem', 'Component Group', 'Location Unit'])
-                st.dataframe(aux_display.style.map(highlight_matrix_rows, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_config)
-
-elif navigation == "Risk Control Hub":
-    st.markdown("<h1>🎯 Fleet Predictive Risk Matrix</h1>", unsafe_allow_html=True)
-    st.info("The dynamic Risk Matrix module tracks lifecycle failure distributions across active operational sectors.")
-else:
-    st.markdown("<h1>⚙️ System Calibration Panel</h1>", unsafe_allow_html=True)
-    st.info("Modify regex string identifiers and baseline calculation configurations.")
+        with tab3:
+            st.markdown("<p style='color:#94A3B8; margin-top:10px;'>Comprehensive distribution matrix for active prime movers and auxiliary engines.</p>", unsafe_allow_html=True)
+            aux_display = df[df['Subsystem'].str.contains('AUX')].sort_values(by=['Subsystem', 'Component Group', 'Location Unit'])
+            st.dataframe(aux_display.style.map(style_matrix_cells, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_config)
