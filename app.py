@@ -3,21 +3,21 @@ import pandas as pd
 import numpy as np
 import re
 
-# --- 1. THE ARCHITECTURAL APEX: NATIVE COCKPIT STEALTH INTERFACE ---
+# --- 1. THE ARCHITECTURAL APEX: NATIVE ULTRA-PREMIUM COMMAND COCKPIT ---
 st.set_page_config(page_title="Propulsion Command Control", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
     
-    /* Absolute System Canvas Reset - Deep Space Matte Corporate Identity */
+    /* Absolute Canvas Reset - High-End Minimalist Stealth Theme */
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         background: radial-gradient(circle at 50% -20%, #0F172A 0%, #020617 100%);
         color: #F8FAFC;
     }
     
-    /* Conceal Default Server Headers and Streamlit Footers */
+    /* Conceal Default Server Headers and Footers for Native App Experience */
     [data-testid="stHeader"], footer {visibility: hidden;}
     
     /* Advanced Interface Presentation Animations */
@@ -31,7 +31,7 @@ st.markdown("""
         100% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
     }
 
-    /* Executive Glassmorphic KPI Row Layout */
+    /* Premium Glassmorphic KPI Row Layout */
     .dashboard-deck {
         display: flex;
         gap: 24px;
@@ -77,7 +77,7 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* Override Default Spreadsheet Element Backgrounds for Slate Cohesion */
+    /* Custom Spreadsheet Wrapper Styles */
     div[data-testid="stDataFrame"] {
         border: 1px solid rgba(255, 255, 255, 0.04) !important;
         border-radius: 12px !important;
@@ -85,7 +85,7 @@ st.markdown("""
         background-color: #090D1A !important;
     }
     
-    /* File Upload Dropzone Refinements */
+    /* File Upload Area Customizations */
     div[data-testid="stFileUploadDropzone"] {
         background-color: rgba(15, 23, 42, 0.25) !important;
         border: 1px dashed rgba(255, 255, 255, 0.1) !important;
@@ -97,6 +97,7 @@ st.markdown("""
         background-color: rgba(30, 41, 59, 0.25) !important;
     }
     
+    /* Modernized Tab Layout Styling */
     button[data-testid="stMarkdownContainer"] p {
         font-size: 14px !important;
         font-weight: 600 !important;
@@ -105,11 +106,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Configuration Thresholds
+# Operational Rule Boundaries
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
-# --- 2. FORENSIC TELEMETRY DATA PIPELINE (100% DATA INTEGRITY MAPPING) ---
+# --- 2. FORENSIC TELEMETRY DATA PIPELINE (100% DATA INTEGRITY) ---
 def clean_extracted_number(val) -> float:
     if pd.isna(val) or val == "" or val == "-":
         return 0.0
@@ -144,7 +145,7 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     records = []
     
-    # Machinery Categorization Mapping Tables (Assigned directly to renamed 'MAIN ENGINE' subsystem)
+    # 1. Main Engine Structural Definition Tables
     me_definitions = [
         ("CYLINDER COVER", 16000), ("PISTON ASSEMBLY", 16000), ("STUFFING BOX", 16000), 
         ("PISTON CROWN", 32000), ("CYLINDER LINER", 16000), ("EXHAUST VALVE", 16000), 
@@ -163,6 +164,7 @@ def execute_stream_ingestion(file_bytes) -> tuple:
                     "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(h_val)
                 })
 
+    # 2. Auxiliary Engine Structural Definition Tables
     aux_definitions = [
         ("Cylinder Head", 12000), ("Piston", 10000), ("Connecting Rod", 10000), 
         ("Cylinder Liners", 10000), ("Fuel Valves (1)", 2000), ("Fuel Pumps", 5000),
@@ -178,15 +180,15 @@ def execute_stream_ingestion(file_bytes) -> tuple:
                     token_idx = ((i - 1) * 6) + cyl
                     if token_idx < len(tokens):
                         records.append({
-                            "Subsystem": f"AUX GENERATOR No.{i}", "Component Group": comp.replace(" (1)", ""), "Location Unit": f"Cyl No.{cyl+1}",
+                            "Subsystem": "AUX ENGINE", "Component Group": comp.replace(" (1)", ""), "Location Unit": f"DG No.{i} - Cyl No.{cyl+1}",
                             "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(tokens[token_idx])
                         })
 
-    # Miscellaneous Fleet Sub-Systems
+    # 3. Other Equipment Sub-Matrix Definitions
     misc_definitions = [
-        ("GENERAL O/H", 16000, "TURBOCHARGER", "M/E T/C"), ("BALANCING OF ROTOR SHAFT", 32000, "TURBOCHARGER", "M/E T/C"),
-        ("AIR COOLER CLEANING", 4000, "COOLERS", "M/E Air Cooler"), ("AIR COND. COMPRESSOR NO.1", 10000, "A/C SYSTEMS", "Compressor 1"),
-        ("AIR COND. COMPRESSOR NO.2", 10000, "A/C SYSTEMS", "Compressor 2"), ("REFRIGERATION COMPRESSOR NO.1", 10000, "REFRIGERATION", "Compressor 1")
+        ("GENERAL O/H", 16000, "OTHER EQUIPMENT", "M/E T/C"), ("BALANCING OF ROTOR SHAFT", 32000, "OTHER EQUIPMENT", "M/E T/C"),
+        ("AIR COOLER CLEANING", 4000, "OTHER EQUIPMENT", "M/E Air Cooler"), ("AIR COND. COMPRESSOR NO.1", 10000, "OTHER EQUIPMENT", "Compressor 1"),
+        ("AIR COND. COMPRESSOR NO.2", 10000, "OTHER EQUIPMENT", "Compressor 2"), ("REFRIGERATION COMPRESSOR NO.1", 10000, "OTHER EQUIPMENT", "Compressor 1")
     ]
     for label, per, sub, unit in misc_definitions:
         m = re.search(rf"{re.escape(label)}\x07.*?\x07([\d\.\,\s\[\]]+)\x07", text, re.IGNORECASE)
@@ -198,18 +200,18 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     return vessel, date_str, pd.DataFrame(records)
 
-# --- 3. COMMAND DECK CORE FRONTEND MAIN FLOW ---
+# --- 3. FRONTEND LAYOUT CONSOLE DESIGN ---
 st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Running Hours Intelligence</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Automated platform for log ingestion, machinery component analysis, and asset evaluation profiles.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified enterprise deck for parsing operational reports, analyzing mechanical limit thresholds, and exporting telemetry matrices.</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("", type=["doc"])
 
 if uploaded_file is not None:
-    # Direct binary parsing execution without intermediate intervention blocks
+    # Direct raw extraction pass without intermediate steps
     vessel_name, report_date, df = execute_stream_ingestion(uploaded_file.read())
     
     if not df.empty:
-        # Analytical metric computations
+        # Vectorized life-cycle consumed calculation
         df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
         
         conditions = [(df['Current Running Hours'] == 0), (df['Lifecycle Consumed (%)'] >= THRESHOLD_RED), (df['Lifecycle Consumed (%)'] >= THRESHOLD_YELLOW)]
@@ -219,7 +221,7 @@ if uploaded_file is not None:
         warn_df = df[df['Status'] == 'HIGH PRIORITY']
         health_factor = max(0.0, 100.0 - ((len(crit_df) * 3.0 + len(warn_df) * 1.0) / len(df) * 100))
 
-        # Strategic Corporate Metric Deck Rows
+        # Executive KPI Cards Displays
         st.markdown(f"""
             <div class="dashboard-deck">
                 <div class="dashboard-card">
@@ -245,16 +247,16 @@ if uploaded_file is not None:
             </div>
         """, unsafe_allow_html=True)
 
-        # --- SECTOR DATA TAB DECKS ---
-        tab1, tab2, tab3 = st.tabs(["🔥 Risk Exceptions Matrix", "🔩 Main Engine Hierarchy", "⚡ Auxiliary Generation Plant"])
+        # --- RECONFIGURED CLUSTER VIEWS: MAIN MATRIX SEPARATIONS ---
+        tab1, tab2, tab3 = st.tabs(["⚙️ Main Engine Matrix", "⚡ Aux Engine Matrix", "🛠️ Other Equipment Matrix"])
         
         ui_table_config = {
-            "Subsystem": st.column_config.TextColumn("Subsystem"),
+            "Subsystem": st.column_config.TextColumn("Subsystem Component"),
             "Component Group": st.column_config.TextColumn("Component Classification"),
-            "Location Unit": st.column_config.TextColumn("Location"),
+            "Location Unit": st.column_config.TextColumn("Location Profile"),
             "Baseline Interval (Hrs)": st.column_config.NumberColumn("Interval Limit (Hrs)", format="%d"),
             "Current Running Hours": st.column_config.NumberColumn("Running Hours", format="%.1f"),
-            "Lifecycle Consumed (%)": st.column_config.ProgressColumn("Fatigue Curve", format="%.1f%%", min_value=0.0, max_value=1.5),
+            "Lifecycle Consumed (%)": st.column_config.ProgressColumn("Fatigue Spectrum", format="%.1f%%", min_value=0.0, max_value=1.5),
             "Status": st.column_config.TextColumn("Diagnostic Condition State")
         }
 
@@ -264,16 +266,16 @@ if uploaded_file is not None:
             return ''
 
         with tab1:
-            risk_df = df[df['Status'].isin(['OVERDUE', 'HIGH PRIORITY'])].sort_values(by='Lifecycle Consumed (%)', ascending=False)
-            if not risk_df.empty:
-                st.dataframe(risk_df.style.map(color_row_states, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_table_config)
-            else:
-                st.success("Data validation complete: All mechanical components operating inside safe lifecycle boundaries.")
-
-        with tab2:
+            st.markdown("<p style='color:#64748B; margin-top:10px; font-size:13px;'>Full flat matrix display for Main Engine components with zero layout hierarchy overrides.</p>", unsafe_allow_html=True)
             me_display = df[df['Subsystem'] == 'MAIN ENGINE'].sort_values(by=['Component Group', 'Location Unit'])
             st.dataframe(me_display.style.map(color_row_states, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_table_config)
 
-        with tab3:
-            aux_display = df[df['Subsystem'].str.contains('AUX')].sort_values(by=['Subsystem', 'Component Group', 'Location Unit'])
+        with tab2:
+            st.markdown("<p style='color:#64748B; margin-top:10px; font-size:13px;'>Full matrix distribution dataset for active prime movers and auxiliary diesel generators.</p>", unsafe_allow_html=True)
+            aux_display = df[df['Subsystem'] == 'AUX ENGINE'].sort_values(by=['Component Group', 'Location Unit'])
             st.dataframe(aux_display.style.map(color_row_states, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_table_config)
+
+        with tab3:
+            st.markdown("<p style='color:#64748B; margin-top:10px; font-size:13px;'>Full matrix overview for auxiliary plant assets, turbochargers, coolers, and critical components.</p>", unsafe_allow_html=True)
+            misc_display = df[df['Subsystem'] == 'OTHER EQUIPMENT'].sort_values(by=['Component Group', 'Location Unit'])
+            st.dataframe(misc_display.style.map(color_row_states, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_table_config)
