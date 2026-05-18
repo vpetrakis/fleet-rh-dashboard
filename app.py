@@ -3,32 +3,32 @@ import pandas as pd
 import numpy as np
 import re
 
-# --- 1. THE ARCHITECTURAL APEX: ULTRA-PREMIUM COCKPIT STYLING ---
+# --- 1. THE ARCHITECTURAL APEX: NATIVE COCKPIT STEALTH INTERFACE ---
 st.set_page_config(page_title="Propulsion Command Control", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
     
-    /* Absolute System Canvas Reset - Deep Space Matte Aesthetic */
+    /* Absolute System Canvas Reset - Deep Space Matte Corporate Identity */
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         background: radial-gradient(circle at 50% -20%, #0F172A 0%, #020617 100%);
         color: #F8FAFC;
     }
     
-    /* Conceal Default Server Headers */
+    /* Conceal Default Server Headers and Streamlit Footers */
     [data-testid="stHeader"], footer {visibility: hidden;}
     
-    /* Immersive Core Audit Grid Wrapper (Premium Matte Trim) */
-    .ledger-container-frame {
-        background: linear-gradient(180deg, rgba(30, 41, 59, 0.25) 0%, rgba(15, 23, 42, 0.4) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-left: 4px solid #38BDF8; /* Precision Cyan Focus Accent */
-        border-radius: 16px;
-        padding: 28px;
-        margin-bottom: 40px;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    /* Advanced Interface Presentation Animations */
+    @keyframes smoothReveal {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes radarPulse {
+        0% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
+        50% { border-color: rgba(248, 113, 113, 0.5); box-shadow: 0 0 25px 0 rgba(248, 113, 113, 0.2); }
+        100% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
     }
 
     /* Executive Glassmorphic KPI Row Layout */
@@ -47,6 +47,7 @@ st.markdown("""
         border-radius: 16px;
         padding: 26px;
         transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        animation: smoothReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
     
     .dashboard-card:hover {
@@ -54,6 +55,10 @@ st.markdown("""
         background: rgba(30, 41, 59, 0.5);
         border-color: rgba(56, 189, 248, 0.25);
         box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+    }
+    
+    .card-critical {
+        animation: smoothReveal 0.6s ease-out both, radarPulse 3s infinite ease-in-out;
     }
     
     .metric-title {
@@ -72,15 +77,15 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* Override Default Spreadsheet Element Backgrounds for Dark Cohesion */
-    div[data-testid="stDataEditor"] {
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    /* Override Default Spreadsheet Element Backgrounds for Slate Cohesion */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid rgba(255, 255, 255, 0.04) !important;
         border-radius: 12px !important;
         overflow: hidden !important;
         background-color: #090D1A !important;
     }
     
-    /* File Upload Section Formatting */
+    /* File Upload Dropzone Refinements */
     div[data-testid="stFileUploadDropzone"] {
         background-color: rgba(15, 23, 42, 0.25) !important;
         border: 1px dashed rgba(255, 255, 255, 0.1) !important;
@@ -100,6 +105,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Configuration Thresholds
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
@@ -138,6 +144,7 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     records = []
     
+    # Machinery Categorization Mapping Tables (Assigned directly to renamed 'MAIN ENGINE' subsystem)
     me_definitions = [
         ("CYLINDER COVER", 16000), ("PISTON ASSEMBLY", 16000), ("STUFFING BOX", 16000), 
         ("PISTON CROWN", 32000), ("CYLINDER LINER", 16000), ("EXHAUST VALVE", 16000), 
@@ -152,7 +159,7 @@ def execute_stream_ingestion(file_bytes) -> tuple:
             tokens = [t.strip() for t in block.group(1).split('\x07') if t.strip()]
             for idx, h_val in enumerate(tokens[:7]):
                 records.append({
-                    "Subsystem": "MAIN PROPULSION", "Component Group": comp, "Location Unit": f"Cyl No.{idx+1}",
+                    "Subsystem": "MAIN ENGINE", "Component Group": comp, "Location Unit": f"Cyl No.{idx+1}",
                     "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(h_val)
                 })
 
@@ -175,6 +182,7 @@ def execute_stream_ingestion(file_bytes) -> tuple:
                             "Baseline Interval (Hrs)": float(periodicity), "Current Running Hours": clean_extracted_number(tokens[token_idx])
                         })
 
+    # Miscellaneous Fleet Sub-Systems
     misc_definitions = [
         ("GENERAL O/H", 16000, "TURBOCHARGER", "M/E T/C"), ("BALANCING OF ROTOR SHAFT", 32000, "TURBOCHARGER", "M/E T/C"),
         ("AIR COOLER CLEANING", 4000, "COOLERS", "M/E Air Cooler"), ("AIR COND. COMPRESSOR NO.1", 10000, "A/C SYSTEMS", "Compressor 1"),
@@ -190,52 +198,18 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     return vessel, date_str, pd.DataFrame(records)
 
-# --- 3. MAIN COMMAND DECK VIEW INTERFACE ---
+# --- 3. COMMAND DECK CORE FRONTEND MAIN FLOW ---
 st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Running Hours Intelligence</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified operating platform for telemetry ingestion, data validation, and asset analytics.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Automated platform for log ingestion, machinery component analysis, and asset evaluation profiles.</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("", type=["doc"])
 
 if uploaded_file is not None:
-    if 'raw_df' not in st.session_state or st.session_state.get('uploaded_file_name') != uploaded_file.name:
-        vessel_name, report_date, raw_dataframe = execute_stream_ingestion(uploaded_file.read())
-        st.session_state.raw_df = raw_dataframe
-        st.session_state.vessel_name = vessel_name
-        st.session_state.report_date = report_date
-        st.session_state.uploaded_file_name = uploaded_file.name
-
-    # --- IMMERSIVE MAIN LAYOUT INLINE LEDGER ---
-    st.markdown("""
-        <div class="ledger-container-frame">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-                <div>
-                    <h3 style="color:#FFFFFF; margin:0px; font-size:15px; font-weight:600; letter-spacing: -0.2px;">🛠️ Ingestion Firewall Guard</h3>
-                    <p style="color:#64748B; margin:2px 0 0 0; font-size:12px;">Review or manually overwrite parsed machinery metrics inline before downstream rendering.</p>
-                </div>
-                <div style="background: rgba(56, 189, 248, 0.08); color: #38BDF8; font-size: 11px; padding: 5px 12px; border-radius: 20px; font-weight: 600; font-family: monospace; border: 1px solid rgba(56, 189, 248, 0.15);">
-                    TELEMETRY FIELD AUDIT
-                </div>
-            </div>
-    """, unsafe_allow_html=True)
+    # Direct binary parsing execution without intermediate intervention blocks
+    vessel_name, report_date, df = execute_stream_ingestion(uploaded_file.read())
     
-    # Render interactive editor with correct, fully compliant parameter keywords
-    verified_df = st.data_editor(
-        st.session_state.raw_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Subsystem": st.column_config.TextColumn("Machinery Subsystem", disabled=True),
-            "Component Group": st.column_config.TextColumn("Equipment Group", disabled=True),
-            "Location Unit": st.column_config.TextColumn("Location Profile", disabled=True),
-            "Baseline Interval (Hrs)": st.column_config.NumberColumn("Maintenance Interval", format="%d"),
-            "Current Running Hours": st.column_config.NumberColumn("Running Hours (Editable)", format="%.1f")
-        }
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Map analytical processing arrays off the output data editor engine
-    if not verified_df.empty:
-        df = verified_df.copy()
+    if not df.empty:
+        # Analytical metric computations
         df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
         
         conditions = [(df['Current Running Hours'] == 0), (df['Lifecycle Consumed (%)'] >= THRESHOLD_RED), (df['Lifecycle Consumed (%)'] >= THRESHOLD_YELLOW)]
@@ -245,15 +219,15 @@ if uploaded_file is not None:
         warn_df = df[df['Status'] == 'HIGH PRIORITY']
         health_factor = max(0.0, 100.0 - ((len(crit_df) * 3.0 + len(warn_df) * 1.0) / len(df) * 100))
 
-        # Dashboard Performance Deck Display
+        # Strategic Corporate Metric Deck Rows
         st.markdown(f"""
             <div class="dashboard-deck">
                 <div class="dashboard-card">
                     <div class="metric-title">Asset Context Profile</div>
-                    <div class="metric-data" style="color:#38BDF8;">{st.session_state.vessel_name}</div>
-                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Log Reference: {st.session_state.report_date}</div>
+                    <div class="metric-data" style="color:#38BDF8;">{vessel_name}</div>
+                    <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Log Reference: {report_date}</div>
                 </div>
-                <div class="dashboard-card">
+                <div class="dashboard-card {'dashboard-card card-critical' if len(crit_df)>0 else ''}">
                     <div class="metric-title">Critical Interrupt Vectors</div>
                     <div class="metric-data" style="color:#F87171;">{len(crit_df)} Items</div>
                     <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Immediate Overhaul Action Demanded</div>
@@ -271,8 +245,8 @@ if uploaded_file is not None:
             </div>
         """, unsafe_allow_html=True)
 
-        # --- SECTOR INTERFACE CATEGORIES ---
-        tab1, tab2, tab3 = st.tabs(["🔥 Risk Exceptions Matrix", "🔩 Main Plant Hierarchy", "⚡ Auxiliary Generation Plant"])
+        # --- SECTOR DATA TAB DECKS ---
+        tab1, tab2, tab3 = st.tabs(["🔥 Risk Exceptions Matrix", "🔩 Main Engine Hierarchy", "⚡ Auxiliary Generation Plant"])
         
         ui_table_config = {
             "Subsystem": st.column_config.TextColumn("Subsystem"),
@@ -297,7 +271,7 @@ if uploaded_file is not None:
                 st.success("Data validation complete: All mechanical components operating inside safe lifecycle boundaries.")
 
         with tab2:
-            me_display = df[df['Subsystem'] == 'MAIN PROPULSION'].sort_values(by=['Component Group', 'Location Unit'])
+            me_display = df[df['Subsystem'] == 'MAIN ENGINE'].sort_values(by=['Component Group', 'Location Unit'])
             st.dataframe(me_display.style.map(color_row_states, subset=['Status']), use_container_width=True, hide_index=True, column_config=ui_table_config)
 
         with tab3:
