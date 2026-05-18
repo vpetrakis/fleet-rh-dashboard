@@ -3,32 +3,32 @@ import pandas as pd
 import numpy as np
 import re
 
-# --- 1. THE PINNACLE OF LUXURY DESIGN: STEALTH SAAS CANVASES ---
+# --- 1. THE ARCHITECTURAL APEX: ULTRA-PREMIUM COCKPIT STYLING ---
 st.set_page_config(page_title="Propulsion Command Control", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
     
-    /* Absolute System Canvas Reset */
+    /* Absolute System Canvas Reset - Deep Space Matte Aesthetic */
     html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         background: radial-gradient(circle at 50% -20%, #0F172A 0%, #020617 100%);
         color: #F8FAFC;
     }
     
-    /* Hide Default Out-of-the-box Header and Footers */
+    /* Conceal Default Server Headers */
     [data-testid="stHeader"], footer {visibility: hidden;}
     
-    /* Advanced Interface Animations */
-    @keyframes smoothReveal {
-        from { opacity: 0; transform: translateY(12px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes radarPulse {
-        0% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
-        50% { border-color: rgba(248, 113, 113, 0.5); box-shadow: 0 0 25px 0 rgba(248, 113, 113, 0.2); }
-        100% { border-color: rgba(248, 113, 113, 0.15); box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.15); }
+    /* Immersive Core Audit Grid Wrapper (Premium Matte Trim) */
+    .ledger-container-frame {
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.25) 0%, rgba(15, 23, 42, 0.4) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-left: 4px solid #38BDF8; /* Precision Cyan Focus Accent */
+        border-radius: 16px;
+        padding: 28px;
+        margin-bottom: 40px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
     }
 
     /* Executive Glassmorphic KPI Row Layout */
@@ -47,7 +47,6 @@ st.markdown("""
         border-radius: 16px;
         padding: 26px;
         transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        animation: subtleReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
     
     .dashboard-card:hover {
@@ -55,10 +54,6 @@ st.markdown("""
         background: rgba(30, 41, 59, 0.5);
         border-color: rgba(56, 189, 248, 0.25);
         box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
-    }
-    
-    .card-critical {
-        animation: subtleReveal 0.6s ease-out both, radarPulse 3s infinite ease-in-out;
     }
     
     .metric-title {
@@ -76,41 +71,27 @@ st.markdown("""
         color: #FFFFFF;
         letter-spacing: -0.5px;
     }
-    
-    /* Immersive Core Audit Grid Wrapper (Eliminating Cheap/Plain Looks) */
-    .ledger-frame {
-        background: linear-gradient(180deg, rgba(15, 23, 42, 0.6) 0%, rgba(2, 6, 23, 0.4) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-left: 4px solid #38BDF8; /* Precision Cyan Focus Accent */
-        border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 35px;
-        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3);
-        animation: subtleReveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
-    }
 
-    /* Target Native Streamlit Spreadsheet Elements via Advanced CSS Injectors */
+    /* Override Default Spreadsheet Element Backgrounds for Dark Cohesion */
     div[data-testid="stDataEditor"] {
-        border: 1px solid rgba(255, 255, 255, 0.03) !important;
-        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        border-radius: 12px !important;
         overflow: hidden !important;
         background-color: #090D1A !important;
     }
     
-    /* Clean custom layouts for files */
+    /* File Upload Section Formatting */
     div[data-testid="stFileUploadDropzone"] {
         background-color: rgba(15, 23, 42, 0.25) !important;
         border: 1px dashed rgba(255, 255, 255, 0.1) !important;
         border-radius: 16px !important;
         padding: 35px !important;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
     div[data-testid="stFileUploadDropzone"]:hover {
         border-color: #38BDF8 !important;
         background-color: rgba(30, 41, 59, 0.25) !important;
     }
     
-    /* Format table headers for premium look */
     button[data-testid="stMarkdownContainer"] p {
         font-size: 14px !important;
         font-weight: 600 !important;
@@ -122,7 +103,7 @@ st.markdown("""
 THRESHOLD_RED = 1.0
 THRESHOLD_YELLOW = 0.8
 
-# --- 2. FORENSIC BACKEND TELEMETRY ENGINE (100% DATA INTEGRITY MAPPING) ---
+# --- 2. FORENSIC TELEMETRY DATA PIPELINE (100% DATA INTEGRITY MAPPING) ---
 def clean_extracted_number(val) -> float:
     if pd.isna(val) or val == "" or val == "-":
         return 0.0
@@ -209,9 +190,9 @@ def execute_stream_ingestion(file_bytes) -> tuple:
 
     return vessel, date_str, pd.DataFrame(records)
 
-# --- 3. CORE CONTROL DECK FRONTEND UI ---
+# --- 3. MAIN COMMAND DECK VIEW INTERFACE ---
 st.markdown("<h1 style='color:#FFFFFF; margin-bottom: 0px; font-weight:700; letter-spacing:-1px;'>Vessel Running Hours Intelligence</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified operating platform for telemetry ingestion, validation auditing, and life-cycle analytics.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#64748B; font-size:14px; margin-bottom: 30px;'>Unified operating platform for telemetry ingestion, data validation, and asset analytics.</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("", type=["doc"])
 
@@ -223,25 +204,25 @@ if uploaded_file is not None:
         st.session_state.report_date = report_date
         st.session_state.uploaded_file_name = uploaded_file.name
 
-    # --- LUXURY LEDGER INTEGRATION (ELIMINATING "ANTI-AESTHETIC" CHEAP SPREADSHEETS) ---
+    # --- IMMERSIVE MAIN LAYOUT INLINE LEDGER ---
     st.markdown("""
-        <div class="ledger-frame">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div class="ledger-container-frame">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
                 <div>
-                    <h3 style="color:#FFFFFF; margin:0px; font-size:15px; font-weight:600; letter-spacing: -0.2px;">🛠️ Real-Time Telemetry Audit Gate</h3>
-                    <p style="color:#64748B; margin:2px 0 0 0; font-size:12px;">Active hardware parser firewall. You can overwrite values inline before downstream computation vectors commit.</p>
+                    <h3 style="color:#FFFFFF; margin:0px; font-size:15px; font-weight:600; letter-spacing: -0.2px;">🛠️ Ingestion Firewall Guard</h3>
+                    <p style="color:#64748B; margin:2px 0 0 0; font-size:12px;">Review or manually overwrite parsed machinery metrics inline before downstream rendering.</p>
                 </div>
-                <div style="background: rgba(56, 189, 248, 0.1); color: #38BDF8; font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-family: monospace;">
-                    LIVE INGESTION MATRIX
+                <div style="background: rgba(56, 189, 248, 0.08); color: #38BDF8; font-size: 11px; padding: 5px 12px; border-radius: 20px; font-weight: 600; font-family: monospace; border: 1px solid rgba(56, 189, 248, 0.15);">
+                    TELEMETRY FIELD AUDIT
                 </div>
             </div>
     """, unsafe_allow_html=True)
     
+    # Render interactive editor with correct, fully compliant parameter keywords
     verified_df = st.data_editor(
         st.session_state.raw_df,
         use_container_width=True,
         hide_index=True,
-        label_visibility="collapsed",  # Hide default cheap label syntax
         column_config={
             "Subsystem": st.column_config.TextColumn("Machinery Subsystem", disabled=True),
             "Component Group": st.column_config.TextColumn("Equipment Group", disabled=True),
@@ -252,7 +233,7 @@ if uploaded_file is not None:
     )
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Process computations live against the refined, verified dataframe output
+    # Map analytical processing arrays off the output data editor engine
     if not verified_df.empty:
         df = verified_df.copy()
         df['Lifecycle Consumed (%)'] = np.where(df['Baseline Interval (Hrs)'] > 0, df['Current Running Hours'] / df['Baseline Interval (Hrs)'], 0.0)
@@ -264,7 +245,7 @@ if uploaded_file is not None:
         warn_df = df[df['Status'] == 'HIGH PRIORITY']
         health_factor = max(0.0, 100.0 - ((len(crit_df) * 3.0 + len(warn_df) * 1.0) / len(df) * 100))
 
-        # Executive Glassmorphic Metric Display Card Deck Row
+        # Dashboard Performance Deck Display
         st.markdown(f"""
             <div class="dashboard-deck">
                 <div class="dashboard-card">
@@ -272,8 +253,8 @@ if uploaded_file is not None:
                     <div class="metric-data" style="color:#38BDF8;">{st.session_state.vessel_name}</div>
                     <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Log Reference: {st.session_state.report_date}</div>
                 </div>
-                <div class="dashboard-card {'dashboard-card card-critical' if len(crit_df)>0 else ''}">
-                    <div class="metric-title">Critical Interrupts</div>
+                <div class="dashboard-card">
+                    <div class="metric-title">Critical Interrupt Vectors</div>
                     <div class="metric-data" style="color:#F87171;">{len(crit_df)} Items</div>
                     <div style="color:#475569; font-size:11px; margin-top:8px; font-weight:600;">Immediate Overhaul Action Demanded</div>
                 </div>
@@ -290,7 +271,7 @@ if uploaded_file is not None:
             </div>
         """, unsafe_allow_html=True)
 
-        # --- CATEGORIZED ADVANCED PROPULSION TAB CORES ---
+        # --- SECTOR INTERFACE CATEGORIES ---
         tab1, tab2, tab3 = st.tabs(["🔥 Risk Exceptions Matrix", "🔩 Main Plant Hierarchy", "⚡ Auxiliary Generation Plant"])
         
         ui_table_config = {
