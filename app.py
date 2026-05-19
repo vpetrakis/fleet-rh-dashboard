@@ -934,31 +934,44 @@ def _safe_float(x):
     except (TypeError, ValueError):
         return None
 
+
+# ════════════════════════════════════════════════════════════════════
+# TABLE RENDERING  — sorted by component → cylinder, fully visible
+# ════════════════════════════════════════════════════════════════════
+
+_STATUS_ORDER = {'OVERDUE': 0, 'HIGH PRIORITY': 1, 'OK': 2, 'NO DATA': 3}
+
+def _cyl_num(unit: str) -> int:
+    """Extract numeric cylinder number for natural sort. e.g. 'Cyl 3' → 3."""
+    m = re.search(r'\d+', str(unit))
+    return int(m.group()) if m else 999
+
+
 def fmt_df(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Build display DataFrame from either raw parser output or DB query.
-    Sorts: OVERDUE first → HIGH PRIORITY → OK → NO DATA.
-    Within each status group: by pct_used descending (most critical first).
-    Works with both raw dict lists converted to DataFrame and DB query results.
+    Build display DataFrame.
+    PRIMARY sort  : description (component name) A→Z
+    SECONDARY sort: unit (cylinder) numerically ascending
+    Works with both raw parser dict lists and DB query results.
     """
     if df.empty:
-        return pd.DataFrame(columns=['Status','Component','Engine','Unit',
-                                     'Periodicity','Last O/H','Hrs Since','% Used'])
+        return pd.DataFrame(columns=[
+            'Status','Component','Engine','Unit',
+            'Periodicity','Last O/H','Hrs Since','% Used'])
 
-    # ── Sort ──────────────────────────────────────────────────────
     d = df.copy()
-    d['_s'] = d['status'].map(lambda s: _STATUS_ORDER.get(str(s), 4))
-    d['_p'] = d['pct_used'].apply(lambda x: _safe_float(x) or 0.0)
-    d = d.sort_values(['_s', '_p'], ascending=[True, False]).drop(columns=['_s','_p'])
+    # Natural sort keys
+    d['_desc'] = d['description'].str.upper()
+    d['_cyl']  = d['unit'].apply(_cyl_num)
+    d = d.sort_values(['_desc', '_cyl']).drop(columns=['_desc', '_cyl'])
 
-    # ── Format columns ────────────────────────────────────────────
     out = pd.DataFrame(index=range(len(d)))
     out['Status']      = d['status'].values
     out['Component']   = d['description'].values
     out['Engine']      = d['engine_label'].values
     out['Unit']        = d['unit'].values
     out['Periodicity'] = [
-        f"{int(float(x)):,}" if _safe_float(x) and str(x) not in ('nan','None','') else 'N/A'
+        f"{int(float(x)):,}" if _safe_float(x) else 'N/A'
         for x in d['periodicity'].values
     ]
     out['Last O/H']    = [
@@ -975,12 +988,51 @@ def fmt_df(df: pd.DataFrame) -> pd.DataFrame:
     ]
     return out
 
+
+def fmt_df_priority(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Variant for Alerts tab — sorts OVERDUE first, then HIGH PRIORITY,
+    within each group by % Used descending (most urgent at top).
+    """
+    if df.empty:
+        return pd.DataFrame(columns=[
+            'Status','Component','Engine','Unit',
+            'Periodicity','Last O/H','Hrs Since','% Used'])
+
+    d = df.copy()
+    d['_s'] = d['status'].map(lambda s: _STATUS_ORDER.get(str(s), 4))
+    d['_p'] = d['pct_used'].apply(lambda x: _safe_float(x) or 0.0)
+    d = d.sort_values(['_s', '_p'], ascending=[True, False]).drop(columns=['_s','_p'])
+
+    out = pd.DataFrame(index=range(len(d)))
+    out['Status']      = d['status'].values
+    out['Component']   = d['description'].values
+    out['Engine']      = d['engine_label'].values
+    out['Unit']        = d['unit'].values
+    out['Periodicity'] = [
+        f"{int(float(x)):,}" if _safe_float(x) else 'N/A'
+        for x in d['periodicity'].values
+    ]
+    out['Last O/H']    = [
+        str(x) if x and str(x) not in ('nan','None','') else '—'
+        for x in d['last_oh_date'].values
+    ]
+    out['Hrs Since']   = [
+        f"{int(float(x)):,}" if _safe_float(x) else '—'
+        for x in d['hrs_since'].values
+    ]
+    out['% Used']      = [
+        f"{float(x)*100:.1f}%" if _safe_float(x) else '—'
+        for x in d['pct_used'].values
+    ]
+    return out
+
+
 def style_df(df: pd.DataFrame):
     """
-    Row-level colour coding for Streamlit Cloud dark AG-Grid theme.
-    High-saturation text on dark-tinted backgrounds — every status
-    is unmistakably visible regardless of the host theme.
-    Columns: [Status, Component, Engine, Unit, Periodicity, Last O/H, Hrs Since, % Used]
+    Per-row colour coding tuned for Streamlit Cloud's dark AG-Grid theme.
+    High-saturation text on dark-tinted backgrounds.
+    Columns order: Status · Component · Engine · Unit · Periodicity · Last O/H · Hrs Since · % Used
     """
     def rs(row):
         s = str(row.get('Status', ''))
@@ -989,84 +1041,84 @@ def style_df(df: pd.DataFrame):
             bg   = 'background-color:#1f0505'
             bg_s = 'background-color:#2d0707'
             return [
-                f'{bg_s};color:#ff6b6b;font-weight:700',  # Status
-                f'{bg};color:#ff8080;font-weight:600',    # Component
-                f'{bg};color:#cc4444',                    # Engine
-                f'{bg};color:#cc4444',                    # Unit
-                f'{bg};color:#773333',                    # Periodicity
-                f'{bg};color:#773333',                    # Last O/H
-                f'{bg};color:#ff9090;font-weight:600',    # Hrs Since
-                f'{bg};color:#ff3333;font-weight:700',    # % Used
+                f'{bg_s};color:#ff6b6b;font-weight:700',
+                f'{bg};color:#ff8080;font-weight:600',
+                f'{bg};color:#cc4444',
+                f'{bg};color:#cc4444',
+                f'{bg};color:#773333',
+                f'{bg};color:#773333',
+                f'{bg};color:#ff9090;font-weight:600',
+                f'{bg};color:#ff3333;font-weight:700',
             ]
-
         if s == 'HIGH PRIORITY':
             bg   = 'background-color:#1e0d02'
             bg_s = 'background-color:#2d1503'
             return [
-                f'{bg_s};color:#ffaa44;font-weight:700',  # Status
-                f'{bg};color:#ff9933;font-weight:600',    # Component
-                f'{bg};color:#cc6622',                    # Engine
-                f'{bg};color:#cc6622',                    # Unit
-                f'{bg};color:#774422',                    # Periodicity
-                f'{bg};color:#774422',                    # Last O/H
-                f'{bg};color:#ffbb55;font-weight:600',    # Hrs Since
-                f'{bg};color:#ffcc00;font-weight:700',    # % Used
+                f'{bg_s};color:#ffaa44;font-weight:700',
+                f'{bg};color:#ff9933;font-weight:600',
+                f'{bg};color:#cc6622',
+                f'{bg};color:#cc6622',
+                f'{bg};color:#774422',
+                f'{bg};color:#774422',
+                f'{bg};color:#ffbb55;font-weight:600',
+                f'{bg};color:#ffcc00;font-weight:700',
             ]
-
         if s == 'OK':
             bg   = 'background-color:#021208'
             bg_s = 'background-color:#042010'
             return [
-                f'{bg_s};color:#4ade80;font-weight:700',  # Status
-                f'{bg};color:#22c55e;font-weight:500',    # Component
-                f'{bg};color:#166534',                    # Engine
-                f'{bg};color:#166534',                    # Unit
-                f'{bg};color:#0f4023',                    # Periodicity
-                f'{bg};color:#0f4023',                    # Last O/H
-                f'{bg};color:#4ade80;font-weight:500',    # Hrs Since
-                f'{bg};color:#4ade80;font-weight:600',    # % Used
+                f'{bg_s};color:#4ade80;font-weight:700',
+                f'{bg};color:#22c55e;font-weight:500',
+                f'{bg};color:#166534',
+                f'{bg};color:#166534',
+                f'{bg};color:#0f4023',
+                f'{bg};color:#0f4023',
+                f'{bg};color:#4ade80;font-weight:500',
+                f'{bg};color:#4ade80;font-weight:600',
             ]
-
-        # NO DATA
         bg   = 'background-color:#090e18'
         bg_s = 'background-color:#0c1422'
         return [
-            f'{bg_s};color:#4a6688;font-weight:600',      # Status
-            f'{bg};color:#334d66',                        # Component
-            f'{bg};color:#253a50',                        # Engine
-            f'{bg};color:#253a50',                        # Unit
-            f'{bg};color:#1a2a38',                        # Periodicity
-            f'{bg};color:#1a2a38',                        # Last O/H
-            f'{bg};color:#334d66',                        # Hrs Since
-            f'{bg};color:#334d66',                        # % Used
+            f'{bg_s};color:#4a6688;font-weight:600',
+            f'{bg};color:#334d66',
+            f'{bg};color:#253a50',
+            f'{bg};color:#253a50',
+            f'{bg};color:#1a2a38',
+            f'{bg};color:#1a2a38',
+            f'{bg};color:#334d66',
+            f'{bg};color:#334d66',
         ]
 
     return df.style.apply(rs, axis=1)
 
-def show_table(df: pd.DataFrame, height: int = None):
-    """Render a component table — sorted, styled, with correct column widths."""
+
+_COL_CONFIG = {
+    "Status":      st.column_config.TextColumn("Status",      width=130),
+    "Component":   st.column_config.TextColumn("Component",   width=210),
+    "Engine":      st.column_config.TextColumn("Engine",      width=80),
+    "Unit":        st.column_config.TextColumn("Unit",        width=70),
+    "Periodicity": st.column_config.TextColumn("Periodicity", width=100),
+    "Last O/H":    st.column_config.TextColumn("Last O/H",    width=100),
+    "Hrs Since":   st.column_config.TextColumn("Hrs Since",   width=90),
+    "% Used":      st.column_config.TextColumn("% Used",      width=80),
+}
+
+
+def show_table(df: pd.DataFrame, height: int = None, priority_sort: bool = False):
+    """Render a styled, sorted component table."""
     if isinstance(df, list):
         df = pd.DataFrame(df)
     if df.empty:
         st.info("No data to display.")
         return
-    formatted = fmt_df(df)
+    formatted = fmt_df_priority(df) if priority_sort else fmt_df(df)
     h = height or min(720, 38 * (len(formatted) + 1) + 4)
     st.dataframe(
         style_df(formatted),
         use_container_width=True,
         hide_index=True,
         height=h,
-        column_config={
-            "Status":      st.column_config.TextColumn("Status",      width=130),
-            "Component":   st.column_config.TextColumn("Component",   width=200),
-            "Engine":      st.column_config.TextColumn("Engine",      width=80),
-            "Unit":        st.column_config.TextColumn("Unit",        width=70),
-            "Periodicity": st.column_config.TextColumn("Periodicity", width=100),
-            "Last O/H":    st.column_config.TextColumn("Last O/H",    width=100),
-            "Hrs Since":   st.column_config.TextColumn("Hrs Since",   width=90),
-            "% Used":      st.column_config.TextColumn("% Used",      width=80),
-        }
+        column_config=_COL_CONFIG,
     )
 
 
@@ -1078,14 +1130,28 @@ def kpi(val, lbl, color="gold", delay=0):
             f'<div class="kc-val">{val}</div>'
             f'<div class="kc-lbl">{lbl}</div></div>')
 
+
 def ph(icon, title, eyebrow=""):
     eye = f'<div class="ph-eyebrow">{eyebrow}</div>' if eyebrow else ''
-    return (f'<div class="ph">{eye}'
-            f'<h1>{icon}&nbsp;&nbsp;{title}</h1></div>'
+    return (f'<div class="ph">{eye}<h1>{icon}&nbsp;&nbsp;{title}</h1></div>'
             f'<div class="ph-line"></div>')
+
 
 def sl(text):
     return f'<div class="sl">{text}</div>'
+
+
+def status_pill(status: str) -> str:
+    """Return a coloured inline HTML pill for a status string."""
+    cfg = {
+        'OVERDUE':       ('background-color:#2d0707;color:#ff6b6b', '● OVERDUE'),
+        'HIGH PRIORITY': ('background-color:#2d1503;color:#ffaa44', '● HIGH PRI'),
+        'OK':            ('background-color:#042010;color:#4ade80', '● OK'),
+    }
+    style, label = cfg.get(status, ('background-color:#0c1422;color:#4a6688', '● —'))
+    return (f'<span style="{style};padding:2px 10px;border-radius:4px;'
+            f'font-family:var(--fm);font-size:0.7rem;font-weight:700;'
+            f'letter-spacing:0.06em">{label}</span>')
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1104,11 +1170,10 @@ with st.sidebar:
         label_visibility="collapsed")
 
     st.markdown("<br>", unsafe_allow_html=True)
-
     vessels = get_all_vessels()
     selected_vessel = st.selectbox("Active Vessel", vessels) if vessels else None
     if not vessels:
-        st.info("No data yet — upload a report to begin.")
+        st.info("No data — upload a report to begin.")
 
     if vessels:
         smry = get_fleet_summary()
@@ -1122,14 +1187,11 @@ with st.sidebar:
                 od = int(row['overdue']); hp = int(row['high_priority'])
                 cls = 'crit' if od > 0 else ('warn' if hp > 0 else 'safe')
                 tags = ''
-                if od > 0:
-                    tags += f'<span class="vc-tag od">{od} OD</span>'
-                if hp > 0:
-                    tags += f'<span class="vc-tag hp">{hp} HP</span>'
-                if od == 0 and hp == 0:
-                    tags += '<span class="vc-tag ok">✓</span>'
+                if od > 0:  tags += f'<span class="vc-tag od">{od} OD</span>'
+                if hp > 0:  tags += f'<span class="vc-tag hp">{hp} HP</span>'
+                if od == 0 and hp == 0: tags += '<span class="vc-tag ok">✓</span>'
                 st.markdown(
-                    f'<div class="vc {cls}" style="animation-delay:{idx*0.05}s">'
+                    f'<div class="vc {cls}" style="animation-delay:{idx*0.04}s">'
                     f'<div class="vc-name">{row["vessel_name"]}</div>'
                     f'<div class="vc-tags">{tags}</div></div>',
                     unsafe_allow_html=True)
@@ -1138,7 +1200,7 @@ with st.sidebar:
     db_kb = DB_PATH.stat().st_size / 1024 if DB_PATH.exists() else 0
     st.markdown(
         f'<div style="font-family:var(--fm);font-size:0.6rem;color:var(--t4)">'
-        f'db {db_kb:.0f} kb · {len(vessels)} vessels · v4.1</div>',
+        f'db {db_kb:.0f} kb · {len(vessels)} vessels · v5.0</div>',
         unsafe_allow_html=True)
 
 
@@ -1150,8 +1212,7 @@ if page == "📤  Upload Report":
 
     col_up, col_info = st.columns([3, 2], gap="large")
     with col_up:
-        uploaded = st.file_uploader(
-            "file", type=["doc"], label_visibility="collapsed")
+        uploaded = st.file_uploader("file", type=["doc"], label_visibility="collapsed")
     with col_info:
         st.markdown("""
         <div class="ic">
@@ -1175,13 +1236,11 @@ if page == "📤  Upload Report":
             try:
                 docx_bytes = convert_doc_to_docx(raw_bytes)
             except Exception as e:
-                st.error(f"**Conversion failed.** `{e}`")
-                st.stop()
+                st.error(f"**Conversion failed.** `{e}`"); st.stop()
             try:
                 parsed = parse_doc_bytes(docx_bytes)
             except ValueError as e:
-                st.error(f"**Parse failed.** `{e}`")
-                st.stop()
+                st.error(f"**Parse failed.** `{e}`"); st.stop()
 
         comps  = parsed['components']
         n_comp = len(comps)
@@ -1190,29 +1249,29 @@ if page == "📤  Upload Report":
         n_ok   = sum(1 for c in comps if c['status'] == 'OK')
         n_oe   = len(parsed['other_equipment'])
 
-        st.markdown(sl("Parse Preview — confirm before saving"), unsafe_allow_html=True)
+        st.markdown(sl("Parsed Data"), unsafe_allow_html=True)
 
         m1,m2,m3,m4,m5 = st.columns(5)
-        m1.metric("Vessel",          parsed['vessel_name'])
-        m2.metric("Report Date",     parsed['report_date'] or "—")
-        m3.metric("M/E Total Hrs",   f"{parsed['me_total_hrs']:,}"  if parsed['me_total_hrs']  else "—")
-        m4.metric("M/E This Month",  f"{parsed['me_this_month']:,}" if parsed['me_this_month'] else "—")
-        m5.metric("Components",      n_comp)
+        m1.metric("Vessel",         parsed['vessel_name'])
+        m2.metric("Report Date",    parsed['report_date'] or "—")
+        m3.metric("M/E Total Hrs",  f"{parsed['me_total_hrs']:,}"  if parsed['me_total_hrs']  else "—")
+        m4.metric("M/E This Month", f"{parsed['me_this_month']:,}" if parsed['me_this_month'] else "—")
+        m5.metric("Components",     n_comp)
 
         st.markdown(f"""
         <div class="ps-row">
-          <div class="ps red"    style="animation-delay:0s">   <div class="ps-val">{n_od}</div><div class="ps-lbl">Overdue</div></div>
-          <div class="ps orange" style="animation-delay:0.07s"><div class="ps-val">{n_hp}</div><div class="ps-lbl">High Priority</div></div>
-          <div class="ps green"  style="animation-delay:0.14s"><div class="ps-val">{n_ok}</div><div class="ps-lbl">OK</div></div>
-          <div class="ps blue"   style="animation-delay:0.21s"><div class="ps-val">{n_oe}</div><div class="ps-lbl">Other Equip</div></div>
+          <div class="ps red"    style="animation-delay:0s">
+            <div class="ps-val">{n_od}</div><div class="ps-lbl">Overdue</div></div>
+          <div class="ps orange" style="animation-delay:0.07s">
+            <div class="ps-val">{n_hp}</div><div class="ps-lbl">High Priority</div></div>
+          <div class="ps green"  style="animation-delay:0.14s">
+            <div class="ps-val">{n_ok}</div><div class="ps-lbl">OK</div></div>
+          <div class="ps blue"   style="animation-delay:0.21s">
+            <div class="ps-val">{n_oe}</div><div class="ps-lbl">Other Equip</div></div>
         </div>""", unsafe_allow_html=True)
 
         for w in parsed['warnings']:
             st.warning(f"⚠ {w}")
-
-        if comps:
-            with st.expander(f"Preview all {n_comp} parsed components", expanded=True):
-                show_table(pd.DataFrame(comps))
 
         st.markdown("---")
         col_btn, _ = st.columns([1, 4])
@@ -1225,14 +1284,14 @@ if page == "📤  Upload Report":
                 st.markdown(f"""
                 <div class="sb">
                   <span style="font-size:1.4rem">✓</span>
-                  <span><b>{parsed['vessel_name']}</b> saved — {n_comp} components
-                  · {n_od} overdue · {n_hp} high priority</span>
+                  <span><b>{parsed['vessel_name']}</b> saved —
+                  {n_comp} components · {n_od} overdue · {n_hp} high priority</span>
                 </div>""", unsafe_allow_html=True)
                 st.balloons()
 
 
 # ════════════════════════════════════════════════════════════════════
-# PAGE: FLEET OVERVIEW
+# PAGE: FLEET OVERVIEW  — rebuilt
 # ════════════════════════════════════════════════════════════════════
 elif page == "🗺️  Fleet Overview":
     st.markdown(ph("🗺️", "Fleet Overview", "All vessels · Live status"), unsafe_allow_html=True)
@@ -1242,6 +1301,7 @@ elif page == "🗺️  Fleet Overview":
         st.info("No data loaded yet. Upload a .doc report to begin.")
         st.stop()
 
+    # ── Fleet KPIs ──────────────────────────────────────────────────
     tv  = len(summary)
     tc  = int(summary['total'].sum())
     tod = int(summary['overdue'].sum())
@@ -1250,77 +1310,129 @@ elif page == "🗺️  Fleet Overview":
 
     k1,k2,k3,k4,k5 = st.columns(5)
     for col,(val,lbl,clr,dly) in zip([k1,k2,k3,k4,k5],[
-        (tv,  "Vessels",       "blue",   0),
-        (tc,  "Components",    "gold",   0.07),
-        (tod, "Overdue",       "red",    0.14),
-        (thp, "High Priority", "orange", 0.21),
-        (tok, "OK",            "green",  0.28),
+        (tv,  "Vessels",        "blue",   0),
+        (tc,  "Components",     "gold",   0.07),
+        (tod, "Overdue",        "red",    0.14),
+        (thp, "High Priority",  "orange", 0.21),
+        (tok, "OK",             "green",  0.28),
     ]):
         with col: st.markdown(kpi(val,lbl,clr,dly), unsafe_allow_html=True)
 
-    st.markdown(sl("Fleet Status Table"), unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    disp = summary[['vessel_name','overdue','high_priority','ok','total',
-                    'me_total_hrs','last_upload']].copy()
-    disp.columns = ['Vessel','Overdue','High Priority','OK','Total','M/E Total Hrs','Last Upload']
-    disp['M/E Total Hrs'] = disp['M/E Total Hrs'].apply(
-        lambda x: f"{int(x):,}" if pd.notna(x) else '—')
-    disp['Last Upload'] = pd.to_datetime(
-        disp['Last Upload'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('—')
+    # ── Vessel selector ─────────────────────────────────────────────
+    vessel_names = summary['vessel_name'].tolist()
+    sel_vessel_ov = st.selectbox(
+        "Select vessel to inspect",
+        vessel_names,
+        key="ov_vessel",
+        help="Choose a vessel to see its full component matrix below"
+    )
 
-    def fleet_style(row):
-        if row['Overdue']>0:
-            return ['background:#280606;color:#fca5a5;font-weight:600',
-                    'background:#280606;color:#f87171;font-weight:700',
-                    'background:#280606;color:#e05252',
-                    'background:#280606;color:#34d399',
-                    'background:#280606;color:#6b7280',
-                    'background:#280606;color:#6b7280',
-                    'background:#280606;color:#6b7280']
-        if row['High Priority']>0:
-            return ['background:#1e0f04;color:#fed7aa;font-weight:600',
-                    'background:#1e0f04;color:#e05252',
-                    'background:#1e0f04;color:#fb923c;font-weight:700',
-                    'background:#1e0f04;color:#34d399',
-                    'background:#1e0f04;color:#6b7280',
-                    'background:#1e0f04;color:#6b7280',
-                    'background:#1e0f04;color:#6b7280']
-        return ['background:#041209;color:#6ee7b7;font-weight:500',
-                'background:#041209;color:#e05252',
-                'background:#041209;color:#fb923c',
-                'background:#041209;color:#34d399;font-weight:700',
-                'background:#041209;color:#6b7280',
-                'background:#041209;color:#6b7280',
-                'background:#041209;color:#6b7280']
+    if sel_vessel_ov:
+        row = summary[summary['vessel_name'] == sel_vessel_ov].iloc[0]
+        od = int(row['overdue']); hp = int(row['high_priority'])
+        ok_n = int(row['ok']); tot = int(row['total'])
+        me_hrs = f"{int(row['me_total_hrs']):,}" if pd.notna(row['me_total_hrs']) else "—"
+        last_up = str(row['last_upload'])[:10] if pd.notna(row['last_upload']) else "—"
 
-    st.dataframe(
-        disp.style.apply(fleet_style, axis=1),
-        use_container_width=True, hide_index=True,
-        height=min(600, 38*(len(disp)+1)+3))
+        # Vessel header card
+        sev_color = '#ff6b6b' if od>0 else ('#ffaa44' if hp>0 else '#4ade80')
+        sev_label = 'CRITICAL' if od>0 else ('WARNING' if hp>0 else 'HEALTHY')
+        st.markdown(f"""
+        <div style="background:var(--bg3);border:1px solid var(--b2);border-radius:12px;
+                    padding:1.25rem 1.75rem;margin:0.5rem 0 1.5rem;
+                    border-left:4px solid {sev_color};
+                    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+          <div>
+            <div style="font-family:var(--ff);font-size:1.3rem;font-weight:700;color:var(--t0)">
+              🚢 {sel_vessel_ov}
+            </div>
+            <div style="font-family:var(--fm);font-size:0.68rem;color:var(--t3);margin-top:4px">
+              {tot} components · M/E {me_hrs} hrs · last upload {last_up}
+            </div>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+            <div style="text-align:center">
+              <div style="font-family:var(--ff);font-size:1.6rem;font-weight:800;color:#ff6b6b">{od}</div>
+              <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.14em;color:var(--t3)">Overdue</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-family:var(--ff);font-size:1.6rem;font-weight:800;color:#ffaa44">{hp}</div>
+              <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.14em;color:var(--t3)">High Pri.</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-family:var(--ff);font-size:1.6rem;font-weight:800;color:#4ade80">{ok_n}</div>
+              <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.14em;color:var(--t3)">OK</div>
+            </div>
+            <div style="background:{sev_color}22;border:1px solid {sev_color}55;border-radius:6px;
+                        padding:6px 14px;font-family:var(--fm);font-size:0.7rem;
+                        font-weight:700;color:{sev_color};letter-spacing:0.08em">
+              {sev_label}
+            </div>
+          </div>
+        </div>""", unsafe_allow_html=True)
 
-    st.markdown(sl("Per-Vessel Breakdown"), unsafe_allow_html=True)
-    for _, row in summary.iterrows():
-        od = int(row['overdue']); hp = int(row['high_priority']); ok = int(row['ok'])
-        icon = "🔴" if od>0 else ("🟡" if hp>0 else "🟢")
-        with st.expander(
-            f"{icon}  {row['vessel_name']}   —   "
-            f"{od} overdue · {hp} high priority · {ok} OK",
-            expanded=False):
-            cc = get_components_df(row['vessel_name'])
-            if not cc.empty:
-                ta, tb = st.tabs(["🔴  Overdue", "🟡  High Priority"])
-                with ta:
-                    od_df = cc[cc['status']=='OVERDUE']
-                    if od_df.empty:
-                        st.markdown('<div class="ac">✓ No overdue items</div>', unsafe_allow_html=True)
-                    else:
-                        show_table(od_df)
-                with tb:
-                    hp_df = cc[cc['status']=='HIGH PRIORITY']
-                    if hp_df.empty:
-                        st.markdown('<div class="ac">✓ No high-priority items</div>', unsafe_allow_html=True)
-                    else:
-                        show_table(hp_df)
+        # ── Full component matrix ────────────────────────────────────
+        cc = get_components_df(sel_vessel_ov)
+
+        if cc.empty:
+            st.info("No component data for this vessel.")
+        else:
+            # Status filter pills
+            st.markdown(sl("Component Matrix — sorted by equipment → cylinder"), unsafe_allow_html=True)
+
+            col_f1, col_f2, col_f3 = st.columns([2, 2, 3])
+            with col_f1:
+                cat_filter = st.selectbox(
+                    "Engine type",
+                    ["All","Main Engine","Aux Engines"],
+                    key="ov_cat")
+            with col_f2:
+                status_filter = st.selectbox(
+                    "Status filter",
+                    ["All","Overdue only","High Priority +","Critical only"],
+                    key="ov_status")
+            with col_f3:
+                comp_filter = st.selectbox(
+                    "Component",
+                    ["All"] + sorted(cc['description'].unique().tolist()),
+                    key="ov_comp")
+
+            # Apply filters
+            filtered = cc.copy()
+            if cat_filter == "Main Engine":
+                filtered = filtered[filtered['category'] == 'MAIN_ENGINE']
+            elif cat_filter == "Aux Engines":
+                filtered = filtered[filtered['category'] == 'AUX_ENGINE']
+
+            if status_filter == "Overdue only":
+                filtered = filtered[filtered['status'] == 'OVERDUE']
+            elif status_filter == "High Priority +":
+                filtered = filtered[filtered['status'].isin(['OVERDUE','HIGH PRIORITY'])]
+            elif status_filter == "Critical only":
+                filtered = filtered[filtered['status'] == 'OVERDUE']
+
+            if comp_filter != "All":
+                filtered = filtered[filtered['description'] == comp_filter]
+
+            n_shown = len(filtered)
+            n_od_shown = int((filtered['status']=='OVERDUE').sum())
+            n_hp_shown = int((filtered['status']=='HIGH PRIORITY').sum())
+
+            st.markdown(f"""
+            <div style="font-family:var(--fm);font-size:0.68rem;color:var(--t3);margin-bottom:0.75rem">
+              Showing <b style="color:var(--t1)">{n_shown}</b> records
+              · <span style="color:#ff6b6b;font-weight:700">{n_od_shown} overdue</span>
+              · <span style="color:#ffaa44;font-weight:700">{n_hp_shown} high priority</span>
+            </div>""", unsafe_allow_html=True)
+
+            if filtered.empty:
+                st.markdown('<div class="ac">✓ No records match the current filter</div>',
+                            unsafe_allow_html=True)
+            else:
+                # Sorted by component name → cylinder — using fmt_df (not priority sort)
+                show_table(filtered, height=min(800, 38*(n_shown+1)+4))
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1367,48 +1479,85 @@ elif page == "🚢  Vessel Detail":
         </div>""", unsafe_allow_html=True)
 
     st.markdown("---")
+
     tabs = st.tabs([
         "⚠️  Alerts",
         "⚙️  Main Engine",
         "🔩  Aux Engines",
         "🛠️  Other Equipment",
-        "📊  All Components"
     ])
 
+    # ── ALERTS ──────────────────────────────────────────────────────
     with tabs[0]:
-        st.markdown(sl("Overdue & High Priority — Action Required"), unsafe_allow_html=True)
+        st.markdown(sl("Overdue & High Priority — sorted by urgency"), unsafe_allow_html=True)
         alerts = df[df['status'].isin(['OVERDUE','HIGH PRIORITY'])]
         if alerts.empty:
             st.markdown(
-                '<div class="ac">✓ All components within acceptable limits — no action required</div>',
+                '<div class="ac">✓ All components within acceptable limits</div>',
                 unsafe_allow_html=True)
         else:
-            show_table(alerts)
+            # Alerts sorted by priority → % used (most urgent first)
+            show_table(alerts, priority_sort=True)
 
+    # ── MAIN ENGINE ─────────────────────────────────────────────────
     with tabs[1]:
         me = df[df['category']=='MAIN_ENGINE']
         if me.empty:
             st.info("No Main Engine data.")
         else:
-            st.markdown(sl("Main Engine Components"), unsafe_allow_html=True)
-            sel = st.selectbox(
-                "Filter by component",
-                ['ALL'] + sorted(me['description'].unique().tolist()),
-                key="me_f")
-            show_table(me if sel=='ALL' else me[me['description']==sel])
+            st.markdown(sl("Main Engine — sorted by component → cylinder"), unsafe_allow_html=True)
+            c1, c2 = st.columns([2,3])
+            with c1:
+                sel_me = st.selectbox(
+                    "Filter component",
+                    ['All'] + sorted(me['description'].unique().tolist()),
+                    key="me_f")
+            with c2:
+                sel_me_status = st.selectbox(
+                    "Filter status",
+                    ['All','Overdue only','High Priority +','OK only'],
+                    key="me_st")
+            view = me.copy()
+            if sel_me != 'All':
+                view = view[view['description'] == sel_me]
+            if sel_me_status == 'Overdue only':
+                view = view[view['status'] == 'OVERDUE']
+            elif sel_me_status == 'High Priority +':
+                view = view[view['status'].isin(['OVERDUE','HIGH PRIORITY'])]
+            elif sel_me_status == 'OK only':
+                view = view[view['status'] == 'OK']
+            show_table(view)
 
+    # ── AUX ENGINES ─────────────────────────────────────────────────
     with tabs[2]:
         aux = df[df['category']=='AUX_ENGINE']
         if aux.empty:
             st.info("No Aux Engine data.")
         else:
-            st.markdown(sl("Auxiliary Engine Components"), unsafe_allow_html=True)
-            sel = st.selectbox(
-                "Filter by engine",
-                ['ALL'] + sorted(aux['engine_label'].unique().tolist()),
-                key="aux_f")
-            show_table(aux if sel=='ALL' else aux[aux['engine_label']==sel])
+            st.markdown(sl("Auxiliary Engines — sorted by component → cylinder"), unsafe_allow_html=True)
+            c1, c2 = st.columns([2,3])
+            with c1:
+                sel_eng = st.selectbox(
+                    "Engine",
+                    ['All'] + sorted(aux['engine_label'].unique().tolist()),
+                    key="aux_f")
+            with c2:
+                sel_aux_status = st.selectbox(
+                    "Status",
+                    ['All','Overdue only','High Priority +','OK only'],
+                    key="aux_st")
+            view_aux = aux.copy()
+            if sel_eng != 'All':
+                view_aux = view_aux[view_aux['engine_label'] == sel_eng]
+            if sel_aux_status == 'Overdue only':
+                view_aux = view_aux[view_aux['status'] == 'OVERDUE']
+            elif sel_aux_status == 'High Priority +':
+                view_aux = view_aux[view_aux['status'].isin(['OVERDUE','HIGH PRIORITY'])]
+            elif sel_aux_status == 'OK only':
+                view_aux = view_aux[view_aux['status'] == 'OK']
+            show_table(view_aux)
 
+    # ── OTHER EQUIPMENT ──────────────────────────────────────────────
     with tabs[3]:
         if oe.empty:
             st.info("No other equipment data.")
@@ -1418,23 +1567,6 @@ elif page == "🚢  Vessel Detail":
                 sd = oe[oe['section']==sec][['description','periodicity','last_date','run_hrs']].copy()
                 sd.columns = ['Description','Periodicity','Last Date','Run Hrs']
                 st.dataframe(sd, use_container_width=True, hide_index=True)
-
-    with tabs[4]:
-        st.markdown(sl("All Component Records"), unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        with c1:
-            sf = st.multiselect(
-                "Filter by status",
-                ['OVERDUE','HIGH PRIORITY','OK','NO DATA'],
-                default=['OVERDUE','HIGH PRIORITY','OK','NO DATA'],
-                key="all_s")
-        with c2:
-            cf = st.multiselect(
-                "Filter by category",
-                ['MAIN_ENGINE','AUX_ENGINE'],
-                default=['MAIN_ENGINE','AUX_ENGINE'],
-                key="all_c")
-        show_table(df[df['status'].isin(sf) & df['category'].isin(cf)])
 
 
 # ════════════════════════════════════════════════════════════════════
