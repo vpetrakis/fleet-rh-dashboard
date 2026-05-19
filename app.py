@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════════╗
-║   FLEET RUNNING HOURS MONITORING SYSTEM  v5.1                        ║
+║   FLEET RUNNING HOURS MONITORING SYSTEM  v5.2                        ║
 ║   100% data integrity · .doc native · Streamlit Cloud production     ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
@@ -168,21 +168,6 @@ h3 { font-family: var(--ff) !important; font-size: 1rem !important;
   background: var(--bg2) !important; border: 1px solid var(--b2) !important;
   border-top: none !important; border-radius: 0 0 10px 10px !important;
   padding: 1.5rem !important;
-}
-
-/* Expansion summary cards */
-.streamlit-expanderHeader {
-  background: var(--bg3) !important; border: 1px solid var(--b2) !important;
-  border-radius: 8px !important; font-family: var(--ff) !important;
-  font-weight: 500 !important; font-size: .85rem !important;
-  color: var(--t1) !important; transition: background .2s, border-color .2s !important;
-}
-.streamlit-expanderHeader:hover {
-  background: var(--bg4) !important; border-color: var(--b3) !important;
-}
-.streamlit-expanderContent {
-  background: var(--bg2) !important; border: 1px solid var(--b2) !important;
-  border-top: none !important; border-radius: 0 0 8px 8px !important;
 }
 
 /* Context filters selectors */
@@ -740,7 +725,7 @@ def get_all_fleet_comps():
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  ULTRA PREMIUM MASTER RENDERING ENGINE
+#  ULTRA PREMIUM MASTER RENDERING ENGINE (Failsafe Integrated)
 # ═══════════════════════════════════════════════════════════════════
 def _sf(x):
     try:
@@ -771,6 +756,7 @@ _COL_CFG = {
 }
 
 def _build_display(df: pd.DataFrame, sort_priority: bool = False) -> pd.DataFrame:
+    """Build the display table with smart conditional sorting based on data context."""
     if df.empty:
         return pd.DataFrame(columns=['Status','Vessel','Component','Engine','Unit',
                                       'Periodicity','Last O/H','Hrs Since','% Used'])
@@ -779,7 +765,11 @@ def _build_display(df: pd.DataFrame, sort_priority: bool = False) -> pd.DataFram
         _ORD = {'OVERDUE':0,'HIGH PRIORITY':1,'OK':2,'NO DATA':3}
         d['_s'] = d['status'].map(lambda s: _ORD.get(str(s),4))
         d['_p'] = d['pct_used'].apply(lambda x: _sf(x) or 0.0)
-        d = d.sort_values(['_s','_p','vessel_name'],ascending=[True,False,True]).drop(columns=['_s','_p'])
+        # Condition Check: Are we in the Master Matrix (has vessel) or Pre-Commit (no vessel yet)?
+        if 'vessel_name' in d.columns:
+            d = d.sort_values(['_s','_p','vessel_name'], ascending=[True,False,True]).drop(columns=['_s','_p'])
+        else:
+            d = d.sort_values(['_s','_p'], ascending=[True,False]).drop(columns=['_s','_p'])
     else:
         d['_k1'] = d['description'].str.upper()
         d['_k2'] = d['unit'].apply(_cyl)
@@ -887,7 +877,7 @@ with st.sidebar:
     st.markdown('<div class="logo-rule"></div>', unsafe_allow_html=True)
     db_kb = DB_PATH.stat().st_size/1024 if DB_PATH.exists() else 0
     st.markdown(f'<div style="font-family:var(--fm);font-size:.58rem;color:var(--t3)">'
-                f'db {db_kb:.0f} kb · {len(vessels)} vessels · v5.1</div>',
+                f'db {db_kb:.0f} kb · {len(vessels)} vessels · v5.2</div>',
                 unsafe_allow_html=True)
 
 
