@@ -187,6 +187,7 @@ def init_db():
         hrs_since REAL,
         pct_used REAL,
         status TEXT NOT NULL,
+        seq INTEGER,
         updated_at TEXT NOT NULL DEFAULT(datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS other_equipment(
@@ -310,15 +311,6 @@ def cyl_sort(unit: Any) -> int:
     m = re.search(r"(\d+)", str(unit))
     return int(m.group(1)) if m else 999
 
-def engine_sort_key(engine_label: str) -> tuple:
-    lab = (engine_label or "").upper()
-    if lab in {"ME", "MAIN ENGINE", "MAIN_ENGINE"}:
-        return (0, 0)
-    m = re.search(r"AUX[-\s]*(\d+)", lab)
-    if m:
-        return (1, int(m.group(1)))
-    return (2, 999)
-
 # ============================================================
 # DOC CONVERSION
 # ============================================================
@@ -418,13 +410,13 @@ def detect_me_totals(doc: Document):
     return total, month
 
 # ============================================================
-# PARSING CORE
+# PARSING CORE WITH SEQUENCE
 # ============================================================
-def parse_main_engine(table) -> List[Dict[str, Any]]:
+def parse_main_engine(table, start_seq: int = 0) -> tuple[List[Dict[str, Any]], int]:
     grid = table_grid(table)
     comps: List[Dict[str, Any]] = []
     if not grid:
-        return comps
+        return comps, start_seq
     max_cols = max(len(r) for r in grid)
 
     cyl_cols = []
@@ -436,6 +428,7 @@ def parse_main_engine(table) -> List[Dict[str, Any]]:
     if not cyl_cols:
         cyl_cols = [(i, f"Cyl {i-1}") for i in range(2, min(max_cols, 14))]
 
+    seq = start_seq
     i = 0
     while i < len(grid) - 1:
         r1 = grid[i]
@@ -451,6 +444,7 @@ def parse_main_engine(table) -> List[Dict[str, Any]]:
             if d is None and h is None:
                 continue
             comps.append({
+                "seq": seq,
                 "category": "MAIN_ENGINE",
                 "engine_label": "ME",
                 "unit": unit,
@@ -462,14 +456,15 @@ def parse_main_engine(table) -> List[Dict[str, Any]]:
                 "pct_used": pct_used(h, periodicity),
                 "status": status_from(h, periodicity),
             })
+            seq += 1
         i += 2
-    return comps
+    return comps, seq
 
-def parse_aux_engine(table) -> List[Dict[str, Any]]:
+def parse_aux_engine(table, start_seq: int) -> tuple[List[Dict[str, Any]], int]:
     grid = table_grid(table)
     comps: List[Dict[str, Any]] = []
     if not grid:
-        return comps
+        return comps, start_seq
 
     header = grid[:5]
     blocks = []
@@ -496,6 +491,7 @@ def parse_aux_engine(table) -> List[Dict[str, Any]]:
                     if m:
                         cyl_map[ci] = (label, f"Cyl {m.group(1)}")
 
+    seq = start_seq
     i = 5
     while i < len(grid) - 1:
         r1 = grid[i]
@@ -511,6 +507,7 @@ def parse_aux_engine(table) -> List[Dict[str, Any]]:
             if d is None and h is None:
                 continue
             comps.append({
+                "seq": seq,
                 "category": "AUX_ENGINE",
                 "engine_label": eng,
                 "unit": unit,
@@ -522,8 +519,9 @@ def parse_aux_engine(table) -> List[Dict[str, Any]]:
                 "pct_used": pct_used(h, periodicity),
                 "status": status_from(h, periodicity),
             })
+            seq += 1
         i += 2
-    return comps
+    return comps, seq
 
 def parse_other_equipment(doc: Document) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
@@ -592,12 +590,15 @@ def parse_doc_bytes(docx_bytes: bytes) -> Dict[str, Any]:
     aux_table = doc.tables[2] if len(doc.tables) > 2 else None
 
     components: List[Dict[str, Any]] = []
+    seq = 0
     if main_table:
-        components.extend(parse_main_engine(main_table))
+        me_comps, seq = parse_main_engine(main_table, start_seq=seq)
+        components.extend(me_comps)
     else:
         warnings.append("No main engine table found.")
     if aux_table:
-        components.extend(parse_aux_engine(aux_table))
+        aux_comps, seq = parse_aux_engine(aux_table, start_seq=seq)
+        components.extend(aux_comps)
     else:
         warnings.append("No auxiliary engine table found.")
 
@@ -662,12 +663,13 @@ def save_parsed(parsed: Dict[str, Any], filename: str, file_hash: str):
             c.execute("""
                 INSERT INTO components(
                     vessel_name, category, engine_label, unit, description,
-                    periodicity, last_oh_date, last_oh_hrs, hrs_since, pct_used, status, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    periodicity, last_oh_date, last_oh_hrs, hrs_since, pct_used,
+                    status, seq, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 vessel, x["category"], x["engine_label"], x["unit"], x["description"],
                 x["periodicity"], x["last_oh_date"], x["last_oh_hrs"], x["hrs_since"],
-                x["pct_used"], x["status"], now
+                x["pct_used"], x["status"], x["seq"], now
             ))
         c.execute("DELETE FROM other_equipment WHERE vessel_name = ?", (vessel,))
         for x in parsed["other_equipment"]:
@@ -739,7 +741,7 @@ def get_summary() -> pd.DataFrame:
                COUNT(*) AS total
         FROM components
         GROUP BY vessel_name
-        ORDER BY overdue DESC, high_priority DESC, vessel_name ASC
+        ORDER BY vessel_name ASC
     """, conn)
     conn.close()
     return df
@@ -752,7 +754,7 @@ def get_all_fleet_components() -> pd.DataFrame:
     return df
 
 # ============================================================
-# DISPLAY TABLES (ME→AUX, CYL 1..N)
+# DISPLAY TABLES (ORIGINAL DOC ORDER VIA seq)
 # ============================================================
 STATUS_THEME = {
     "OVERDUE": {"bg":"#2d0707", "status":"#ff6b6b", "main":"#ff8080", "accent":"#ff3333", "dim":"#773333"},
@@ -764,44 +766,31 @@ STATUS_THEME = {
 def build_display_df(df: pd.DataFrame, priority: bool=False) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=[
-            "Status","Vessel","Component","Engine","Unit","Periodicity","Last O/H","Hrs Since","Used"
+            "Status","Vessel","Component","Engine","Unit",
+            "Periodicity","Last O/H","Hrs Since","Used"
         ])
 
     d = df.copy()
 
-    # Ensure required columns exist
     for col in ["status","vessel_name","description","engine_label","unit",
-                "periodicity","last_oh_date","hrs_since","pct_used","category"]:
+                "periodicity","last_oh_date","hrs_since","pct_used","category","seq"]:
         if col not in d.columns:
             if col in {"vessel_name","category"}:
                 d[col] = ""
+            elif col == "seq":
+                d[col] = range(len(d))
             else:
                 d[col] = None
 
-    # Custom ordering: MAIN_ENGINE then AUX_ENGINE, cylinders 1..N
     if priority:
         order_map = {"OVERDUE":0, "HIGH PRIORITY":1, "OK":2, "NO DATA":3}
         d["_ord"] = d["status"].map(lambda x: order_map.get(str(x), 9))
         d["_pct"] = d["pct_used"].fillna(0)
-
-    d["_cat_rank"] = d["category"].map(
-        lambda c: 0 if str(c).upper().startswith("MAIN") else (1 if str(c).upper().startswith("AUX") else 2)
-    )
-    d["_eng_group"] = d["engine_label"].map(lambda e: engine_sort_key(str(e))[0])
-    d["_eng_rank"]  = d["engine_label"].map(lambda e: engine_sort_key(str(e))[1])
-    d["_cyl"]       = d["unit"].map(cyl_sort)
-    d["_desc"]      = d["description"].astype(str).str.upper()
-
-    sort_cols = ["_cat_rank", "_eng_group", "_eng_rank", "_cyl", "_desc"]
-    asc       = [True, True, True, True, True]
-
-    if priority:
-        sort_cols = ["_ord", "_pct"] + sort_cols
-        asc       = [True, False] + asc
-
-    if "vessel_name" in d.columns:
-        sort_cols = ["vessel_name"] + sort_cols
-        asc       = [True] + asc
+        sort_cols = ["_ord", "_pct", "vessel_name", "seq"]
+        asc       = [True, False, True, True]
+    else:
+        sort_cols = ["vessel_name", "seq"]
+        asc       = [True, True]
 
     d = d.sort_values(sort_cols, ascending=asc)
 
@@ -903,17 +892,12 @@ if page == "Fleet Overview":
             st.markdown(kpi(v, l, cl), unsafe_allow_html=True)
 
     vessel_f = st.selectbox("Filter Vessel", ["All Fleet"] + sorted(all_comps["vessel_name"].unique().tolist()))
-    cat_f = st.selectbox("Filter Machinery Type", ["All", "Main Engine", "Aux Engines"])
     status_f = st.selectbox("Filter Status", ["All", "Critical Focus", "Overdue Only", "High Priority Only", "OK Only", "No Data Only"])
     comp_f = st.selectbox("Filter Component", ["All"] + sorted(all_comps["description"].unique().tolist()))
 
     filt = all_comps.copy()
     if vessel_f != "All Fleet":
         filt = filt[filt["vessel_name"] == vessel_f]
-    if cat_f == "Main Engine":
-        filt = filt[filt["category"] == "MAIN_ENGINE"]
-    elif cat_f == "Aux Engines":
-        filt = filt[filt["category"] == "AUX_ENGINE"]
 
     if status_f == "Critical Focus":
         filt = filt[filt["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
@@ -959,17 +943,13 @@ elif page == "Vessel Detail":
         last = hist.iloc[0]
         st.write(f"Latest file: {last['filename']} · Confidence {float(last['parse_confidence']):.2f}")
 
-    tabs = st.tabs(["Alerts", "Main Engine", "Aux Engines", "Other Equipment"])
+    tabs = st.tabs(["Alerts", "All Components (Report Order)", "Other Equipment"])
     with tabs[0]:
         alerts = df[df["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
         render_table(alerts, priority=True)
     with tabs[1]:
-        me = df[df["category"] == "MAIN_ENGINE"]
-        render_table(me)
+        render_table(df)  # original DOC order via seq
     with tabs[2]:
-        aux = df[df["category"] == "AUX_ENGINE"]
-        render_table(aux)
-    with tabs[3]:
         if oe.empty:
             st.info("No other equipment data.")
         else:
@@ -995,9 +975,9 @@ elif page == "Upload Report":
 
         pre = pd.DataFrame(parsed["components"])
         if not pre.empty:
-            pre["vessel_name"] = parsed["vessel_name"]  # align preview with fleet format
-            st.subheader("Preview")
-            render_table(pre, priority=True)
+            pre["vessel_name"] = parsed["vessel_name"]
+            st.subheader("Preview (Report Order)")
+            render_table(pre)
 
         if st.button("Commit to Database"):
             try:
