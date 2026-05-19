@@ -8,6 +8,7 @@ import subprocess
 import shutil
 from pathlib import Path
 from datetime import datetime
+from typing import List, Dict, Any, Optional
 import pandas as pd
 from docx import Document
 
@@ -19,7 +20,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# UI
+# PREMIUM UI LAYER
 # ============================================================
 st.markdown("""
 <style>
@@ -104,6 +105,7 @@ h3 { font-size:1rem!important; font-weight:600!important; }
   border-radius:12px!important;
   overflow:hidden!important;
 }
+
 .stTabs [data-baseweb="tab-list"]{
   background:var(--bg2)!important;
   border:1px solid var(--b2)!important;
@@ -131,8 +133,16 @@ h3 { font-size:1rem!important; font-weight:600!important; }
 </style>
 """, unsafe_allow_html=True)
 
+def kpi(val, lbl, color="gold"):
+    return f'''
+    <div style="background:var(--bg3);border:1px solid var(--b2);border-radius:12px;padding:1rem 1.1rem">
+      <div style="font-family:var(--ff);font-size:2rem;font-weight:700;color:var(--t0);line-height:1">{val}</div>
+      <div style="color:var(--t3);text-transform:uppercase;letter-spacing:.15em;font-size:.62rem;margin-top:.4rem">{lbl}</div>
+    </div>
+    '''
+
 # ============================================================
-# DB
+# DB LAYER
 # ============================================================
 DB_PATH = Path("running_hours.db")
 
@@ -200,15 +210,63 @@ init_db()
 # ============================================================
 # HELPERS
 # ============================================================
-def clean_text(x):
-    return re.sub(r"\s+", " ", str(x).replace("\xa0", " ")).strip() if x is not None else ""
+HEADER_PATTERNS = [
+    "1-DATE OF LAST O/H 2- RUNNING HOURS SINCE LAST O/H",
+    "1-DATE OF LAST O/H 2- RUNNING HOURS SINCE LAST O/ H",
+    "DATE OF LAST O/H",
+    "RUNNING HOURS SINCE LAST O/H",
+    "TOTAL RUNNING HOURS",
+    "THIS MONTH",
+    "MAIN ENGINE",
+    "TYPE: MAN B&W",
+    "MAN B&W –5S60MC",
+]
 
-def safe_float(x):
+def clean_text(x: Any) -> str:
+    if x is None:
+        return ""
+    return re.sub(r"\s+", " ", str(x).replace("\xa0", " ")).strip()
+
+def is_header_like(text: str) -> bool:
+    t = clean_text(text).upper()
+    if not t:
+        return False
+    for pat in HEADER_PATTERNS:
+        if pat.upper() in t:
+            return True
+    # Long all‑caps with digits & punctuation starting with "1-"
+    if re.match(r"^1[- ]?DATE OF LAST", t):
+        return True
+    return False
+
+def looks_like_name(x: str) -> bool:
+    t = clean_text(x)
+    if not t or len(t) < 3:
+        return False
+    u = t.upper()
+    if is_header_like(u):
+        return False
+    # Pure numbers / dates / hours only → not a component name
+    if re.fullmatch(r"[\d./ ,:-]+", u):
+        return False
+    # Reject generic labels
+    if u in {"DATE", "RUN HRS", "RUN HOURS", "PERIODICITY"}:
+        return False
+    return True
+
+def safe_float(x: Any) -> Optional[float]:
     s = clean_text(x).replace(",", "")
+    if not s:
+        return None
     m = re.search(r"[-+]?\d+(?:\.\d+)?", s)
-    return float(m.group()) if m else None
+    if not m:
+        return None
+    try:
+        return float(m.group())
+    except:
+        return None
 
-def parse_date(raw):
+def parse_date(raw: Any) -> Optional[str]:
     raw = clean_text(raw)
     if not raw or raw.upper() in {"NA", "N/A", "-", "--"}:
         return None
@@ -225,17 +283,18 @@ def parse_date(raw):
                 pass
     return raw
 
-def parse_periodicity(raw):
-    s = clean_text(raw).upper().replace("O/H", "").replace("HRS", "").replace("HR", "")
+def parse_periodicity(raw: Any) -> Optional[float]:
+    s = clean_text(raw).upper()
+    s = s.replace("O/H", "").replace("HRS", "").replace("HRS.", "").replace("HR", "")
     m = re.search(r"(\d+(?:\.\d+)?)", s)
     return float(m.group(1)) if m else None
 
-def extract_number(raw):
+def extract_number(raw: Any) -> Optional[float]:
     s = clean_text(raw).replace(",", "")
     m = re.search(r"[-+]?\d+(?:\.\d+)?", s)
     return float(m.group()) if m else None
 
-def status_from(hrs_since, periodicity):
+def status_from(hrs_since: Optional[float], periodicity: Optional[float]) -> str:
     if hrs_since is None or periodicity is None or periodicity <= 0:
         return "NO DATA"
     r = hrs_since / periodicity
@@ -245,22 +304,32 @@ def status_from(hrs_since, periodicity):
         return "HIGH PRIORITY"
     return "OK"
 
-def pct_used(hrs_since, periodicity):
+def pct_used(hrs_since: Optional[float], periodicity: Optional[float]) -> float:
     if hrs_since is None or periodicity is None or periodicity <= 0:
         return 0.0
     return round(hrs_since / periodicity, 4)
 
-def cyl_sort(u):
-    m = re.search(r"(\d+)", str(u))
+def cyl_sort(unit: Any) -> int:
+    m = re.search(r"(\d+)", str(unit))
     return int(m.group(1)) if m else 999
 
+def engine_sort_key(engine_label: str) -> tuple:
+    # MAIN_ENGINE / ME first, then AUX‑n
+    lab = (engine_label or "").upper()
+    if lab in {"ME", "MAIN ENGINE", "MAIN_ENGINE"}:
+        return (0, 0)
+    m = re.search(r"AUX[-\s]*(\d+)", lab)
+    if m:
+        return (1, int(m.group(1)))
+    return (2, 999)
+
 # ============================================================
-# DOC CONVERSION / PARSING
+# DOC CONVERSION
 # ============================================================
-def convert_doc_to_docx(raw):
+def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
     if not os.path.isfile(soffice):
-        raise RuntimeError("LibreOffice not found.")
+        raise RuntimeError("LibreOffice not found. Add 'libreoffice' in packages.")
     with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as t:
         t.write(raw)
         src = t.name
@@ -286,7 +355,7 @@ def convert_doc_to_docx(raw):
                 pass
         shutil.rmtree(outdir, ignore_errors=True)
 
-def open_docx_bytes(docx_bytes):
+def open_docx_bytes(docx_bytes: bytes) -> Document:
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as t:
         t.write(docx_bytes)
         p = t.name
@@ -298,13 +367,13 @@ def open_docx_bytes(docx_bytes):
         except:
             pass
 
-def table_grid(table):
+def table_grid(table) -> List[List[str]]:
     return [[clean_text(c.text) for c in row.cells] for row in table.rows]
 
-def row_text(row):
+def row_text(row: List[str]) -> str:
     return " | ".join([clean_text(x) for x in row if clean_text(x)])
 
-def doc_all_text(doc):
+def doc_all_text(doc: Document) -> str:
     parts = [clean_text(p.text) for p in doc.paragraphs if clean_text(p.text)]
     for table in doc.tables:
         for row in table_grid(table):
@@ -313,7 +382,7 @@ def doc_all_text(doc):
                 parts.append(txt)
     return "\n".join(parts)
 
-def detect_vessel_name(doc):
+def detect_vessel_name(doc: Document) -> str:
     pats = [
         r"VESSEL\s*NAME[:\s]+(?:M/V\s*)?([A-Z0-9 \-_/]{2,})",
         r"\bM/?V\s+([A-Z0-9 \-_/]{2,})",
@@ -332,7 +401,7 @@ def detect_vessel_name(doc):
             return clean_text(m.group(1))
     return "UNKNOWN"
 
-def detect_report_date(doc):
+def detect_report_date(doc: Document) -> Optional[str]:
     for p in doc.paragraphs:
         txt = clean_text(p.text)
         m = re.search(r"(?:REPORT\s*)?DATE[:\s]+(.+)", txt, flags=re.I)
@@ -340,7 +409,7 @@ def detect_report_date(doc):
             return parse_date(m.group(1))
     return None
 
-def detect_me_totals(doc):
+def detect_me_totals(doc: Document):
     txt = doc_all_text(doc)
     total = None
     month = None
@@ -352,21 +421,17 @@ def detect_me_totals(doc):
         month = int(m2.group(1).replace(",", ""))
     return total, month
 
-def looks_like_name(x):
-    t = clean_text(x).upper()
-    if not t or len(t) < 3:
-        return False
-    if re.fullmatch(r"[\d./ -]+", t):
-        return False
-    bad = {"DATE", "RUN HRS", "RUN HOURS", "PERIODICITY", "LAST OH DATE", "LAST OH HOURS"}
-    return t not in bad
-
-def parse_main_engine(table):
+# ============================================================
+# PARSING CORE
+# ============================================================
+def parse_main_engine(table) -> List[Dict[str, Any]]:
     grid = table_grid(table)
-    comps = []
+    comps: List[Dict[str, Any]] = []
     if not grid:
         return comps
     max_cols = max(len(r) for r in grid)
+
+    # Discover cylinder columns by header text
     cyl_cols = []
     for ci in range(max_cols):
         txt = " ".join(r[ci] if ci < len(r) else "" for r in grid[:4])
@@ -388,6 +453,7 @@ def parse_main_engine(table):
         for ci, unit in cyl_cols:
             d = parse_date(r1[ci] if ci < len(r1) else None)
             h = extract_number(r2[ci] if ci < len(r2) else None)
+            # Accept rows where either date OR hours exists
             if d is None and h is None:
                 continue
             comps.append({
@@ -405,9 +471,9 @@ def parse_main_engine(table):
         i += 2
     return comps
 
-def parse_aux_engine(table):
+def parse_aux_engine(table) -> List[Dict[str, Any]]:
     grid = table_grid(table)
-    comps = []
+    comps: List[Dict[str, Any]] = []
     if not grid:
         return comps
 
@@ -465,8 +531,8 @@ def parse_aux_engine(table):
         i += 2
     return comps
 
-def parse_other_equipment(doc):
-    rows = []
+def parse_other_equipment(doc: Document) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
     for table in doc.tables:
         for row in table_grid(table):
             joined = clean_text(" ".join(row)).upper()
@@ -478,23 +544,51 @@ def parse_other_equipment(doc):
                         "description": desc,
                         "periodicity": "",
                         "last_date": "",
-                        "run_hrs": ""
+                        "run_hrs": "",
                     })
-    return rows
-
-def dedupe_dicts(items):
+    # Deduplicate
     out = []
     seen = set()
-    for x in items:
-        key = tuple(sorted(x.items()))
+    for r in rows:
+        key = (r["section"], r["description"])
+        if key not in seen:
+            seen.add(key)
+            out.append(r)
+    return out
+
+def dedupe_components(comps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    seen = set()
+    for x in comps:
+        key = (
+            x["category"],
+            x["engine_label"],
+            x["unit"],
+            x["description"],
+            x.get("last_oh_date"),
+            x.get("hrs_since"),
+        )
         if key not in seen:
             seen.add(key)
             out.append(x)
     return out
 
-def parse_doc_bytes(docx_bytes):
+def filter_header_noise(comps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    for c in comps:
+        desc = clean_text(c.get("description", ""))
+        if is_header_like(desc):
+            continue
+        if c["status"] == "NO DATA":
+            if not c.get("periodicity") and not c.get("last_oh_date") and c.get("hrs_since") is None:
+                # Pure NO DATA with no numbers and header‑like description → drop
+                continue
+        out.append(c)
+    return out
+
+def parse_doc_bytes(docx_bytes: bytes) -> Dict[str, Any]:
     doc = open_docx_bytes(docx_bytes)
-    warnings = []
+    warnings: List[str] = []
     vessel_name = detect_vessel_name(doc)
     report_date = detect_report_date(doc)
     me_total_hrs, me_this_month = detect_me_totals(doc)
@@ -505,19 +599,20 @@ def parse_doc_bytes(docx_bytes):
     main_table = doc.tables[0] if len(doc.tables) > 0 else None
     aux_table = doc.tables[2] if len(doc.tables) > 2 else None
 
-    components = []
+    components: List[Dict[str, Any]] = []
     if main_table:
         components.extend(parse_main_engine(main_table))
     else:
         warnings.append("No main engine table found.")
-
     if aux_table:
         components.extend(parse_aux_engine(aux_table))
     else:
         warnings.append("No auxiliary engine table found.")
 
-    components = dedupe_dicts(components)
-    other_equipment = dedupe_dicts(parse_other_equipment(doc))
+    components = dedupe_components(components)
+    components = filter_header_noise(components)
+
+    other_equipment = parse_other_equipment(doc)
 
     if len(components) < 5:
         warnings.append(f"Low component count extracted ({len(components)}).")
@@ -549,9 +644,9 @@ def parse_doc_bytes(docx_bytes):
     }
 
 # ============================================================
-# DB SAVE
+# SAVE
 # ============================================================
-def save_parsed(parsed, filename, file_hash):
+def save_parsed(parsed: Dict[str, Any], filename: str, file_hash: str):
     if parsed["parse_confidence"] < 0.35 or len(parsed["components"]) < 5:
         raise ValueError("Parse confidence too low to commit safely.")
     conn = get_db()
@@ -567,8 +662,8 @@ def save_parsed(parsed, filename, file_hash):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             vessel, filename, file_hash, parsed["report_date"], parsed["me_total_hrs"],
-            parsed["me_this_month"], parsed["parse_confidence"], len(parsed["components"]),
-            len(parsed["warnings"]), now
+            parsed["me_this_month"], parsed["parse_confidence"],
+            len(parsed["components"]), len(parsed["warnings"]), now
         ))
         c.execute("DELETE FROM components WHERE vessel_name = ?", (vessel,))
         for x in parsed["components"]:
@@ -589,7 +684,8 @@ def save_parsed(parsed, filename, file_hash):
                     vessel_name, section, description, periodicity, last_date, run_hrs, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
-                vessel, x["section"], x["description"], x["periodicity"], x["last_date"], x["run_hrs"], now
+                vessel, x["section"], x["description"], x["periodicity"],
+                x["last_date"], x["run_hrs"], now
             ))
         conn.commit()
     except:
@@ -602,28 +698,31 @@ def save_parsed(parsed, filename, file_hash):
 # QUERIES
 # ============================================================
 @st.cache_data(ttl=10)
-def get_vessels():
+def get_vessels() -> List[str]:
     conn = get_db()
     rows = conn.execute("SELECT name FROM vessels ORDER BY name").fetchall()
     conn.close()
     return [r["name"] for r in rows]
 
 @st.cache_data(ttl=10)
-def get_components(vessel):
+def get_components(vessel: str) -> pd.DataFrame:
     conn = get_db()
     df = pd.read_sql_query("SELECT * FROM components WHERE vessel_name = ?", conn, params=(vessel,))
     conn.close()
     return df
 
 @st.cache_data(ttl=10)
-def get_other_equipment(vessel):
+def get_other_equipment(vessel: str) -> pd.DataFrame:
     conn = get_db()
-    df = pd.read_sql_query("SELECT * FROM other_equipment WHERE vessel_name = ? ORDER BY section, description", conn, params=(vessel,))
+    df = pd.read_sql_query(
+        "SELECT * FROM other_equipment WHERE vessel_name = ? ORDER BY section, description",
+        conn, params=(vessel,)
+    )
     conn.close()
     return df
 
 @st.cache_data(ttl=10)
-def get_history(vessel):
+def get_history(vessel: str) -> pd.DataFrame:
     conn = get_db()
     df = pd.read_sql_query("""
         SELECT filename, report_date, me_total_hrs, me_this_month,
@@ -637,7 +736,7 @@ def get_history(vessel):
     return df
 
 @st.cache_data(ttl=10)
-def get_summary():
+def get_summary() -> pd.DataFrame:
     conn = get_db()
     df = pd.read_sql_query("""
         SELECT vessel_name,
@@ -654,14 +753,14 @@ def get_summary():
     return df
 
 @st.cache_data(ttl=10)
-def get_all_fleet_components():
+def get_all_fleet_components() -> pd.DataFrame:
     conn = get_db()
     df = pd.read_sql_query("SELECT * FROM components", conn)
     conn.close()
     return df
 
 # ============================================================
-# DISPLAY
+# DISPLAY TABLES (WITH ORDERING ME→AUX, CYL 1..N)
 # ============================================================
 STATUS_THEME = {
     "OVERDUE": {"bg":"#2d0707", "status":"#ff6b6b", "main":"#ff8080", "accent":"#ff3333", "dim":"#773333"},
@@ -670,21 +769,41 @@ STATUS_THEME = {
     "NO DATA": {"bg":"#0c1422", "status":"#7da3d8", "main":"#5f7fa6", "accent":"#7da3d8", "dim":"#2a3950"},
 }
 
-def build_display_df(df, priority=False):
+def build_display_df(df: pd.DataFrame, priority: bool=False) -> pd.DataFrame:
     if df.empty:
-        return pd.DataFrame(columns=["Status","Vessel","Component","Engine","Unit","Periodicity","Last O/H","Hrs Since","Used"])
+        return pd.DataFrame(columns=[
+            "Status","Vessel","Component","Engine","Unit","Periodicity","Last O/H","Hrs Since","Used"
+        ])
     d = df.copy()
+
+    # Custom ordering: category/engine/cylinder/description
     if priority:
-        order = {"OVERDUE":0, "HIGH PRIORITY":1, "OK":2, "NO DATA":3}
-        d["_o"] = d["status"].map(lambda x: order.get(str(x), 9))
-        d["_p"] = d["pct_used"].fillna(0)
-        sort_cols = ["_o", "_p"] + (["vessel_name"] if "vessel_name" in d.columns else [])
-        d = d.sort_values(sort_cols, ascending=[True, False] + ([True] if "vessel_name" in d.columns else [])).drop(columns=["_o","_p"])
-    else:
-        d["_k1"] = d["description"].astype(str).str.upper()
-        d["_k2"] = d["unit"].apply(cyl_sort)
-        sort_cols = (["vessel_name"] if "vessel_name" in d.columns else []) + ["_k1","_k2"]
-        d = d.sort_values(sort_cols).drop(columns=["_k1","_k2"])
+        order_map = {"OVERDUE":0, "HIGH PRIORITY":1, "OK":2, "NO DATA":3}
+        d["_ord"] = d["status"].map(lambda x: order_map.get(str(x), 9))
+        d["_pct"] = d["pct_used"].fillna(0)
+    d["_cat_rank"] = d["category"].map(
+        lambda c: 0 if str(c).upper().startswith("MAIN") else (1 if str(c).upper().startswith("AUX") else 2)
+    )
+    d["_eng_rank"] = d["engine_label"].map(lambda e: engine_sort_key(str(e))[1])
+    d["_eng_group"] = d["engine_label"].map(lambda e: engine_sort_key(str(e))[0])
+    d["_cyl"] = d["unit"].map(cyl_sort)
+    d["_desc"] = d["description"].astype(str).str.upper()
+
+    sort_cols = ["_cat_rank", "_eng_group", "_eng_rank", "_cyl", "_desc"]
+    asc = [True, True, True, True, True]
+    if priority:
+        sort_cols = ["_ord", "_pct"] + sort_cols
+        asc = [True, False] + asc
+    if "vessel_name" in d.columns:
+        sort_cols = ["vessel_name"] + sort_cols
+        asc = [True] + asc
+
+    d = d.sort_values(sort_cols, ascending=asc)
+
+    keep = ["status","vessel_name","description","engine_label","unit",
+            "periodicity","last_oh_date","hrs_since","pct_used"]
+    d = d[keep]
+
     out = pd.DataFrame()
     out["Status"] = d["status"]
     out["Vessel"] = d["vessel_name"] if "vessel_name" in d.columns else ""
@@ -697,8 +816,8 @@ def build_display_df(df, priority=False):
     out["Used"] = d["pct_used"].apply(lambda x: round(float(x) * 100, 1) if pd.notna(x) else 0.0)
     return out
 
-def apply_style(df):
-    def row_style(row):
+def apply_style(df: pd.DataFrame):
+    def style_row(row):
         s = STATUS_THEME.get(str(row["Status"]), STATUS_THEME["NO DATA"])
         return [
             f"background-color:{s['bg']}; color:{s['status']}; font-weight:700",
@@ -711,7 +830,7 @@ def apply_style(df):
             f"background-color:{s['bg']}; color:{s['accent']}; font-weight:700",
             f"background-color:{s['bg']}; color:{s['accent']}; font-weight:700",
         ]
-    return df.style.apply(row_style, axis=1)
+    return df.style.apply(style_row, axis=1)
 
 COLCFG = {
     "Status": st.column_config.TextColumn("Status", width=130),
@@ -725,7 +844,7 @@ COLCFG = {
     "Used": st.column_config.ProgressColumn("Used", min_value=0, max_value=160, format="%.1f%%", width=120),
 }
 
-def render_table(df, height=None, priority=False):
+def render_table(df: pd.DataFrame, height: Optional[int]=None, priority: bool=False):
     if isinstance(df, list):
         df = pd.DataFrame(df)
     if df.empty:
@@ -733,31 +852,39 @@ def render_table(df, height=None, priority=False):
         return
     tbl = build_display_df(df, priority=priority)
     h = height or min(900, 38 * len(tbl) + 44)
-    st.dataframe(apply_style(tbl), use_container_width=True, hide_index=True, height=h, column_config=COLCFG)
-
-def kpi(val, lbl, color="gold"):
-    return f'<div style="background:var(--bg3);border:1px solid var(--b2);border-radius:12px;padding:1rem 1.1rem"><div style="font-family:var(--ff);font-size:2rem;font-weight:700;color:var(--t0);line-height:1">{val}</div><div style="color:var(--t3);text-transform:uppercase;letter-spacing:.15em;font-size:.62rem;margin-top:.4rem">{lbl}</div></div>'
+    st.dataframe(
+        apply_style(tbl),
+        use_container_width=True,
+        hide_index=True,
+        height=h,
+        column_config=COLCFG
+    )
 
 # ============================================================
 # SIDEBAR
 # ============================================================
 with st.sidebar:
     st.markdown("<h2>FLEET MONITOR</h2>", unsafe_allow_html=True)
-    page = st.selectbox("Navigation", ["Fleet Overview", "Vessel Detail", "Upload Report", "Upload History"], label_visibility="collapsed")
+    page = st.selectbox(
+        "Navigation",
+        ["Fleet Overview", "Vessel Detail", "Upload Report", "Upload History"],
+        label_visibility="collapsed",
+    )
     vessels = get_vessels()
-    selected_vessel = st.selectbox("Active Vessel", vessels if vessels else ["—"], disabled=not bool(vessels))
+    selected_vessel = st.selectbox(
+        "Active Vessel", vessels if vessels else ["—"], disabled=not bool(vessels)
+    )
     st.markdown("<hr>", unsafe_allow_html=True)
-    st.write(f"DB: {DB_PATH.name}")
-    st.write(f"Vessels: {len(vessels)}")
+    db_kb = DB_PATH.stat().st_size / 1024 if DB_PATH.exists() else 0
+    st.write(f"DB: {DB_PATH.name} · {db_kb:.0f} kB · {len(vessels)} vessels")
 
 # ============================================================
-# PAGE: OVERVIEW
+# PAGES
 # ============================================================
 if page == "Fleet Overview":
     st.markdown("<h1>Fleet Master Matrix</h1>", unsafe_allow_html=True)
     smry = get_summary()
     all_comps = get_all_fleet_components()
-
     if smry.empty or all_comps.empty:
         st.info("No data loaded. Upload a report to begin.")
         st.stop()
@@ -786,6 +913,7 @@ if page == "Fleet Overview":
         filt = filt[filt["category"] == "MAIN_ENGINE"]
     elif cat_f == "Aux Engines":
         filt = filt[filt["category"] == "AUX_ENGINE"]
+
     if status_f == "Critical Focus":
         filt = filt[filt["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
     elif status_f == "Overdue Only":
@@ -796,23 +924,19 @@ if page == "Fleet Overview":
         filt = filt[filt["status"] == "OK"]
     elif status_f == "No Data Only":
         filt = filt[filt["status"] == "NO DATA"]
+
     if comp_f != "All":
         filt = filt[filt["description"] == comp_f]
 
     render_table(filt, priority=True)
 
-# ============================================================
-# PAGE: VESSEL DETAIL
-# ============================================================
 elif page == "Vessel Detail":
     if not vessels or selected_vessel == "—":
         st.info("Select a vessel from the sidebar.")
         st.stop()
-
     st.markdown(f"<h1>{selected_vessel}</h1>", unsafe_allow_html=True)
     df = get_components(selected_vessel)
     oe = get_other_equipment(selected_vessel)
-
     if df.empty:
         st.info("No data for this vessel.")
         st.stop()
@@ -832,39 +956,30 @@ elif page == "Vessel Detail":
     hist = get_history(selected_vessel)
     if not hist.empty:
         last = hist.iloc[0]
-        st.write(f"Latest file: {last['filename']} | Confidence: {float(last['parse_confidence']):.2f}")
+        st.write(f"Latest file: {last['filename']} · Confidence {float(last['parse_confidence']):.2f}")
 
     tabs = st.tabs(["Alerts", "Main Engine", "Aux Engines", "Other Equipment"])
-
     with tabs[0]:
         alerts = df[df["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
         render_table(alerts, priority=True)
-
     with tabs[1]:
         me = df[df["category"] == "MAIN_ENGINE"]
         render_table(me)
-
     with tabs[2]:
         aux = df[df["category"] == "AUX_ENGINE"]
         render_table(aux)
-
     with tabs[3]:
         if oe.empty:
             st.info("No other equipment data.")
         else:
             st.dataframe(oe, use_container_width=True, hide_index=True)
 
-# ============================================================
-# PAGE: UPLOAD
-# ============================================================
 elif page == "Upload Report":
     st.markdown("<h1>Upload Report</h1>", unsafe_allow_html=True)
     uploaded = st.file_uploader("Upload TEC-004 .doc", type=["doc"], label_visibility="collapsed")
-
     if uploaded:
         raw = uploaded.read()
         file_hash = hashlib.md5(raw).hexdigest()
-
         with st.spinner("Converting and parsing..."):
             docx_bytes = convert_doc_to_docx(raw)
             parsed = parse_doc_bytes(docx_bytes)
@@ -891,9 +1006,6 @@ elif page == "Upload Report":
             except Exception as e:
                 st.error(str(e))
 
-# ============================================================
-# PAGE: HISTORY
-# ============================================================
 elif page == "Upload History":
     st.markdown("<h1>Upload History</h1>", unsafe_allow_html=True)
     if not vessels or selected_vessel == "—":
