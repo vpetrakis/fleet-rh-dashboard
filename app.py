@@ -239,17 +239,6 @@ def is_header_like(text: str) -> bool:
         return True
     return False
 
-def is_valid_component(name: str) -> bool:
-    """Strictly isolates actual machinery from ALEXIS/metadata leaks."""
-    t = clean_text(name).upper()
-    if not t or len(t) < 3: return False
-    if re.fullmatch(r"[\d./ ,:-]+", t): return False
-    stop_words = ["ALEXIS", "DATE", "PAGE", "SIGNATURE", "CHIEF ENGINEER", "MASTER", 
-                  "RUN HRS", "RUNNING HOURS", "PERIODICITY", "TOTAL", "THIS MONTH", 
-                  "TYPE:", "MAN B&W", "MAKER", "TABLE", "INSPECTION"]
-    if any(sw in t for sw in stop_words): return False
-    return True
-
 def looks_like_name(x: str) -> bool:
     t = clean_text(x)
     if not t or len(t) < 3:
@@ -421,58 +410,54 @@ def detect_me_totals(doc: Document):
     return total, month
 
 # ============================================================
-# PARSING CORE WITH SEQUENCE (WIDE ROW LOGIC)
+# PARSING CORE WITH SEQUENCE
 # ============================================================
 def parse_main_engine(table, start_seq: int = 0) -> tuple[List[Dict[str, Any]], int]:
     grid = table_grid(table)
     comps: List[Dict[str, Any]] = []
     if not grid:
         return comps, start_seq
+    max_cols = max(len(r) for r in grid)
 
     cyl_cols = []
-    for r in grid[:5]:
-        for ci, cell in enumerate(r):
-            m = re.search(r"CYL(?:INDER)?\s*NO\.?\s*(\d+)", cell, flags=re.I)
-            if m:
-                label = f"Cyl {m.group(1)}"
-                if (ci, label) not in cyl_cols:
-                    cyl_cols.append((ci, label))
-                    
-    cyl_cols = sorted(cyl_cols, key=lambda x: x[0])
+    for ci in range(max_cols):
+        txt = " ".join(r[ci] if ci < len(r) else "" for r in grid[:4])
+        m = re.search(r"CYL(?:INDER)?\s*NO\.?\s*(\d+)", txt, flags=re.I)
+        if m:
+            cyl_cols.append((ci, f"Cyl {m.group(1)}"))
+    if not cyl_cols:
+        cyl_cols = [(i, f"Cyl {i-1}") for i in range(2, min(max_cols, 14))]
 
     seq = start_seq
-    for r in grid:
-        name = r[0] if r else ""
-        if not is_valid_component(name): 
+    i = 0
+    while i < len(grid) - 1:
+        r1 = grid[i]
+        r2 = grid[i + 1]
+        name = r1[0] if r1 else ""
+        if not looks_like_name(name):
+            i += 1
             continue
-        
-        periodicity = parse_periodicity(r[1] if len(r) > 1 else None)
-        row_has_data = False
-        
+        periodicity = parse_periodicity(r1[1] if len(r1) > 1 else None)
         for ci, unit in cyl_cols:
-            d_str = r[ci] if ci < len(r) else None
-            h_str = r[ci+1] if (ci+1) < len(r) else None 
-            
-            d = parse_date(d_str)
-            h = extract_number(h_str)
-            
-            if d is not None or h is not None:
-                row_has_data = True
-                comps.append({
-                    "seq": seq,
-                    "category": "MAIN_ENGINE",
-                    "engine_label": "ME",
-                    "unit": unit,
-                    "description": clean_text(name),
-                    "periodicity": periodicity,
-                    "last_oh_date": d,
-                    "last_oh_hrs": h,
-                    "hrs_since": h,
-                    "pct_used": pct_used(h, periodicity),
-                    "status": status_from(h, periodicity),
-                })
-        if row_has_data:
+            d = parse_date(r1[ci] if ci < len(r1) else None)
+            h = extract_number(r2[ci] if ci < len(r2) else None)
+            if d is None and h is None:
+                continue
+            comps.append({
+                "seq": seq,
+                "category": "MAIN_ENGINE",
+                "engine_label": "ME",
+                "unit": unit,
+                "description": clean_text(name),
+                "periodicity": periodicity,
+                "last_oh_date": d,
+                "last_oh_hrs": h,
+                "hrs_since": h,
+                "pct_used": pct_used(h, periodicity),
+                "status": status_from(h, periodicity),
+            })
             seq += 1
+        i += 2
     return comps, seq
 
 def parse_aux_engine(table, start_seq: int) -> tuple[List[Dict[str, Any]], int]:
@@ -481,9 +466,10 @@ def parse_aux_engine(table, start_seq: int) -> tuple[List[Dict[str, Any]], int]:
     if not grid:
         return comps, start_seq
 
+    header = grid[:5]
     blocks = []
     seen = set()
-    for row in grid[:5]:
+    for row in header:
         for ci, cell in enumerate(row):
             m = re.search(r"AUX(?:ILIARY)?\s*ENGINE\s*NO\.?\s*(\d+)", cell, flags=re.I)
             if m:
@@ -491,52 +477,50 @@ def parse_aux_engine(table, start_seq: int) -> tuple[List[Dict[str, Any]], int]:
                 if label not in seen:
                     seen.add(label)
                     blocks.append((label, ci))
+    if not blocks:
+        blocks = [("AUX-1", 2), ("AUX-2", 6), ("AUX-3", 10)]
 
     cyl_map = {}
-    if len(grid) > 4 and blocks:
+    if len(grid) > 4:
+        hdr_row = grid[4]
         for idx, (label, start) in enumerate(blocks):
-            end = blocks[idx + 1][1] if idx + 1 < len(blocks) else len(grid[4])
-            for r_idx in range(2, 6): 
-                if r_idx < len(grid):
-                    for ci in range(start, end):
-                        if ci < len(grid[r_idx]):
-                            m = re.search(r"\b(\d{1,2})\b", grid[r_idx][ci])
-                            if m and ci not in cyl_map:
-                                cyl_map[ci] = (label, f"Cyl {m.group(1)}")
+            end = blocks[idx + 1][1] if idx + 1 < len(blocks) else len(hdr_row)
+            for ci in range(start, end):
+                if ci < len(hdr_row):
+                    m = re.search(r"\b(\d{1,2})\b", hdr_row[ci])
+                    if m:
+                        cyl_map[ci] = (label, f"Cyl {m.group(1)}")
 
     seq = start_seq
-    for r in grid:
-        name = r[0] if r else ""
-        if not is_valid_component(name): 
+    i = 5
+    while i < len(grid) - 1:
+        r1 = grid[i]
+        r2 = grid[i + 1]
+        name = r1[0] if r1 else ""
+        if not looks_like_name(name):
+            i += 1
             continue
-        
-        periodicity = parse_periodicity(r[1] if len(r) > 1 else None)
-        row_has_data = False
-        
+        periodicity = parse_periodicity(r1[1] if len(r1) > 1 else None)
         for ci, (eng, unit) in cyl_map.items():
-            d_str = r[ci] if ci < len(r) else None
-            h_str = r[ci+1] if (ci+1) < len(r) else None
-            
-            d = parse_date(d_str)
-            h = extract_number(h_str)
-            
-            if d is not None or h is not None:
-                row_has_data = True
-                comps.append({
-                    "seq": seq,
-                    "category": "AUX_ENGINE",
-                    "engine_label": eng,
-                    "unit": unit,
-                    "description": clean_text(name),
-                    "periodicity": periodicity,
-                    "last_oh_date": d,
-                    "last_oh_hrs": h,
-                    "hrs_since": h,
-                    "pct_used": pct_used(h, periodicity),
-                    "status": status_from(h, periodicity),
-                })
-        if row_has_data:
+            d = parse_date(r1[ci] if ci < len(r1) else None)
+            h = extract_number(r2[ci] if ci < len(r2) else None)
+            if d is None and h is None:
+                continue
+            comps.append({
+                "seq": seq,
+                "category": "AUX_ENGINE",
+                "engine_label": eng,
+                "unit": unit,
+                "description": clean_text(name),
+                "periodicity": periodicity,
+                "last_oh_date": d,
+                "last_oh_hrs": h,
+                "hrs_since": h,
+                "pct_used": pct_used(h, periodicity),
+                "status": status_from(h, periodicity),
+            })
             seq += 1
+        i += 2
     return comps, seq
 
 def parse_other_equipment(doc: Document) -> List[Dict[str, Any]]:
@@ -545,7 +529,7 @@ def parse_other_equipment(doc: Document) -> List[Dict[str, Any]]:
         for row in table_grid(table):
             joined = clean_text(" ".join(row)).upper()
             if any(x in joined for x in ["TURBOCHARGER", "COOLERS", "COMPRESSORS", "BOILER", "D/G"]):
-                desc = next((c for c in row if is_valid_component(c)), "")
+                desc = next((c for c in row if looks_like_name(c)), "")
                 if desc:
                     rows.append({
                         "section": "OTHER EQUIPMENT",
@@ -563,11 +547,28 @@ def parse_other_equipment(doc: Document) -> List[Dict[str, Any]]:
             out.append(r)
     return out
 
+def dedupe_components(comps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    seen = set()
+    for x in comps:
+        key = (
+            x["category"],
+            x["engine_label"],
+            x["unit"],
+            x["description"],
+            x.get("last_oh_date"),
+            x.get("hrs_since"),
+        )
+        if key not in seen:
+            seen.add(key)
+            out.append(x)
+    return out
+
 def filter_header_noise(comps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out = []
     for c in comps:
         desc = clean_text(c.get("description", ""))
-        if not is_valid_component(desc):
+        if is_header_like(desc):
             continue
         if c["status"] == "NO DATA":
             if not c.get("periodicity") and not c.get("last_oh_date") and c.get("hrs_since") is None:
@@ -601,8 +602,7 @@ def parse_doc_bytes(docx_bytes: bytes) -> Dict[str, Any]:
     else:
         warnings.append("No auxiliary engine table found.")
 
-    # Deduplication removed to prevent ME/AUX collisions. 
-    # Just filter out noise.
+    components = dedupe_components(components)
     components = filter_header_noise(components)
 
     other_equipment = parse_other_equipment(doc)
@@ -948,7 +948,7 @@ elif page == "Vessel Detail":
         alerts = df[df["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
         render_table(alerts, priority=True)
     with tabs[1]:
-        render_table(df)  
+        render_table(df)  # original DOC order via seq
     with tabs[2]:
         if oe.empty:
             st.info("No other equipment data.")
