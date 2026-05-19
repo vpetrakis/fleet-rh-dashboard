@@ -976,44 +976,70 @@ def fmt_df(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 def style_df(df: pd.DataFrame):
-    """Apply rich row-level colour coding based on Status column."""
+    """
+    Row-level colour coding for Streamlit Cloud dark AG-Grid theme.
+    High-saturation text on dark-tinted backgrounds — every status
+    is unmistakably visible regardless of the host theme.
+    Columns: [Status, Component, Engine, Unit, Periodicity, Last O/H, Hrs Since, % Used]
+    """
     def rs(row):
         s = str(row.get('Status', ''))
+
         if s == 'OVERDUE':
+            bg   = 'background-color:#1f0505'
+            bg_s = 'background-color:#2d0707'
             return [
-                'background:#3a0808;color:#fca5a5;font-weight:600',  # Status
-                'background:#280606;color:#f87171',                   # Component
-                'background:#280606;color:#e05252',                   # Engine
-                'background:#280606;color:#e05252',                   # Unit
-                'background:#280606;color:#9ca3af',                   # Periodicity
-                'background:#280606;color:#9ca3af',                   # Last O/H
-                'background:#280606;color:#fca5a5;font-weight:600',   # Hrs Since
-                'background:#280606;color:#fca5a5;font-weight:700',   # % Used
+                f'{bg_s};color:#ff6b6b;font-weight:700',  # Status
+                f'{bg};color:#ff8080;font-weight:600',    # Component
+                f'{bg};color:#cc4444',                    # Engine
+                f'{bg};color:#cc4444',                    # Unit
+                f'{bg};color:#773333',                    # Periodicity
+                f'{bg};color:#773333',                    # Last O/H
+                f'{bg};color:#ff9090;font-weight:600',    # Hrs Since
+                f'{bg};color:#ff3333;font-weight:700',    # % Used
             ]
+
         if s == 'HIGH PRIORITY':
+            bg   = 'background-color:#1e0d02'
+            bg_s = 'background-color:#2d1503'
             return [
-                'background:#3a1a04;color:#fed7aa;font-weight:600',
-                'background:#281204;color:#fb923c',
-                'background:#281204;color:#d97706',
-                'background:#281204;color:#d97706',
-                'background:#281204;color:#9ca3af',
-                'background:#281204;color:#9ca3af',
-                'background:#281204;color:#fed7aa;font-weight:600',
-                'background:#281204;color:#fed7aa;font-weight:700',
+                f'{bg_s};color:#ffaa44;font-weight:700',  # Status
+                f'{bg};color:#ff9933;font-weight:600',    # Component
+                f'{bg};color:#cc6622',                    # Engine
+                f'{bg};color:#cc6622',                    # Unit
+                f'{bg};color:#774422',                    # Periodicity
+                f'{bg};color:#774422',                    # Last O/H
+                f'{bg};color:#ffbb55;font-weight:600',    # Hrs Since
+                f'{bg};color:#ffcc00;font-weight:700',    # % Used
             ]
+
         if s == 'OK':
+            bg   = 'background-color:#021208'
+            bg_s = 'background-color:#042010'
             return [
-                'background:#061a10;color:#6ee7b7;font-weight:500',
-                'background:#041209;color:#34d399',
-                'background:#041209;color:#059669',
-                'background:#041209;color:#059669',
-                'background:#041209;color:#6b7280',
-                'background:#041209;color:#6b7280',
-                'background:#041209;color:#6ee7b7',
-                'background:#041209;color:#6ee7b7',
+                f'{bg_s};color:#4ade80;font-weight:700',  # Status
+                f'{bg};color:#22c55e;font-weight:500',    # Component
+                f'{bg};color:#166534',                    # Engine
+                f'{bg};color:#166534',                    # Unit
+                f'{bg};color:#0f4023',                    # Periodicity
+                f'{bg};color:#0f4023',                    # Last O/H
+                f'{bg};color:#4ade80;font-weight:500',    # Hrs Since
+                f'{bg};color:#4ade80;font-weight:600',    # % Used
             ]
-        # NO DATA / default
-        return ['background:#080f1a;color:#374151'] * 8
+
+        # NO DATA
+        bg   = 'background-color:#090e18'
+        bg_s = 'background-color:#0c1422'
+        return [
+            f'{bg_s};color:#4a6688;font-weight:600',      # Status
+            f'{bg};color:#334d66',                        # Component
+            f'{bg};color:#253a50',                        # Engine
+            f'{bg};color:#253a50',                        # Unit
+            f'{bg};color:#1a2a38',                        # Periodicity
+            f'{bg};color:#1a2a38',                        # Last O/H
+            f'{bg};color:#334d66',                        # Hrs Since
+            f'{bg};color:#334d66',                        # % Used
+        ]
 
     return df.style.apply(rs, axis=1)
 
