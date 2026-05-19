@@ -148,12 +148,6 @@ hr { border-color: var(--b2)!important; }
 .kpi .l { color:var(--t3); text-transform:uppercase; letter-spacing:.16em; font-size:.62rem; margin-top:.45rem; }
 .kpi.gold .v{color:var(--gold3);} .kpi.red .v{color:var(--red2);} .kpi.orange .v{color:var(--ora2);} .kpi.green .v{color:var(--grn2);} .kpi.blue .v{color:var(--blu2);} 
 
-.badge { display:inline-block; padding:.28rem .58rem; border-radius:999px; font-size:.68rem; font-weight:700; letter-spacing:.04em; }
-.badge.ok{background:rgba(31,169,107,.12); color:var(--grn2); border:1px solid rgba(31,169,107,.28);} 
-.badge.warn{background:rgba(223,127,47,.12); color:var(--ora2); border:1px solid rgba(223,127,47,.28);} 
-.badge.bad{background:rgba(216,74,74,.12); color:var(--red2); border:1px solid rgba(216,74,74,.28);} 
-.badge.info{background:rgba(45,108,223,.12); color:var(--blu2); border:1px solid rgba(45,108,223,.28);} 
-
 [data-testid="stFileUploadDropzone"]{
   border:1.5px dashed var(--gold)!important;
   border-radius:14px!important;
@@ -473,26 +467,12 @@ def is_me_table(grid) -> bool:
     return "MAIN ENGINE" in text and "PERIODICITY" in text and "CYL" in text
 
 
-def is_aux_table(grid) -> bool:
-    text = " ".join(" ".join(r) for r in grid[:8]).upper()
-    return "AUX. ENGINE" in text or ("DESCRIPTION" in text and "D/G NO1" in text) or ("DESCRIPTION" in text and "AUX. ENGINE NO.1" in text)
-
-
 def find_me_table(doc: Document):
     for table in doc.tables:
         grid = table_grid(table)
         if is_me_table(grid):
             return grid
     return None
-
-
-def find_aux_text_rows(doc: Document):
-    rows = []
-    for table in doc.tables:
-        grid = table_grid(table)
-        if is_aux_table(grid):
-            rows.extend(grid)
-    return rows
 
 
 def parse_me_table(grid) -> Tuple[List[Dict], List[str]]:
@@ -536,7 +516,6 @@ def parse_me_table(grid) -> Tuple[List[Dict], List[str]]:
             date_val = None
             hrs_val = None
 
-            # Expected structure in source: row1[col] = '1', row1[col+1] = date; row2[col] = '2', row2[col+1] = hours
             c11 = clean_text(row1[col]) if col < len(row1) else ""
             c12 = clean_text(row1[col + 1]) if col + 1 < len(row1) else ""
             c21 = clean_text(row2[col]) if col < len(row2) else ""
@@ -614,6 +593,140 @@ def parse_other_equipment(doc: Document) -> List[Dict]:
     return dedup
 
 
+def deduplicate_components(rows: List[Dict]) -> List[Dict]:
+    dedup = []
+    seen = set()
+    for r in rows:
+        key = (
+            r.get("category"),
+            r.get("engine_label"),
+            r.get("unit"),
+            r.get("description"),
+            r.get("periodicity"),
+            r.get("last_oh_date"),
+            r.get("hrs_since"),
+        )
+        if key not in seen:
+            seen.add(key)
+            dedup.append(r)
+    return dedup
+
+
+def looks_like_aux_header(text: str) -> bool:
+    u = normalized(text)
+    return "AUX. ENGINE" in u or "AUX ENGINE" in u or "DG NO1" in u or "DG NO2" in u or "DG NO3" in u
+
+
+def find_aux_tables(doc: Document):
+    matches = []
+    for table in doc.tables:
+        grid = table_grid(table)
+        head = " ".join(" ".join(r) for r in grid[:10])
+        if looks_like_aux_header(head):
+            matches.append(grid)
+    return matches
+
+
+def parse_aux_table(grid) -> Tuple[List[Dict], List[str]]:
+    warnings = []
+    rows = []
+    if not grid:
+        return rows, ["Aux engine table not found."]
+
+    text_lines = [" | ".join([clean_text(c) for c in row if clean_text(c)]) for row in grid]
+    joined = "\n".join(text_lines)
+
+    eng_labels = []
+    for m in re.finditer(r"AUX\. ENGINE NO\.?\s*(\d+)", joined, flags=re.I):
+        eng_labels.append(f"AUX-{m.group(1)}")
+    if not eng_labels:
+        eng_labels = [f"DG-{n}" for n in (1, 2, 3) if re.search(rf"DG\s*NO\s*{n}", joined, flags=re.I)]
+    if not eng_labels:
+        eng_labels = ["DG-1", "DG-2", "DG-3"]
+
+    header_idx = None
+    header_row = None
+    for i, row in enumerate(grid):
+        joined_row = normalized(" ".join(row))
+        if "DESCRIPTION" in joined_row and "PERIODICITY" in joined_row and (
+            "DG NO1" in joined_row or "DG NO2" in joined_row or "DG NO3" in joined_row
+        ):
+            header_idx = i
+            header_row = row
+            break
+
+    if header_row is None:
+        warnings.append("Aux DG header row not found.")
+        return rows, warnings
+
+    col_map = {}
+    for idx, cell in enumerate(header_row):
+        u = normalized(cell)
+        if "DG NO1" in u:
+            col_map[idx] = "DG-1"
+        elif "DG NO2" in u:
+            col_map[idx] = "DG-2"
+        elif "DG NO3" in u:
+            col_map[idx] = "DG-3"
+
+    if not col_map:
+        warnings.append("Aux DG columns not detected.")
+        return rows, warnings
+
+    for i in range(header_idx + 1, len(grid)):
+        row = grid[i]
+        if not row:
+            continue
+        desc = clean_text(row[0]) if len(row) > 0 else ""
+        if not desc:
+            continue
+        udesc = normalized(desc)
+        if any(x in udesc for x in ["TABLE", "TITLE", "REMARKS", "NAME", "SIGNATURE", "1ST COPY", "2ND COPY"]):
+            continue
+        if "DESCRIPTION" in udesc or "PERIODICITY" in udesc:
+            continue
+
+        periodicity = parse_periodicity(row[1] if len(row) > 1 else None)
+
+        for col_idx, eng_label in col_map.items():
+            cell = clean_text(row[col_idx]) if col_idx < len(row) else ""
+            right = clean_text(row[col_idx + 1]) if col_idx + 1 < len(row) else ""
+            pair = f"{cell} {right}".strip()
+            date_val = parse_date(cell) or parse_date(right)
+            hrs_val = safe_number(cell)
+            if hrs_val is None:
+                hrs_val = safe_number(right)
+            if hrs_val is None:
+                hrs_val = safe_number(pair)
+
+            if date_val is None and hrs_val is None:
+                tokens = re.findall(r"\d{1,2}[A-Z]{3,9}\d{2,4}|\d+", pair.replace(" ", ""), flags=re.I)
+                if tokens:
+                    merged = " ".join(tokens)
+                    date_val = parse_date(merged)
+                    hrs_val = hrs_val or safe_number(merged)
+
+            if date_val is None and hrs_val is None:
+                continue
+
+            rows.append({
+                "category": "AUXENGINE",
+                "engine_label": eng_label,
+                "unit": eng_label,
+                "description": desc,
+                "periodicity": periodicity,
+                "last_oh_date": date_val,
+                "last_oh_hrs": hrs_val,
+                "hrs_since": hrs_val,
+                "pct_used": pct_used(hrs_val, periodicity),
+                "status": derive_status(hrs_val, periodicity),
+            })
+
+    if not rows:
+        warnings.append("No aux engine rows extracted.")
+    return deduplicate_components(rows), warnings
+
+
 def parse_doc_bytes(docx_bytes: bytes) -> Dict:
     doc = open_docx_bytes(docx_bytes)
     warnings = []
@@ -622,9 +735,20 @@ def parse_doc_bytes(docx_bytes: bytes) -> Dict:
     me_total_hrs, me_this_month = detect_me_totals(doc)
 
     me_grid = find_me_table(doc)
-    components, me_warn = parse_me_table(me_grid)
+    me_components, me_warn = parse_me_table(me_grid)
     warnings.extend(me_warn)
 
+    aux_components = []
+    aux_tables = find_aux_tables(doc)
+    if aux_tables:
+        for aux_grid in aux_tables:
+            parsed_aux, aux_warn = parse_aux_table(aux_grid)
+            aux_components.extend(parsed_aux)
+            warnings.extend(aux_warn)
+    else:
+        warnings.append("No aux engine candidate tables found.")
+
+    components = deduplicate_components(me_components + aux_components)
     other_equipment = parse_other_equipment(doc)
 
     confidence = 0.0
@@ -633,9 +757,11 @@ def parse_doc_bytes(docx_bytes: bytes) -> Dict:
     if report_date:
         confidence += 0.1
     if len(components) >= 8:
-        confidence += 0.35
+        confidence += 0.25
     if any(c["category"] == "MAINENGINE" for c in components):
-        confidence += 0.2
+        confidence += 0.15
+    if any(c["category"] == "AUXENGINE" for c in components):
+        confidence += 0.15
     if any(c.get("periodicity") for c in components):
         confidence += 0.1
     if len(warnings) == 0:
@@ -995,7 +1121,7 @@ elif page == "Vessel Detail":
             unsafe_allow_html=True,
         )
 
-    tabs = st.tabs(["Alerts", "Main Engine", "Other Equipment"])
+    tabs = st.tabs(["Alerts", "Main Engine", "Aux Engines", "Other Equipment"])
     with tabs[0]:
         alerts = df[df["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
         if alerts.empty:
@@ -1027,6 +1153,29 @@ elif page == "Vessel Detail":
             render_table(v)
 
     with tabs[2]:
+        aux = df[df["category"] == "AUXENGINE"]
+        if aux.empty:
+            st.info("No Aux Engine data available.")
+        else:
+            a, b = st.columns(2)
+            with a:
+                eng = st.selectbox("Generator Node", ["All"] + sorted(aux["engine_label"].dropna().unique().tolist()), key="aux_eng")
+            with b:
+                stat = st.selectbox("Node Status", ["All", "Overdue only", "High Priority only", "OK only", "No Data only"], key="aux_stat")
+            v = aux.copy()
+            if eng != "All":
+                v = v[v["engine_label"] == eng]
+            if stat == "Overdue only":
+                v = v[v["status"] == "OVERDUE"]
+            elif stat == "High Priority only":
+                v = v[v["status"] == "HIGH PRIORITY"]
+            elif stat == "OK only":
+                v = v[v["status"] == "OK"]
+            elif stat == "No Data only":
+                v = v[v["status"] == "NO DATA"]
+            render_table(v)
+
+    with tabs[3]:
         if oe.empty:
             st.info("No Other Equipment data available.")
         else:
@@ -1064,7 +1213,7 @@ elif page == "Upload Report":
               <div style='margin-top:.5rem; line-height:1.8'>
                 Main-engine paired-row parsing<br>
                 Marker-cell protection for 1 / 2 rows<br>
-                Thousands-aware periodicity parsing<br>
+                Aux-engine DG block extraction<br>
                 Safe commit blocking on low confidence<br>
                 Audit trail for every upload
               </div>
@@ -1119,7 +1268,8 @@ elif page == "Upload Report":
 
         st.markdown("<div class='smallcap' style='margin:1rem 0 .5rem'>Extracted Telemetry Preview</div>", unsafe_allow_html=True)
         preview_df = pd.DataFrame(comps) if comps else pd.DataFrame()
-        tabs = st.tabs(["Main Engine Matrix", "Other Equipment"])
+        tabs = st.tabs(["Main Engine Matrix", "Aux Engines Matrix", "Other Equipment"])
+
         with tabs[0]:
             if not preview_df.empty:
                 me = preview_df[preview_df["category"] == "MAINENGINE"]
@@ -1129,7 +1279,18 @@ elif page == "Upload Report":
                     st.info("No Main Engine telemetry extracted.")
             else:
                 st.info("No component data available.")
+
         with tabs[1]:
+            if not preview_df.empty:
+                aux = preview_df[preview_df["category"] == "AUXENGINE"]
+                if not aux.empty:
+                    render_table(aux, height=420, priority=True)
+                else:
+                    st.info("No Aux Engine telemetry extracted.")
+            else:
+                st.info("No component data available.")
+
+        with tabs[2]:
             if parsed["other_equipment"]:
                 st.dataframe(pd.DataFrame(parsed["other_equipment"]), use_container_width=True, hide_index=True, height=420)
             else:
@@ -1154,6 +1315,7 @@ elif page == "Upload History":
     if not vessels or selected_vessel == "—":
         st.info("Select a vessel from the sidebar.")
         st.stop()
+
     hist = get_history(selected_vessel)
     if hist.empty:
         st.info("No upload history recorded for this vessel.")
