@@ -22,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-import os, re, sqlite3, tempfile, hashlib, subprocess
+import os, re, sqlite3, tempfile, hashlib
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
@@ -220,104 +220,39 @@ init_db()
 
 
 # ════════════════════════════════════════════════════════════════════
-# CONVERSION  — .doc → .docx  (LibreOffice, cloud-safe)
+# CONVERSION  — .doc → .docx bytes  (pure Python, zero system deps)
+# Uses spire.doc (pip-installable). No LibreOffice, no packages.txt.
 # ════════════════════════════════════════════════════════════════════
-
-@st.cache_resource(show_spinner=False)
-def ensure_libreoffice() -> bool:
-    """
-    Guarantee LibreOffice is available. Runs ONCE at startup via cache.
-    On Streamlit Cloud (Ubuntu) soffice may not be in PATH without packages.txt —
-    we install it silently at runtime via apt-get. No extra files needed.
-    """
-    import shutil
-    for p in ['/usr/bin/soffice', '/usr/lib/libreoffice/program/soffice']:
-        if os.path.isfile(p) and os.access(p, os.X_OK):
-            return True
-    if shutil.which('soffice'):
-        return True
-    # Not found — install silently (Streamlit Cloud has root/sudo)
-    result = subprocess.run(
-        ['apt-get', 'install', '-y', '-q', '--no-install-recommends', 'libreoffice'],
-        capture_output=True, timeout=180
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Could not install LibreOffice (code {result.returncode}). "
-            f"{result.stderr.decode('utf-8','ignore')[:300]}"
-        )
-    return True
-
-
-def _soffice_path() -> str:
-    """Return full path to soffice binary."""
-    import shutil
-    for p in ['/usr/bin/soffice', '/usr/lib/libreoffice/program/soffice']:
-        if os.path.isfile(p) and os.access(p, os.X_OK):
-            return p
-    found = shutil.which('soffice')
-    if found:
-        return found
-    raise RuntimeError("soffice binary not found.")
-
 
 def convert_doc_to_docx(file_bytes: bytes) -> bytes:
     """
-    Convert a legacy .doc binary to .docx bytes using LibreOffice headless.
-    LibreOffice is auto-installed on first run if not already present.
-
-    Cloud-safe flags:
-      --norestore              skip crash-recovery dialog (would hang headless)
-      --nofirststartwizard     skip first-run setup wizard
-      -env:UserInstallation=   per-process temp profile → no lock conflicts
+    Convert .doc binary → .docx bytes entirely in Python via spire.doc.
+    No system binaries required. Works on any cloud platform.
     """
-    ensure_libreoffice()  # guaranteed present before we proceed
+    from spire.doc import Document as SpireDoc, FileFormat
 
-    with tempfile.NamedTemporaryFile(suffix='.doc', delete=False) as tmp:
-        tmp.write(file_bytes)
-        tmp_path = tmp.name
+    # Write .doc to temp file (spire.doc needs a file path)
+    with tempfile.NamedTemporaryFile(suffix='.doc', delete=False) as tmp_in:
+        tmp_in.write(file_bytes)
+        tmp_in_path = tmp_in.name
 
-    out_dir     = tempfile.gettempdir()
-    profile_dir = f"file:///tmp/lo_profile_{os.getpid()}_{os.urandom(4).hex()}"
+    tmp_out_path = tmp_in_path.replace('.doc', '_out.docx')
 
     try:
-        result = subprocess.run(
-            [
-                _soffice_path(),
-                '--headless',
-                '--norestore',
-                '--nofirststartwizard',
-                f'-env:UserInstallation={profile_dir}',
-                '--convert-to', 'docx',
-                tmp_path,
-                '--outdir', out_dir,
-            ],
-            capture_output=True,
-            timeout=120,
-        )
+        doc = SpireDoc()
+        doc.LoadFromFile(tmp_in_path)
+        doc.SaveToFile(tmp_out_path, FileFormat.Docx2019)
+        doc.Close()
 
-        base      = os.path.splitext(os.path.basename(tmp_path))[0]
-        docx_path = os.path.join(out_dir, base + '.docx')
+        if not os.path.exists(tmp_out_path):
+            raise RuntimeError("spire.doc conversion produced no output file.")
 
-        if result.returncode != 0 or not os.path.exists(docx_path):
-            stderr = result.stderr.decode('utf-8', errors='ignore').strip()
-            stdout = result.stdout.decode('utf-8', errors='ignore').strip()
-            raise RuntimeError(
-                f"LibreOffice exited with code {result.returncode}.\n"
-                f"stdout: {stdout[:300] or '(empty)'}\n"
-                f"stderr: {stderr[:300] or '(empty)'}"
-            )
-
-        with open(docx_path, 'rb') as f:
+        with open(tmp_out_path, 'rb') as f:
             return f.read()
-
     finally:
-        # Always clean up — never leave temp files on the server
-        for p in [tmp_path,
-                  os.path.join(out_dir, os.path.splitext(os.path.basename(tmp_path))[0] + '.docx')]:
+        for p in [tmp_in_path, tmp_out_path]:
             try:
-                if os.path.exists(p):
-                    os.unlink(p)
+                if os.path.exists(p): os.unlink(p)
             except Exception:
                 pass
 
@@ -764,12 +699,8 @@ if page == "📤  Upload Report":
         with st.spinner("Converting and parsing…"):
             try:
                 docx_bytes = convert_doc_to_docx(raw_bytes)
-            except (RuntimeError, FileNotFoundError, OSError) as e:
-                st.error(
-                    f"**Conversion failed.**\n\n"
-                    f"Error detail: `{e}`\n\n"
-                    f"Please try re-uploading. If the problem persists, contact your administrator."
-                )
+            except Exception as e:
+                st.error(f"**Conversion failed.** `{e}`")
                 st.stop()
 
             try:
