@@ -234,7 +234,6 @@ def is_header_like(text: str) -> bool:
     for pat in HEADER_PATTERNS:
         if pat.upper() in t:
             return True
-    # Long all‑caps with digits & punctuation starting with "1-"
     if re.match(r"^1[- ]?DATE OF LAST", t):
         return True
     return False
@@ -246,10 +245,8 @@ def looks_like_name(x: str) -> bool:
     u = t.upper()
     if is_header_like(u):
         return False
-    # Pure numbers / dates / hours only → not a component name
     if re.fullmatch(r"[\d./ ,:-]+", u):
         return False
-    # Reject generic labels
     if u in {"DATE", "RUN HRS", "RUN HOURS", "PERIODICITY"}:
         return False
     return True
@@ -314,7 +311,6 @@ def cyl_sort(unit: Any) -> int:
     return int(m.group(1)) if m else 999
 
 def engine_sort_key(engine_label: str) -> tuple:
-    # MAIN_ENGINE / ME first, then AUX‑n
     lab = (engine_label or "").upper()
     if lab in {"ME", "MAIN ENGINE", "MAIN_ENGINE"}:
         return (0, 0)
@@ -431,7 +427,6 @@ def parse_main_engine(table) -> List[Dict[str, Any]]:
         return comps
     max_cols = max(len(r) for r in grid)
 
-    # Discover cylinder columns by header text
     cyl_cols = []
     for ci in range(max_cols):
         txt = " ".join(r[ci] if ci < len(r) else "" for r in grid[:4])
@@ -453,7 +448,6 @@ def parse_main_engine(table) -> List[Dict[str, Any]]:
         for ci, unit in cyl_cols:
             d = parse_date(r1[ci] if ci < len(r1) else None)
             h = extract_number(r2[ci] if ci < len(r2) else None)
-            # Accept rows where either date OR hours exists
             if d is None and h is None:
                 continue
             comps.append({
@@ -546,7 +540,6 @@ def parse_other_equipment(doc: Document) -> List[Dict[str, Any]]:
                         "last_date": "",
                         "run_hrs": "",
                     })
-    # Deduplicate
     out = []
     seen = set()
     for r in rows:
@@ -581,7 +574,6 @@ def filter_header_noise(comps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         if c["status"] == "NO DATA":
             if not c.get("periodicity") and not c.get("last_oh_date") and c.get("hrs_since") is None:
-                # Pure NO DATA with no numbers and header‑like description → drop
                 continue
         out.append(c)
     return out
@@ -760,7 +752,7 @@ def get_all_fleet_components() -> pd.DataFrame:
     return df
 
 # ============================================================
-# DISPLAY TABLES (WITH ORDERING ME→AUX, CYL 1..N)
+# DISPLAY TABLES (ME→AUX, CYL 1..N)
 # ============================================================
 STATUS_THEME = {
     "OVERDUE": {"bg":"#2d0707", "status":"#ff6b6b", "main":"#ff8080", "accent":"#ff3333", "dim":"#773333"},
@@ -774,46 +766,55 @@ def build_display_df(df: pd.DataFrame, priority: bool=False) -> pd.DataFrame:
         return pd.DataFrame(columns=[
             "Status","Vessel","Component","Engine","Unit","Periodicity","Last O/H","Hrs Since","Used"
         ])
+
     d = df.copy()
 
-    # Custom ordering: category/engine/cylinder/description
+    # Ensure required columns exist
+    for col in ["status","vessel_name","description","engine_label","unit",
+                "periodicity","last_oh_date","hrs_since","pct_used","category"]:
+        if col not in d.columns:
+            if col in {"vessel_name","category"}:
+                d[col] = ""
+            else:
+                d[col] = None
+
+    # Custom ordering: MAIN_ENGINE then AUX_ENGINE, cylinders 1..N
     if priority:
         order_map = {"OVERDUE":0, "HIGH PRIORITY":1, "OK":2, "NO DATA":3}
         d["_ord"] = d["status"].map(lambda x: order_map.get(str(x), 9))
         d["_pct"] = d["pct_used"].fillna(0)
+
     d["_cat_rank"] = d["category"].map(
         lambda c: 0 if str(c).upper().startswith("MAIN") else (1 if str(c).upper().startswith("AUX") else 2)
     )
-    d["_eng_rank"] = d["engine_label"].map(lambda e: engine_sort_key(str(e))[1])
     d["_eng_group"] = d["engine_label"].map(lambda e: engine_sort_key(str(e))[0])
-    d["_cyl"] = d["unit"].map(cyl_sort)
-    d["_desc"] = d["description"].astype(str).str.upper()
+    d["_eng_rank"]  = d["engine_label"].map(lambda e: engine_sort_key(str(e))[1])
+    d["_cyl"]       = d["unit"].map(cyl_sort)
+    d["_desc"]      = d["description"].astype(str).str.upper()
 
     sort_cols = ["_cat_rank", "_eng_group", "_eng_rank", "_cyl", "_desc"]
-    asc = [True, True, True, True, True]
+    asc       = [True, True, True, True, True]
+
     if priority:
         sort_cols = ["_ord", "_pct"] + sort_cols
-        asc = [True, False] + asc
+        asc       = [True, False] + asc
+
     if "vessel_name" in d.columns:
         sort_cols = ["vessel_name"] + sort_cols
-        asc = [True] + asc
+        asc       = [True] + asc
 
     d = d.sort_values(sort_cols, ascending=asc)
 
-    keep = ["status","vessel_name","description","engine_label","unit",
-            "periodicity","last_oh_date","hrs_since","pct_used"]
-    d = d[keep]
-
     out = pd.DataFrame()
-    out["Status"] = d["status"]
-    out["Vessel"] = d["vessel_name"] if "vessel_name" in d.columns else ""
-    out["Component"] = d["description"]
-    out["Engine"] = d["engine_label"]
-    out["Unit"] = d["unit"]
+    out["Status"]      = d["status"]
+    out["Vessel"]      = d["vessel_name"]
+    out["Component"]   = d["description"]
+    out["Engine"]      = d["engine_label"]
+    out["Unit"]        = d["unit"]
     out["Periodicity"] = d["periodicity"].apply(lambda x: int(x) if pd.notna(x) else None)
-    out["Last O/H"] = d["last_oh_date"].fillna("")
-    out["Hrs Since"] = d["hrs_since"].apply(lambda x: int(x) if pd.notna(x) else None)
-    out["Used"] = d["pct_used"].apply(lambda x: round(float(x) * 100, 1) if pd.notna(x) else 0.0)
+    out["Last O/H"]    = d["last_oh_date"].fillna("")
+    out["Hrs Since"]   = d["hrs_since"].apply(lambda x: int(x) if pd.notna(x) else None)
+    out["Used"]        = d["pct_used"].apply(lambda x: round(float(x) * 100, 1) if pd.notna(x) else 0.0)
     return out
 
 def apply_style(df: pd.DataFrame):
@@ -994,6 +995,7 @@ elif page == "Upload Report":
 
         pre = pd.DataFrame(parsed["components"])
         if not pre.empty:
+            pre["vessel_name"] = parsed["vessel_name"]  # align preview with fleet format
             st.subheader("Preview")
             render_table(pre, priority=True)
 
