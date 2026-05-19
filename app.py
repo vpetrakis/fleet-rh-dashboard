@@ -220,37 +220,49 @@ init_db()
 
 
 # ════════════════════════════════════════════════════════════════════
-# CONVERSION  — .doc → .docx bytes  (pure Python, zero system deps)
-# Uses spire.doc (pip-installable). No LibreOffice, no packages.txt.
+# CONVERSION  — .doc -> .docx via LibreOffice (via packages.txt)
 # ════════════════════════════════════════════════════════════════════
+
+import subprocess, shutil as _shutil
 
 def convert_doc_to_docx(file_bytes: bytes) -> bytes:
     """
-    Convert .doc binary → .docx bytes entirely in Python via spire.doc.
-    No system binaries required. Works on any cloud platform.
+    Convert .doc to .docx using LibreOffice headless.
+    LibreOffice is declared in packages.txt (one line: libreoffice).
+    A unique UserInstallation profile per call prevents lock conflicts.
     """
-    from spire.doc import Document as SpireDoc, FileFormat
+    soffice = _shutil.which("soffice") or "/usr/bin/soffice"
+    if not os.path.isfile(soffice):
+        raise RuntimeError(
+            "LibreOffice not found. "
+            "packages.txt in the repo root must contain: libreoffice"
+        )
 
-    # Write .doc to temp file (spire.doc needs a file path)
-    with tempfile.NamedTemporaryFile(suffix='.doc', delete=False) as tmp_in:
-        tmp_in.write(file_bytes)
-        tmp_in_path = tmp_in.name
+    with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
 
-    tmp_out_path = tmp_in_path.replace('.doc', '_out.docx')
+    out_dir   = tempfile.gettempdir()
+    base      = os.path.splitext(os.path.basename(tmp_path))[0]
+    docx_path = os.path.join(out_dir, base + ".docx")
+    profile   = f"file:///tmp/lo_{os.getpid()}_{os.urandom(4).hex()}"
 
     try:
-        doc = SpireDoc()
-        doc.LoadFromFile(tmp_in_path)
-        doc.SaveToFile(tmp_out_path, FileFormat.Docx2019)
-        doc.Close()
-
-        if not os.path.exists(tmp_out_path):
-            raise RuntimeError("spire.doc conversion produced no output file.")
-
-        with open(tmp_out_path, 'rb') as f:
+        r = subprocess.run(
+            [soffice, "--headless", "--norestore", "--nofirststartwizard",
+             f"-env:UserInstallation={profile}",
+             "--convert-to", "docx", tmp_path, "--outdir", out_dir],
+            capture_output=True, timeout=120,
+        )
+        if not os.path.exists(docx_path):
+            raise RuntimeError(
+                f"LibreOffice exited {r.returncode}. "
+                f"{r.stderr.decode('utf-8', errors='ignore')[:300]}"
+            )
+        with open(docx_path, "rb") as f:
             return f.read()
     finally:
-        for p in [tmp_in_path, tmp_out_path]:
+        for p in [tmp_path, docx_path]:
             try:
                 if os.path.exists(p): os.unlink(p)
             except Exception:
