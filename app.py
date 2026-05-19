@@ -783,7 +783,10 @@ def _build_display(df: pd.DataFrame, sort_priority: bool = False) -> pd.DataFram
     else:
         d['_k1'] = d['description'].str.upper()
         d['_k2'] = d['unit'].apply(_cyl)
-        d = d.sort_values(['vessel_name','_k1','_k2']).drop(columns=['_k1','_k2'])
+        if 'vessel_name' in d.columns:
+            d = d.sort_values(['vessel_name','_k1','_k2']).drop(columns=['_k1','_k2'])
+        else:
+            d = d.sort_values(['_k1','_k2']).drop(columns=['_k1','_k2'])
 
     out = pd.DataFrame(index=range(len(d)))
     out['Status']      = d['status'].values
@@ -1090,6 +1093,41 @@ elif page == "📤  Upload Report":
         </div>""", unsafe_allow_html=True)
 
         for w in parsed['warnings']: st.warning(f"⚠ Core structural indicator anomaly: {w}")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(sl("Extracted Telemetry Matrices — Pre-Commit Review"), unsafe_allow_html=True)
+        
+        df_preview = pd.DataFrame(parsed['components']) if parsed['components'] else pd.DataFrame()
+        prev_tabs = st.tabs(["⚙️ Main Engine Matrix", "🔩 Aux Engines Matrix", "🛠️ Other Equipment"])
+        
+        with prev_tabs[0]:
+            if not df_preview.empty:
+                me_prev = df_preview[df_preview['category'] == 'MAIN_ENGINE']
+                if not me_prev.empty:
+                    render_table(me_prev, height=400, priority=True)
+                else:
+                    st.info("No Main Engine telemetry extracted from this report.")
+            else:
+                st.info("No component data available.")
+
+        with prev_tabs[1]:
+            if not df_preview.empty:
+                aux_prev = df_preview[df_preview['category'] == 'AUX_ENGINE']
+                if not aux_prev.empty:
+                    render_table(aux_prev, height=400, priority=True)
+                else:
+                    st.info("No Auxiliary Engine telemetry extracted from this report.")
+            else:
+                st.info("No component data available.")
+
+        with prev_tabs[2]:
+            if parsed['other_equipment']:
+                oe_prev = pd.DataFrame(parsed['other_equipment'])
+                oe_prev.columns = ['Machinery Category', 'Description', 'Periodicity', 'Last Inspected', 'Logged Hours']
+                st.dataframe(oe_prev, use_container_width=True, hide_index=True, height=400)
+            else:
+                st.info("No Auxiliary Plant or Other Equipment data extracted from this report.")
+
         st.markdown("---")
         col_btn,_ = st.columns([1,4])
         with col_btn:
