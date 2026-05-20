@@ -1,3 +1,10 @@
+"""
+╔══════════════════════════════════════════════════════════════════════╗
+║   FLEET COMMAND & TELEMETRY SYSTEM  v7.0                             ║
+║   Wide-Row Parser · Smart Upsert DB · Enterprise Cloud Edition       ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+
 import streamlit as st
 import os
 import re
@@ -13,137 +20,218 @@ import pandas as pd
 from docx import Document
 
 st.set_page_config(
-    page_title="Fleet Running Hours",
+    page_title="Fleet Command",
     page_icon="⚓",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ============================================================
-# PREMIUM UI LAYER
+#  GLOBAL UI STEALTH DESIGN SYSTEM
 # ============================================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg:#03060d; --bg1:#06091a; --bg2:#080e20; --bg3:#0b1228; --bg4:#0f1830;
-  --b1:#0f1c35; --b2:#182840; --b3:#223350;
-  --gold:#c89a14; --gold2:#e0b422; --gold3:#f5cc44;
-  --red:#cc2828; --red2:#ff5c5c;
-  --orange:#b85518; --ora2:#ff8833;
-  --green:#0d8a4a; --grn2:#22c55e; --grn3:#6ee7b7;
-  --blue:#1444a8; --blu2:#3b82f6;
-  --t0:#f2f7ff; --t1:#c0d0e8; --t2:#7e95b6; --t3:#425372;
-  --ff:'Space Grotesk',sans-serif;
-  --fi:'Inter',sans-serif;
-  --fm:'JetBrains Mono',monospace;
+  --bg:      #03060d;  --bg1: #06091a;  --bg2: #080e20;
+  --bg3:     #0b1228;  --bg4: #0f1830;
+  --b1:      #0f1c35;  --b2:  #182840;  --b3:  #223350;
+  --gold:    #c89a14;  --gold2:#e0b422; --gold3:#f5cc44;
+  --red:     #cc2828;  --red2: #ff5c5c; --red3: #ff8a8a;
+  --orange:  #b85518;  --ora2: #ff8833; --ora3: #ffb366;
+  --green:   #0d8a4a;  --grn2: #22c55e; --grn3: #6ee7b7;
+  --blue:    #1444a8;  --blu2: #3b82f6; --blu3: #93c5fd;
+  --t0: #f2f7ff; --t1: #c0d0e8; --t2: #6a84a8; --t3: #304060;
+  --ff: 'Space Grotesk', sans-serif;
+  --fi: 'Inter', sans-serif;
+  --fm: 'JetBrains Mono', monospace;
 }
 
+*, *::before, *::after { box-sizing: border-box; }
+
 html, body, [class*="css"] {
+  font-family: var(--fi) !important;
   background: var(--bg) !important;
   color: var(--t1) !important;
-  font-family: var(--fi) !important;
   -webkit-font-smoothing: antialiased;
 }
 .main, .main > div { background: var(--bg) !important; }
-.block-container { max-width: 100% !important; padding: 1.8rem 2rem 4rem !important; }
+.block-container { padding: 2rem 2.5rem 5rem !important; max-width: 100% !important; }
 
-.main::before{
-  content:"";
-  position:fixed; inset:0; pointer-events:none; z-index:0;
+/* Ambient space background glow */
+.main::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
   background:
-    radial-gradient(ellipse 90% 50% at -10% -5%, rgba(200,154,20,.06) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 45% at 110% 105%, rgba(20,68,168,.05) 0%, transparent 55%);
+    radial-gradient(ellipse 90% 50% at -10% -5%,  rgba(200,154,20,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 45% at 110% 105%,  rgba(20,68,168,0.05) 0%, transparent 55%);
 }
 
-[data-testid="stSidebar"]{
-  background:var(--bg1)!important;
-  border-right:1px solid var(--b2)!important;
-}
-[data-testid="stSidebar"] * { color: var(--t1)!important; }
-[data-testid="stSidebarContent"] { padding:1.25rem!important; }
+/* Sidebar structure */
+[data-testid="stSidebar"] { background: var(--bg1) !important; border-right: 1px solid var(--b2) !important; }
+[data-testid="stSidebar"] * { color: var(--t1) !important; }
+[data-testid="stSidebarContent"] { padding: 1.5rem 1.25rem !important; }
+[data-testid="stSidebar"] .stSelectbox > div > div { background: var(--bg3) !important; border: 1px solid var(--b2) !important; border-radius: 6px !important; }
 
-h1,h2,h3 {
-  font-family:var(--ff)!important;
-  color:var(--t0)!important;
-  letter-spacing:-.02em!important;
-}
-h1 { font-size:1.8rem!important; font-weight:700!important; }
-h2 { font-size:1.25rem!important; font-weight:600!important; }
-h3 { font-size:1rem!important; font-weight:600!important; }
+/* Operational headings */
+h1 { font-family: var(--ff) !important; font-size: 1.8rem !important; font-weight: 700 !important; color: var(--t0) !important; letter-spacing: -0.02em !important; line-height: 1.2 !important; }
+h2 { font-family: var(--ff) !important; font-size: 1.2rem !important; font-weight: 600 !important; color: var(--t0) !important; }
+h3 { font-family: var(--ff) !important; font-size: 1rem !important; font-weight: 500 !important; color: var(--t1) !important; }
 
-.stButton > button {
-  background: linear-gradient(135deg, var(--gold) 0%, #8a6a08 100%) !important;
-  color:#000!important; border:none!important;
-  border-radius:8px!important; padding:.7rem 1.25rem!important;
-  font-family:var(--ff)!important; font-weight:700!important;
-  letter-spacing:.05em!important; text-transform:uppercase!important;
-}
-.stButton > button:hover { transform:translateY(-1px); }
+/* Unified dashboard metric blocks */
+[data-testid="stMetric"] { background: var(--bg3) !important; border: 1px solid var(--b2) !important; border-radius: 10px !important; padding: 1rem 1.2rem 1.1rem !important; position: relative !important; overflow: hidden !important; transition: border-color .25s, transform .2s !important; }
+[data-testid="stMetric"]:hover { border-color: var(--b3) !important; transform: translateY(-2px) !important; }
+[data-testid="stMetricValue"] { font-family: var(--ff) !important; font-size: 2rem !important; font-weight: 700 !important; color: var(--t0) !important; letter-spacing: -0.03em !important; }
+[data-testid="stMetricLabel"] { font-family: var(--fi) !important; color: var(--t3) !important; font-size: 0.62rem !important; text-transform: uppercase !important; letter-spacing: 0.15em !important; }
 
-[data-testid="stMetric"]{
-  background: var(--bg3)!important;
-  border:1px solid var(--b2)!important;
-  border-radius:12px!important;
-  padding:.9rem 1rem 1rem!important;
-}
-[data-testid="stMetricValue"]{
-  font-family:var(--ff)!important;
-  color:var(--t0)!important;
-  font-weight:700!important;
-}
-[data-testid="stMetricLabel"]{
-  color:var(--t3)!important;
-  text-transform:uppercase!important;
-  letter-spacing:.12em!important;
-  font-size:.66rem!important;
-}
+/* Enhanced telemetry layout grids */
+[data-testid="stDataFrame"] { border: 1px solid var(--b2) !important; border-radius: 10px !important; overflow: hidden !important; box-shadow: 0 4px 24px rgba(0,0,0,0.35) !important; }
+.dvn-scroller { background: var(--bg2) !important; }
 
-[data-testid="stDataFrame"]{
-  border:1px solid var(--b2)!important;
-  border-radius:12px!important;
-  overflow:hidden!important;
-}
+/* Control buttons styling */
+.stButton > button { background: linear-gradient(135deg, var(--gold) 0%, #8a6a08 100%) !important; color: #000 !important; border: none !important; font-family: var(--ff) !important; font-weight: 600 !important; font-size: 0.82rem !important; letter-spacing: 0.06em !important; text-transform: uppercase !important; border-radius: 7px !important; padding: .6rem 1.8rem !important; box-shadow: 0 2px 14px rgba(200,154,20,.2),inset 0 1px 0 rgba(255,255,255,.1) !important; transition: all .18s !important; }
+.stButton > button:hover { background: linear-gradient(135deg, var(--gold2) 0%, var(--gold) 100%) !important; box-shadow: 0 5px 22px rgba(200,154,20,.38) !important; transform: translateY(-2px) !important; }
+.stButton > button:active { transform: translateY(0) !important; }
 
-.stTabs [data-baseweb="tab-list"]{
-  background:var(--bg2)!important;
-  border:1px solid var(--b2)!important;
-  border-radius:12px 12px 0 0!important;
-  gap:0!important;
-}
-.stTabs [data-baseweb="tab"]{
-  color:var(--t3)!important;
-  font-family:var(--ff)!important;
-  text-transform:uppercase!important;
-  letter-spacing:.05em!important;
-  font-size:.74rem!important;
-}
-.stTabs [aria-selected="true"]{
-  color:var(--gold2)!important;
-  border-bottom:2px solid var(--gold)!important;
-}
-.stTabs [data-baseweb="tab-panel"]{
-  background:var(--bg2)!important;
-  border:1px solid var(--b2)!important;
-  border-top:none!important;
-  border-radius:0 0 12px 12px!important;
-  padding:1.25rem!important;
-}
+/* File drop interface layout */
+[data-testid="stFileUploadDropzone"] { background: linear-gradient(160deg,rgba(200,154,20,.04) 0%,rgba(20,68,168,.03) 100%) !important; border: 1.5px dashed var(--gold) !important; border-radius: 14px !important; transition: all .3s !important; padding: 3rem 2rem !important; }
+[data-testid="stFileUploadDropzone"]:hover { background: rgba(200,154,20,.07) !important; border-color: var(--gold2) !important; box-shadow: 0 0 40px rgba(200,154,20,.07) !important; }
+[data-testid="stFileUploadDropzone"] p, [data-testid="stFileUploadDropzone"] span { color: var(--gold2) !important; font-family: var(--ff) !important; font-size: .95rem !important; font-weight: 500 !important; }
+[data-testid="stFileUploadDropzone"] small { color: var(--t2) !important; }
+
+/* Telemetry display navigation tabs */
+.stTabs [data-baseweb="tab-list"] { background: var(--bg2) !important; border-radius: 10px 10px 0 0 !important; border-bottom: 1px solid var(--b2) !important; gap: 0 !important; padding: 0 1rem !important; }
+.stTabs [data-baseweb="tab"] { background: transparent !important; color: var(--t3) !important; font-family: var(--ff) !important; font-weight: 500 !important; letter-spacing: .04em !important; font-size: .75rem !important; text-transform: uppercase !important; padding: .85rem 1.3rem !important; border-bottom: 2px solid transparent !important; margin-bottom: -1px !important; transition: color .2s !important; }
+.stTabs [data-baseweb="tab"]:hover { color: var(--t2) !important; }
+.stTabs [aria-selected="true"] { color: var(--gold2) !important; border-bottom: 2px solid var(--gold) !important; }
+.stTabs [data-baseweb="tab-panel"] { background: var(--bg2) !important; border: 1px solid var(--b2) !important; border-top: none !important; border-radius: 0 0 10px 10px !important; padding: 1.5rem !important; }
+
+/* Context filters selectors */
+.stSelectbox > div > div, .stMultiSelect > div > div { background: var(--bg3) !important; border: 1px solid var(--b2) !important; border-radius: 7px !important; color: var(--t1) !important; font-family: var(--fi) !important; }
+.stSelectbox label, .stMultiSelect label { font-family: var(--fi) !important; color: var(--t3) !important; font-size: .7rem !important; text-transform: uppercase !important; letter-spacing: .1em !important; }
+
+/* Interface components modifications */
+.stAlert { border-radius: 8px !important; border-left-width: 3px !important; }
+hr { border-color: var(--b2) !important; opacity:1 !important; margin:1.5rem 0 !important; }
+a { color: var(--gold2) !important; text-decoration: none !important; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg1); }
+::-webkit-scrollbar-thumb { background: var(--b3); border-radius: 3px; }
+
+/* CSS View Presentation Keyframes */
+@keyframes slideDown  { from{opacity:0;transform:translateY(-18px)} to{opacity:1;transform:translateY(0)} }
+@keyframes slideUp    { from{opacity:0;transform:translateY(14px)}  to{opacity:1;transform:translateY(0)} }
+@keyframes slideRight { from{opacity:0;transform:translateX(-14px)} to{opacity:1;transform:translateX(0)} }
+@keyframes numIn      { from{opacity:0;transform:translateY(8px)}   to{opacity:1;transform:translateY(0)} }
+@keyframes popIn      { from{opacity:0;transform:scale(.9)}          to{opacity:1;transform:scale(1)} }
+@keyframes successPop { 0%{transform:scale(.85);opacity:0} 55%{transform:scale(1.02)} 100%{transform:scale(1);opacity:1} }
+@keyframes goldLine   { from{width:0;opacity:0} to{width:100%;opacity:1} }
+
+.ph { animation: slideDown .45s cubic-bezier(.22,1,.36,1) both; }
+.ph h1 { margin: 0; }
+.ph-eye { font-family: var(--fi); font-size: .6rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); margin-bottom: .3rem; animation: slideDown .4s .05s ease both; animation-fill-mode: both; }
+.ph-line { height: 1px; margin: .35rem 0 1.75rem; background: linear-gradient(90deg, var(--gold) 0%, var(--b2) 30%, transparent 100%); animation: goldLine .7s .1s ease both; animation-fill-mode: both; }
+
+/* Premium KPI Interface layouts */
+.kc { background: var(--bg3); border: 1px solid var(--b2); border-radius: 10px; padding: 1rem 1.2rem 1.1rem; position: relative; overflow: hidden; animation: slideUp .4s ease both; animation-fill-mode: both; transition: border-color .25s, transform .2s, box-shadow .25s; cursor: default; }
+.kc:hover { transform: translateY(-4px); box-shadow: 0 14px 40px rgba(0,0,0,.5); }
+.kc::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 10px 10px 0 0; }
+.kc.gold   { border-color: rgba(200,154,20,.3); }
+.kc.gold::before   { background: linear-gradient(90deg, var(--gold),  transparent 70%); }
+.kc.gold::after    { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(200,154,20,.05) 0%,transparent 60%); pointer-events:none; }
+.kc.gold:hover     { border-color: rgba(224,180,34,.5); box-shadow: 0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(200,154,20,.07); }
+.kc.red    { border-color: rgba(204,40,40,.25); }
+.kc.red::before    { background: linear-gradient(90deg, var(--red),   transparent 70%); }
+.kc.red::after     { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(204,40,40,.05) 0%,transparent 60%); pointer-events:none; }
+.kc.red:hover      { border-color: rgba(255,92,92,.4); box-shadow:  0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(204,40,40,.07); }
+.kc.orange { border-color: rgba(184,85,24,.25); }
+.kc.orange::before { background: linear-gradient(90deg, var(--orange),transparent 70%); }
+.kc.orange::after  { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(184,85,24,.05) 0%,transparent 60%); pointer-events:none; }
+.kc.orange:hover   { border-color: rgba(255,136,51,.4); box-shadow: 0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(184,85,24,.07); }
+.kc.green  { border-color: rgba(13,138,74,.25); }
+.kc.green::before  { background: linear-gradient(90deg, var(--green), transparent 70%); }
+.kc.green::after   { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(13,138,74,.05) 0%,transparent 60%); pointer-events:none; }
+.kc.green:hover    { border-color: rgba(34,197,94,.4); box-shadow:  0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(13,138,74,.07); }
+.kc.blue   { border-color: rgba(20,68,168,.25); }
+.kc.blue::before   { background: linear-gradient(90deg, var(--blue),  transparent 70%); }
+.kc.blue::after    { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(20,68,168,.05) 0%,transparent 60%); pointer-events:none; }
+.kc.blue:hover     { border-color: rgba(59,130,246,.4); box-shadow:  0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(20,68,168,.07); }
+
+.kc-val { font-family: var(--ff); font-size: 2.2rem; font-weight: 700; line-height: 1.1; letter-spacing: -.04em; position: relative; z-index: 1; animation: numIn .4s .1s ease both; animation-fill-mode: both; }
+.kc.gold   .kc-val { color: var(--gold3); }
+.kc.red    .kc-val { color: var(--red2);  }
+.kc.orange .kc-val { color: var(--ora2);  }
+.kc.green  .kc-val { color: var(--grn2);  }
+.kc.blue   .kc-val { color: var(--blu2);  }
+
+.kc-lbl { font-family: var(--fi); font-size: .6rem; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; color: var(--t3); margin-top: 5px; position: relative; z-index: 1; }
+
+/* Section dividers labels styling */
+.sl { font-family: var(--fi); font-size: .58rem; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--t3); display: flex; align-items: center; gap: .75rem; margin: 1.75rem 0 1rem; }
+.sl::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--b2), transparent); }
+
+/* Analytical summary metrics grid */
+.ps-row { display: flex; gap: .65rem; flex-wrap: wrap; margin: 1rem 0 1.5rem; }
+.ps { background: var(--bg3); border: 1px solid var(--b2); border-radius: 9px; padding: .65rem 1.1rem .7rem; min-width: 86px; animation: popIn .35s ease both; animation-fill-mode: both; transition: border-color .2s, transform .15s; position: relative; overflow: hidden; }
+.ps:hover { transform: translateY(-2px); border-color: var(--b3); }
+.ps::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.ps.red::before    { background: var(--red); }
+.ps.orange::before { background: var(--orange); }
+.ps.green::before  { background: var(--green); }
+.ps.blue::before   { background: var(--blue); }
+.ps-val { font-family: var(--ff); font-size: 1.7rem; font-weight: 700; line-height: 1; letter-spacing: -.03em; }
+.ps-lbl { font-family: var(--fi); font-size: .58rem; text-transform: uppercase; letter-spacing: .14em; color: var(--t3); margin-top: 4px; }
+.ps.red    .ps-val { color: var(--red2); }
+.ps.orange .ps-val { color: var(--ora2); }
+.ps.green  .ps-val { color: var(--grn2); }
+.ps.blue   .ps-val { color: var(--blu2); }
+
+/* Core context informative panels */
+.ic { background: var(--bg3); border: 1px solid var(--b2); border-radius: 12px; padding: 1.4rem 1.6rem; font-family: var(--fi); font-size: .82rem; color: var(--t2); line-height: 1.9; animation: slideRight .4s ease both; animation-fill-mode: both; }
+.ic-title { font-family: var(--ff); font-size: .58rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--gold2); margin-bottom: .4rem; }
+
+/* Visual validation component banners */
+.sb { background: linear-gradient(135deg,rgba(13,138,74,.12),rgba(13,138,74,.04)); border: 1px solid rgba(13,138,74,.3); border-radius: 10px; padding: 1rem 1.5rem; color: var(--grn3); font-family: var(--ff); font-size: .92rem; font-weight: 500; animation: successPop .5s cubic-bezier(.34,1.56,.64,1) both; display: flex; align-items: center; gap: .75rem; }
+.ac { background: rgba(13,138,74,.04); border: 1px solid rgba(13,138,74,.12); border-radius: 10px; padding: 1.75rem; text-align: center; color: var(--grn3); font-family: var(--ff); font-size: .95rem; font-weight: 500; }
+
+/* Core sidebar presentation design elements */
+.logo { font-family: var(--ff); font-size: 1.15rem; font-weight: 700; letter-spacing: .04em; color: var(--gold2); display:flex; align-items:center; gap:.5rem; }
+.logo-tag { font-family: var(--fi); font-size: .57rem; text-transform: uppercase; letter-spacing: .2em; color: var(--t3); margin-top: 3px; }
+.logo-rule { height: 1px; margin: 1.2rem 0; background: linear-gradient(90deg, var(--gold), transparent); }
+.vc { display: flex; align-items: center; justify-content: space-between; background: var(--bg3); border: 1px solid var(--b2); border-radius: 7px; padding: .5rem .8rem; margin-bottom: .28rem; transition: border-color .2s, background .2s; animation: slideRight .28s ease both; animation-fill-mode: both; }
+.vc:hover { border-color: var(--b3); background: var(--bg4); }
+.vc.crit  { border-left: 2px solid var(--red); }
+.vc.warn  { border-left: 2px solid var(--orange); }
+.vc.safe  { border-left: 2px solid var(--green); }
+.vc-name  { font-family: var(--ff); font-size: .73rem; font-weight: 600; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 115px; }
+.vc-tags  { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.vt       { font-family: var(--fm); font-size: .56rem; font-weight: 500; padding: 1px 6px; border-radius: 3px; }
+.vt.od    { background: rgba(204,40,40,.15);  color: var(--red2); }
+.vt.hp    { background: rgba(184,85,24,.15);  color: var(--ora2); }
+.vt.ok    { background: rgba(13,138,74,.15);  color: var(--grn2); }
+
+/* Premium Asset overview telemetry dashboard panels */
+.vc-hero { background: var(--bg3); border: 1px solid var(--b2); border-radius: 12px; padding: 1.25rem 1.6rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin: .5rem 0 1.5rem; animation: slideDown .4s ease both; }
+.vc-hero.crit { border-left: 4px solid var(--red); }
+.vc-hero.warn { border-left: 4px solid var(--orange); }
+.vc-hero.safe { border-left: 4px solid var(--green); }
+.vc-hero-name { font-family: var(--ff); font-size: 1.25rem; font-weight: 700; color: var(--t0); }
+.vc-hero-meta { font-family: var(--fm); font-size: .66rem; color: var(--t3); margin-top: 3px; }
+.vc-hero-stats { display: flex; gap: .9rem; align-items: center; flex-wrap: wrap; }
+.vc-stat { text-align: center; }
+.vc-stat-val { font-family: var(--ff); font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.vc-stat-lbl { font-family: var(--fi); font-size: .58rem; text-transform: uppercase; letter-spacing: .14em; color: var(--t3); margin-top: 2px; }
+.sev-badge { border-radius: 6px; padding: 5px 13px; font-family: var(--fm); font-size: .68rem; font-weight: 700; letter-spacing: .07em; }
+
+.ml { display: flex; gap: 1.4rem; flex-wrap: wrap; font-family: var(--fm); font-size: .66rem; color: var(--t3); margin: .7rem 0 0; }
+.ml b { color: var(--t2); font-weight: 500; }
 </style>
 """, unsafe_allow_html=True)
 
-def kpi(val, lbl, color="gold"):
-    return f'''
-    <div style="background:var(--bg3);border:1px solid var(--b2);border-radius:12px;padding:1rem 1.1rem">
-      <div style="font-family:var(--ff);font-size:2rem;font-weight:700;color:var(--t0);line-height:1">{val}</div>
-      <div style="color:var(--t3);text-transform:uppercase;letter-spacing:.15em;font-size:.62rem;margin-top:.4rem">{lbl}</div>
-    </div>
-    '''
 
-# ============================================================
-# DB LAYER
-# ============================================================
+# ═══════════════════════════════════════════════════════════════════
+#  DATABASE LAYER (INTEGRATED WAL LOCK PROTECTION)
+# ═══════════════════════════════════════════════════════════════════
 DB_PATH = Path("running_hours.db")
 
 def get_db():
@@ -152,849 +240,759 @@ def get_db():
     return conn
 
 def init_db():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("PRAGMA journal_mode=WAL")
+    c = get_db()
+    # Forces Write-Ahead Logging to guarantee synchronous multi-user pipelines
+    c.execute("PRAGMA journal_mode=WAL;")
     c.executescript("""
     CREATE TABLE IF NOT EXISTS vessels(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        created_at TEXT NOT NULL DEFAULT(datetime('now'))
-    );
+        created_at TEXT NOT NULL DEFAULT(datetime('now')));
     CREATE TABLE IF NOT EXISTS upload_log(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        vessel_name TEXT NOT NULL,
-        filename TEXT NOT NULL,
-        file_hash TEXT NOT NULL,
-        report_date TEXT,
-        me_total_hrs INTEGER,
-        me_this_month INTEGER,
-        parse_confidence REAL DEFAULT 0,
-        component_count INTEGER DEFAULT 0,
-        warning_count INTEGER DEFAULT 0,
-        uploaded_at TEXT NOT NULL DEFAULT(datetime('now'))
-    );
+        vessel_name TEXT NOT NULL, filename TEXT NOT NULL,
+        file_hash TEXT NOT NULL, report_date TEXT,
+        me_total_hrs INTEGER, me_this_month INTEGER,
+        uploaded_at TEXT NOT NULL DEFAULT(datetime('now')));
     CREATE TABLE IF NOT EXISTS components(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        vessel_name TEXT NOT NULL,
-        category TEXT NOT NULL,
-        engine_label TEXT NOT NULL,
-        unit TEXT NOT NULL,
-        description TEXT NOT NULL,
-        periodicity REAL,
-        last_oh_date TEXT,
-        last_oh_hrs REAL,
-        hrs_since REAL,
-        pct_used REAL,
-        status TEXT NOT NULL,
-        seq INTEGER,
-        updated_at TEXT NOT NULL DEFAULT(datetime('now'))
-    );
+        vessel_name TEXT NOT NULL, category TEXT NOT NULL,
+        engine_label TEXT NOT NULL, unit TEXT NOT NULL,
+        description TEXT NOT NULL, periodicity REAL,
+        last_oh_date TEXT, last_oh_hrs REAL,
+        hrs_since REAL, pct_used REAL, status TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT(datetime('now')));
     CREATE TABLE IF NOT EXISTS other_equipment(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        vessel_name TEXT NOT NULL,
-        section TEXT NOT NULL,
-        description TEXT NOT NULL,
-        periodicity TEXT,
-        last_date TEXT,
-        run_hrs TEXT,
-        updated_at TEXT NOT NULL DEFAULT(datetime('now'))
-    );
+        vessel_name TEXT NOT NULL, section TEXT NOT NULL,
+        description TEXT NOT NULL, periodicity TEXT,
+        last_date TEXT, run_hrs TEXT,
+        updated_at TEXT NOT NULL DEFAULT(datetime('now')));
     CREATE INDEX IF NOT EXISTS idx_cv ON components(vessel_name);
     CREATE INDEX IF NOT EXISTS idx_cs ON components(status);
     """)
-    conn.commit()
-    conn.close()
+    c.commit(); c.close()
 
 init_db()
 
-# ============================================================
-# HELPERS
-# ============================================================
-HEADER_PATTERNS = [
-    "1-DATE OF LAST O/H 2- RUNNING HOURS SINCE LAST O/H",
-    "1-DATE OF LAST O/H 2- RUNNING HOURS SINCE LAST O/ H",
-    "DATE OF LAST O/H",
-    "RUNNING HOURS SINCE LAST O/H",
-    "TOTAL RUNNING HOURS",
-    "THIS MONTH",
-    "MAIN ENGINE",
-    "TYPE: MAN B&W",
-    "MAN B&W –5S60MC",
-]
 
-def clean_text(x: Any) -> str:
-    if x is None:
-        return ""
-    return re.sub(r"\s+", " ", str(x).replace("\xa0", " ")).strip()
-
-def is_header_like(text: str) -> bool:
-    t = clean_text(text).upper()
-    if not t:
-        return False
-    for pat in HEADER_PATTERNS:
-        if pat.upper() in t:
-            return True
-    if re.match(r"^1[- ]?DATE OF LAST", t):
-        return True
-    return False
-
-def looks_like_name(x: str) -> bool:
-    t = clean_text(x)
-    if not t or len(t) < 3:
-        return False
-    u = t.upper()
-    if is_header_like(u):
-        return False
-    if re.fullmatch(r"[\d./ ,:-]+", u):
-        return False
-    if u in {"DATE", "RUN HRS", "RUN HOURS", "PERIODICITY"}:
-        return False
-    return True
-
-def safe_float(x: Any) -> Optional[float]:
-    s = clean_text(x).replace(",", "")
-    if not s:
-        return None
-    m = re.search(r"[-+]?\d+(?:\.\d+)?", s)
-    if not m:
-        return None
-    try:
-        return float(m.group())
-    except:
-        return None
-
-def parse_date(raw: Any) -> Optional[str]:
-    raw = clean_text(raw)
-    if not raw or raw.upper() in {"NA", "N/A", "-", "--"}:
-        return None
-    raw = re.sub(r"SEPT", "SEP", raw, flags=re.I)
-    for fmt in [
-        "%d %b %y", "%d %B %y", "%d %b %Y", "%d %B %Y",
-        "%d/%m/%y", "%d/%m/%Y", "%d-%m-%y", "%d-%m-%Y",
-        "%b %Y", "%B %Y", "%Y-%m-%d"
-    ]:
-        for v in (raw, raw.upper(), raw.title()):
-            try:
-                return datetime.strptime(v, fmt).strftime("%Y-%m-%d")
-            except:
-                pass
-    return raw
-
-def parse_periodicity(raw: Any) -> Optional[float]:
-    s = clean_text(raw).upper()
-    s = s.replace("O/H", "").replace("HRS", "").replace("HRS.", "").replace("HR", "")
-    m = re.search(r"(\d+(?:\.\d+)?)", s)
-    return float(m.group(1)) if m else None
-
-def extract_number(raw: Any) -> Optional[float]:
-    s = clean_text(raw).replace(",", "")
-    m = re.search(r"[-+]?\d+(?:\.\d+)?", s)
-    return float(m.group()) if m else None
-
-def status_from(hrs_since: Optional[float], periodicity: Optional[float]) -> str:
-    if hrs_since is None or periodicity is None or periodicity <= 0:
-        return "NO DATA"
-    r = hrs_since / periodicity
-    if r >= 1.0:
-        return "OVERDUE"
-    if r >= 0.80:
-        return "HIGH PRIORITY"
-    return "OK"
-
-def pct_used(hrs_since: Optional[float], periodicity: Optional[float]) -> float:
-    if hrs_since is None or periodicity is None or periodicity <= 0:
-        return 0.0
-    return round(hrs_since / periodicity, 4)
-
-def cyl_sort(unit: Any) -> int:
-    m = re.search(r"(\d+)", str(unit))
-    return int(m.group(1)) if m else 999
-
-# ============================================================
-# DOC CONVERSION
-# ============================================================
+# ═══════════════════════════════════════════════════════════════════
+#  CONVERSION  — Headless File Decryption Engine
+# ═══════════════════════════════════════════════════════════════════
 def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
     if not os.path.isfile(soffice):
-        raise RuntimeError("LibreOffice not found. Add 'libreoffice' in packages.")
+        raise RuntimeError("LibreOffice not found. packages.txt must contain: libreoffice")
     with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as t:
-        t.write(raw)
-        src = t.name
-    outdir = tempfile.mkdtemp(prefix="docconv_")
-    outdocx = os.path.join(outdir, Path(src).stem + ".docx")
-    profile = f"file:///tmp/lo_{os.getpid()}_{os.urandom(4).hex()}"
+        t.write(raw); tp = t.name
+    od = tempfile.gettempdir()
+    base = os.path.splitext(os.path.basename(tp))[0]
+    dp = os.path.join(od, base + ".docx")
+    pf = f"file:///tmp/lo_{os.getpid()}_{os.urandom(4).hex()}"
     try:
-        res = subprocess.run(
-            [soffice, "--headless", "--norestore", "--nofirststartwizard",
-             f"-env:UserInstallation={profile}", "--convert-to", "docx", src, "--outdir", outdir],
-            capture_output=True, timeout=120
-        )
-        if not os.path.exists(outdocx):
-            raise RuntimeError(res.stderr.decode("utf-8", errors="ignore")[:400])
-        with open(outdocx, "rb") as f:
-            return f.read()
+        r = subprocess.run(
+            [soffice,"--headless","--norestore","--nofirststartwizard",
+             f"-env:UserInstallation={pf}","--convert-to","docx",tp,"--outdir",od],
+            capture_output=True, timeout=120)
+        if not os.path.exists(dp):
+            raise RuntimeError(f"exit {r.returncode}: {r.stderr.decode('utf-8','ignore')[:300]}")
+        with open(dp,"rb") as f: return f.read()
     finally:
-        for p in [src, outdocx]:
+        for p in [tp,dp]:
             try:
-                if os.path.exists(p):
-                    os.unlink(p)
-            except:
-                pass
-        shutil.rmtree(outdir, ignore_errors=True)
+                if os.path.exists(p): os.unlink(p)
+            except Exception: pass
 
-def open_docx_bytes(docx_bytes: bytes) -> Document:
-    with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as t:
-        t.write(docx_bytes)
-        p = t.name
-    try:
-        return Document(p)
-    finally:
+
+# ═══════════════════════════════════════════════════════════════════
+#  DETERMINISTIC TELEMETRY STREAM PARSER (WIDE-ROW EDITION)
+# ═══════════════════════════════════════════════════════════════════
+def _cp(raw):
+    if not raw: return None
+    s = re.sub(r'\.(?=\d{3}(\.|$))','',str(raw).strip())
+    s = re.sub(r'[^0-9\.]','',s)
+    try: return float(s) if s else None
+    except ValueError: return None
+
+def _pd(raw):
+    if not raw or str(raw).strip() in ('','N/A','n/a','-','--'): return None
+    raw = re.sub(r'\s+',' ',str(raw).strip().lstrip('[').rstrip(']'))
+    if re.match(r'^\d+$',raw.strip()): return None 
+    rn = re.sub(r'\bSEPT\b','SEP',raw,flags=re.IGNORECASE)
+    rn = re.sub(r'\bJUNE\b','JUN',rn, flags=re.IGNORECASE)
+    rn = re.sub(r'\bJULY\b','JUL',rn, flags=re.IGNORECASE)
+    fmts=['%d %b %y','%d %B %y','%d %b %Y','%d %B %Y',
+          '%d/%m/%y','%d/%m/%Y','%d-%m-%y','%d-%m-%Y',
+          '%b %Y','%B %Y','%Y-%m-%d']
+    for fmt in fmts:
+        for v in (rn,rn.upper(),rn.title(),raw,raw.upper()):
+            try: return datetime.strptime(v,fmt).strftime('%Y-%m-%d')
+            except ValueError: pass
+    return raw
+
+def _ph(raw):
+    if not raw or str(raw).strip() in ('','N/A','n/a','-','--'): return None
+    for n in re.findall(r'\d[\d,]*',str(raw).replace('\n',' ')):
         try:
-            os.unlink(p)
-        except:
-            pass
-
-def table_grid(table) -> List[List[str]]:
-    return [[clean_text(c.text) for c in row.cells] for row in table.rows]
-
-def row_text(row: List[str]) -> str:
-    return " | ".join([clean_text(x) for x in row if clean_text(x)])
-
-def doc_all_text(doc: Document) -> str:
-    parts = [clean_text(p.text) for p in doc.paragraphs if clean_text(p.text)]
-    for table in doc.tables:
-        for row in table_grid(table):
-            txt = row_text(row)
-            if txt:
-                parts.append(txt)
-    return "\n".join(parts)
-
-def detect_vessel_name(doc: Document) -> str:
-    pats = [
-        r"VESSEL\s*NAME[:\s]+(?:M/V\s*)?([A-Z0-9 \-_/]{2,})",
-        r"\bM/?V\s+([A-Z0-9 \-_/]{2,})",
-        r"NAME OF VESSEL[:\s]+([A-Z0-9 \-_/]{2,})",
-    ]
-    for p in doc.paragraphs:
-        txt = clean_text(p.text)
-        for pat in pats:
-            m = re.search(pat, txt, flags=re.I)
-            if m:
-                return clean_text(m.group(1))
-    alltxt = doc_all_text(doc).upper()
-    for pat in pats:
-        m = re.search(pat, alltxt, flags=re.I)
-        if m:
-            return clean_text(m.group(1))
-    return "UNKNOWN"
-
-def detect_report_date(doc: Document) -> Optional[str]:
-    for p in doc.paragraphs:
-        txt = clean_text(p.text)
-        m = re.search(r"(?:REPORT\s*)?DATE[:\s]+(.+)", txt, flags=re.I)
-        if m:
-            return parse_date(m.group(1))
+            v=float(n.replace(',',''))
+            if v>0: return v
+        except ValueError: pass
     return None
 
-def detect_me_totals(doc: Document):
-    txt = doc_all_text(doc)
-    total = None
-    month = None
-    m1 = re.search(r"TOTAL\s+RUNNING\s+HOURS[^0-9]{0,20}([\d,]+)", txt, flags=re.I)
-    m2 = re.search(r"THIS\s+MONTH[^0-9]{0,20}([\d,]+)", txt, flags=re.I)
-    if m1:
-        total = int(m1.group(1).replace(",", ""))
-    if m2:
-        month = int(m2.group(1).replace(",", ""))
-    return total, month
+def _st(h,p):
+    if h is None or p is None or p==0: return 'NO DATA'
+    r=h/p
+    if r>1.0: return 'OVERDUE'
+    if r>=0.80: return 'HIGH PRIORITY'
+    return 'OK'
 
-# ============================================================
-# PARSING CORE WITH SEQUENCE
-# ============================================================
-def parse_main_engine(table, start_seq: int = 0) -> tuple[List[Dict[str, Any]], int]:
-    grid = table_grid(table)
-    comps: List[Dict[str, Any]] = []
-    if not grid:
-        return comps, start_seq
-    max_cols = max(len(r) for r in grid)
+def _pt(h,p):
+    if h is None or p is None or p==0: return 0.0
+    return round(h/p,4)
 
-    cyl_cols = []
-    for ci in range(max_cols):
-        txt = " ".join(r[ci] if ci < len(r) else "" for r in grid[:4])
-        m = re.search(r"CYL(?:INDER)?\s*NO\.?\s*(\d+)", txt, flags=re.I)
-        if m:
-            cyl_cols.append((ci, f"Cyl {m.group(1)}"))
-    if not cyl_cols:
-        cyl_cols = [(i, f"Cyl {i-1}") for i in range(2, min(max_cols, 14))]
+def is_valid_component(name: str) -> bool:
+    """Strictly isolates actual machinery from metadata leaks."""
+    # Aggressively clean invisible/zero-width space characters (\xa0) that cause ghost lines
+    t = str(name).replace("\xa0", " ").strip().upper()
+    if not t or len(t) < 3: return False
+    if re.fullmatch(r"[\d./ ,:-]+", t): return False
+    
+    # Aggressive Stop-Word Filter
+    stop_words = [
+        "ALEXIS", "DATE", "PAGE", "SIGNATURE", "CHIEF ENGINEER", "MASTER", 
+        "RUN HRS", "RUNNING HOURS", "PERIODICITY", "TOTAL", "THIS MONTH", 
+        "TYPE:", "MAN B&W", "MAKER", "TABLE", "INSPECTION"
+    ]
+    if any(sw in t for sw in stop_words): 
+        return False
+    return True
 
+def parse_wide_matrix(table, category: str, start_seq: int) -> tuple[list, int]:
+    """Universal wide-row parser for ME and AUX engines."""
+    comps = []
     seq = start_seq
-    i = 0
-    while i < len(grid) - 1:
-        r1 = grid[i]
-        r2 = grid[i + 1]
-        name = r1[0] if r1 else ""
-        if not looks_like_name(name):
-            i += 1
-            continue
-        periodicity = parse_periodicity(r1[1] if len(r1) > 1 else None)
-        for ci, unit in cyl_cols:
-            d = parse_date(r1[ci] if ci < len(r1) else None)
-            h = extract_number(r2[ci] if ci < len(r2) else None)
-            if d is None and h is None:
-                continue
-            comps.append({
-                "seq": seq,
-                "category": "MAIN_ENGINE",
-                "engine_label": "ME",
-                "unit": unit,
-                "description": clean_text(name),
-                "periodicity": periodicity,
-                "last_oh_date": d,
-                "last_oh_hrs": h,
-                "hrs_since": h,
-                "pct_used": pct_used(h, periodicity),
-                "status": status_from(h, periodicity),
-            })
-            seq += 1
-        i += 2
-    return comps, seq
-
-def parse_aux_engine(table, start_seq: int) -> tuple[List[Dict[str, Any]], int]:
-    grid = table_grid(table)
-    comps: List[Dict[str, Any]] = []
-    if not grid:
-        return comps, start_seq
-
-    header = grid[:5]
-    blocks = []
-    seen = set()
-    for row in header:
-        for ci, cell in enumerate(row):
-            m = re.search(r"AUX(?:ILIARY)?\s*ENGINE\s*NO\.?\s*(\d+)", cell, flags=re.I)
+    if not table.rows: return comps, seq
+    grid = [[str(c.text).replace("\xa0", " ").strip() for c in r.cells] for r in table.rows]
+    
+    # Map Columns by dynamic header search (Scans top 7 rows for deep-nested headers)
+    cyl_map = []
+    for r in grid[:7]: 
+        for ci, cell in enumerate(r):
+            m = re.search(r'(?:CYL|AUX\s*ENGINE)[^\d]*(\d+)', cell, re.IGNORECASE)
             if m:
-                label = f"AUX-{m.group(1)}"
-                if label not in seen:
-                    seen.add(label)
-                    blocks.append((label, ci))
-    if not blocks:
-        blocks = [("AUX-1", 2), ("AUX-2", 6), ("AUX-3", 10)]
-
-    cyl_map = {}
-    if len(grid) > 4:
-        hdr_row = grid[4]
-        for idx, (label, start) in enumerate(blocks):
-            end = blocks[idx + 1][1] if idx + 1 < len(blocks) else len(hdr_row)
-            for ci in range(start, end):
-                if ci < len(hdr_row):
-                    m = re.search(r"\b(\d{1,2})\b", hdr_row[ci])
-                    if m:
-                        cyl_map[ci] = (label, f"Cyl {m.group(1)}")
-
-    seq = start_seq
-    i = 5
-    while i < len(grid) - 1:
-        r1 = grid[i]
-        r2 = grid[i + 1]
-        name = r1[0] if r1 else ""
-        if not looks_like_name(name):
-            i += 1
-            continue
-        periodicity = parse_periodicity(r1[1] if len(r1) > 1 else None)
-        for ci, (eng, unit) in cyl_map.items():
-            d = parse_date(r1[ci] if ci < len(r1) else None)
-            h = extract_number(r2[ci] if ci < len(r2) else None)
-            if d is None and h is None:
-                continue
-            comps.append({
-                "seq": seq,
-                "category": "AUX_ENGINE",
-                "engine_label": eng,
-                "unit": unit,
-                "description": clean_text(name),
-                "periodicity": periodicity,
-                "last_oh_date": d,
-                "last_oh_hrs": h,
-                "hrs_since": h,
-                "pct_used": pct_used(h, periodicity),
-                "status": status_from(h, periodicity),
-            })
-            seq += 1
-        i += 2
+                label = f"Cyl {m.group(1)}" if category == 'MAIN_ENGINE' else f"AUX-{m.group(1)}"
+                if (ci, label) not in cyl_map:
+                    cyl_map.append((ci, label))
+                    
+    cyl_map = sorted(cyl_map, key=lambda x: x[0])
+    
+    # Extract Wide Rows
+    for r in grid:
+        name = r[0] if r else ""
+        if not is_valid_component(name): continue
+        
+        periodicity = _cp(r[1] if len(r) > 1 else None)
+        row_has_valid_data = False
+        
+        for idx, (ci, unit) in enumerate(cyl_map):
+            date_str = r[ci] if ci < len(r) else None
+            hrs_str = r[ci+1] if (ci+1) < len(r) else None
+            
+            engine_label = 'ME' if category == 'MAIN_ENGINE' else unit.split('-')[0]
+            unit_label = unit if category == 'MAIN_ENGINE' else f"Cyl {unit.split('-')[1]}"
+            
+            d = _pd(date_str)
+            h = _ph(hrs_str)
+            
+            if d is not None or h is not None:
+                row_has_valid_data = True
+                comps.append({
+                    'seq': seq, 'category': category, 'engine_label': engine_label, 'unit': unit_label,
+                    'description': name, 'periodicity': periodicity, 'last_oh_date': d, 'last_oh_hrs': h,
+                    'hrs_since': h, 'pct_used': _pt(h, periodicity), 'status': _st(h, periodicity)
+                })
+        if row_has_valid_data: seq += 1
     return comps, seq
 
-def parse_other_equipment(doc: Document) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
-    for table in doc.tables:
-        for row in table_grid(table):
-            joined = clean_text(" ".join(row)).upper()
-            if any(x in joined for x in ["TURBOCHARGER", "COOLERS", "COMPRESSORS", "BOILER", "D/G"]):
-                desc = next((c for c in row if looks_like_name(c)), "")
-                if desc:
-                    rows.append({
-                        "section": "OTHER EQUIPMENT",
-                        "description": desc,
-                        "periodicity": "",
-                        "last_date": "",
-                        "run_hrs": "",
-                    })
-    out = []
-    seen = set()
-    for r in rows:
-        key = (r["section"], r["description"])
-        if key not in seen:
-            seen.add(key)
-            out.append(r)
-    return out
+def parse_doc_bytes(docx: bytes) -> dict:
+    warns=[]
+    with tempfile.NamedTemporaryFile(suffix='.docx',delete=False) as t:
+        t.write(docx); tp=t.name
+    try: doc=Document(tp)
+    except Exception as e: raise ValueError(f"Cannot open document: {e}")
+    finally:
+        try: os.unlink(tp)
+        except Exception: pass
+        
+    if not doc.tables: raise ValueError("No tables — is this a valid TEC-004?")
 
-def dedupe_components(comps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    out = []
-    seen = set()
-    for x in comps:
-        key = (
-            x["category"],
-            x["engine_label"],
-            x["unit"],
-            x["description"],
-            x.get("last_oh_date"),
-            x.get("hrs_since"),
-        )
-        if key not in seen:
-            seen.add(key)
-            out.append(x)
-    return out
+    vn='UNKNOWN'; rd=None
+    for para in doc.paragraphs:
+        txt=para.text.replace("\xa0", " ").strip()
+        if not txt: continue
+        vm=re.search(r"Vessel[\u2019\u2018']?s?\s+Name\s*:\s*(?:MV\s+)?([A-Z][A-Z0-9 \-]+?)(?:\s{2,}|\t)",txt,re.IGNORECASE)
+        dm=re.search(r"Date\s*:\s*(.+)",txt,re.IGNORECASE)
+        if vm: vn=vm.group(1).strip()
+        if dm: rd=_pd(dm.group(1).strip())
+        if vm or dm: break
+    if vn=='UNKNOWN': warns.append("Could not extract vessel name. Check metadata block.")
 
-def filter_header_noise(comps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    out = []
-    for c in comps:
-        desc = clean_text(c.get("description", ""))
-        if is_header_like(desc):
-            continue
-        if c["status"] == "NO DATA":
-            if not c.get("periodicity") and not c.get("last_oh_date") and c.get("hrs_since") is None:
-                continue
-        out.append(c)
-    return out
+    mt=mm=None; comps=[]
+    
+    if len(doc.tables) > 0:
+        t0 = doc.tables[0]
+        for cell in t0.rows[0].cells:
+            x=cell.text
+            if m:=re.search(r'Total Running Hours[\s:ǀ|]+([\d,]+)',x,re.IGNORECASE):
+                try: mt=int(m.group(1).replace(',',''))
+                except ValueError: pass
+            if m:=re.search(r'This Month[\s:]+([\d,]+)',x,re.IGNORECASE):
+                try: mm=int(m.group(1).replace(',',''))
+                except ValueError: pass
 
-def parse_doc_bytes(docx_bytes: bytes) -> Dict[str, Any]:
-    doc = open_docx_bytes(docx_bytes)
-    warnings: List[str] = []
-    vessel_name = detect_vessel_name(doc)
-    report_date = detect_report_date(doc)
-    me_total_hrs, me_this_month = detect_me_totals(doc)
-
-    if vessel_name == "UNKNOWN":
-        warnings.append("Could not confidently extract vessel name.")
-
-    main_table = doc.tables[0] if len(doc.tables) > 0 else None
-    aux_table = doc.tables[2] if len(doc.tables) > 2 else None
-
-    components: List[Dict[str, Any]] = []
     seq = 0
-    if main_table:
-        me_comps, seq = parse_main_engine(main_table, start_seq=seq)
-        components.extend(me_comps)
-    else:
-        warnings.append("No main engine table found.")
-    if aux_table:
-        aux_comps, seq = parse_aux_engine(aux_table, start_seq=seq)
-        components.extend(aux_comps)
-    else:
-        warnings.append("No auxiliary engine table found.")
+    if len(doc.tables) > 0:
+        me_comps, seq = parse_wide_matrix(doc.tables[0], 'MAIN_ENGINE', seq)
+        comps.extend(me_comps)
+    else: warns.append("Missing Main Engine matrix.")
+        
+    if len(doc.tables) > 2:
+        aux_comps, seq = parse_wide_matrix(doc.tables[2], 'AUX_ENGINE', seq)
+        comps.extend(aux_comps)
+    else: warns.append("Missing Auxiliary Engine matrix.")
 
-    components = dedupe_components(components)
-    components = filter_header_noise(components)
-
-    other_equipment = parse_other_equipment(doc)
-
-    if len(components) < 5:
-        warnings.append(f"Low component count extracted ({len(components)}).")
-
+    oe=[]
+    if len(doc.tables)>1:
+        t1=doc.tables[1]
+        for row in t1.rows:
+            cells=[str(c.text).replace("\xa0", " ").strip() for c in row.cells]
+            for sec,dc,datec,hrsc in [('TURBOCHARGER / BOILER',0,1,3),
+                                       ('COOLERS / HEAT EXCH',5,6,8),
+                                       ('COMPRESSORS / AC',10,11,12)]:
+                desc = cells[dc] if dc<len(cells) else ''
+                if not is_valid_component(desc): continue
+                dv = cells[datec] if datec<len(cells) else ''
+                hv = cells[hrsc]  if hrsc <len(cells) else ''
+                if dv or hv:
+                    oe.append({'section':sec,'description':desc,'periodicity':'','last_date':_pd(dv) or dv,'run_hrs':_ph(hv) or hv})
+    
     confidence = 0.0
-    if vessel_name != "UNKNOWN":
-        confidence += 0.2
-    if report_date:
-        confidence += 0.1
-    if len(components) >= 8:
-        confidence += 0.3
-    if any(c["category"] == "MAIN_ENGINE" for c in components):
-        confidence += 0.2
-    if any(c["category"] == "AUX_ENGINE" for c in components):
-        confidence += 0.15
-    if not warnings:
-        confidence += 0.05
+    if vn != "UNKNOWN": confidence += 0.2
+    if rd: confidence += 0.1
+    if len(comps) >= 10: confidence += 0.3
+    if any(c["category"] == "MAIN_ENGINE" for c in comps): confidence += 0.2
+    if any(c["category"] == "AUX_ENGINE" for c in comps): confidence += 0.15
+    if not warns: confidence += 0.05
     confidence = round(min(confidence, 1.0), 2)
 
     return {
-        "vessel_name": vessel_name,
-        "report_date": report_date,
-        "me_total_hrs": me_total_hrs,
-        "me_this_month": me_this_month,
-        "components": components,
-        "other_equipment": other_equipment,
-        "warnings": warnings,
-        "parse_confidence": confidence,
+        "vessel_name": vn, "report_date": rd, 
+        "me_total_hrs": mt, "me_this_month": mm,
+        "components": comps, "other_equipment": oe, 
+        "warnings": warns, "parse_confidence": confidence
     }
 
-# ============================================================
-# SAVE
-# ============================================================
-def save_parsed(parsed: Dict[str, Any], filename: str, file_hash: str):
-    if parsed["parse_confidence"] < 0.35 or len(parsed["components"]) < 5:
-        raise ValueError("Parse confidence too low to commit safely.")
+
+# ═══════════════════════════════════════════════════════════════════
+#  SMART UPSERT DATA LAYER (NO DATA LOSS / ROLLBACK SECURED)
+# ═══════════════════════════════════════════════════════════════════
+def save_parsed(parsed, filename, fhash):
     conn = get_db()
     c = conn.cursor()
     now = datetime.utcnow().isoformat() + "Z"
-    vessel = parsed["vessel_name"]
+    v = parsed['vessel_name']
+    
+    # Fully secured context execution loop protecting table updates against failures
     try:
-        c.execute("INSERT OR IGNORE INTO vessels(name, created_at) VALUES (?, ?)", (vessel, now))
-        c.execute("""
-            INSERT INTO upload_log(
-                vessel_name, filename, file_hash, report_date, me_total_hrs,
-                me_this_month, parse_confidence, component_count, warning_count, uploaded_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            vessel, filename, file_hash, parsed["report_date"], parsed["me_total_hrs"],
-            parsed["me_this_month"], parsed["parse_confidence"],
-            len(parsed["components"]), len(parsed["warnings"]), now
-        ))
-        c.execute("DELETE FROM components WHERE vessel_name = ?", (vessel,))
-        for x in parsed["components"]:
-            c.execute("""
-                INSERT INTO components(
-                    vessel_name, category, engine_label, unit, description,
-                    periodicity, last_oh_date, last_oh_hrs, hrs_since, pct_used,
-                    status, seq, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                vessel, x["category"], x["engine_label"], x["unit"], x["description"],
-                x["periodicity"], x["last_oh_date"], x["last_oh_hrs"], x["hrs_since"],
-                x["pct_used"], x["status"], x["seq"], now
-            ))
-        c.execute("DELETE FROM other_equipment WHERE vessel_name = ?", (vessel,))
-        for x in parsed["other_equipment"]:
-            c.execute("""
-                INSERT INTO other_equipment(
-                    vessel_name, section, description, periodicity, last_date, run_hrs, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                vessel, x["section"], x["description"], x["periodicity"],
-                x["last_date"], x["run_hrs"], now
-            ))
+        c.execute("INSERT OR IGNORE INTO vessels(name,created_at) VALUES(?,?)",(v,now))
+        c.execute("INSERT INTO upload_log(vessel_name,filename,file_hash,report_date,me_total_hrs,me_this_month,uploaded_at) VALUES(?,?,?,?,?,?,?)",
+            (v,filename,fhash,parsed['report_date'],parsed['me_total_hrs'],parsed['me_this_month'],now))
+        
+        # SMART UPSERT LOGIC: Only delete historical records for the categories successfully extracted in THIS report.
+        # This prevents a missing AUX table from permanently destroying historical AUX records.
+        if any(x['category'] == 'MAIN_ENGINE' for x in parsed['components']):
+            c.execute("DELETE FROM components WHERE vessel_name=? AND category='MAIN_ENGINE'", (v,))
+        if any(x['category'] == 'AUX_ENGINE' for x in parsed['components']):
+            c.execute("DELETE FROM components WHERE vessel_name=? AND category='AUX_ENGINE'", (v,))
+
+        for x in parsed['components']:
+            c.execute("INSERT INTO components(vessel_name,category,engine_label,unit,description,periodicity,last_oh_date,last_oh_hrs,hrs_since,pct_used,status,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                (v,x['category'],x['engine_label'],x['unit'],x['description'],
+                 x['periodicity'],x['last_oh_date'],x['last_oh_hrs'],
+                 x['hrs_since'],x['pct_used'],x['status'],now))
+                 
+        if parsed['other_equipment']:
+            c.execute("DELETE FROM other_equipment WHERE vessel_name=?",(v,))
+            for x in parsed['other_equipment']:
+                c.execute("INSERT INTO other_equipment(vessel_name,section,description,periodicity,last_date,run_hrs,updated_at) VALUES(?,?,?,?,?,?,?)",
+                    (v,x['section'],x['description'],x.get('periodicity',''),
+                     x.get('last_date',''),x.get('run_hrs',''),now))
         conn.commit()
-    except:
-        conn.rollback()
-        raise
+    except Exception as e:
+        conn.rollback() # Safeguards database files from half-written executions
+        raise e
     finally:
         conn.close()
 
-# ============================================================
-# QUERIES
-# ============================================================
-@st.cache_data(ttl=10)
-def get_vessels() -> List[str]:
-    conn = get_db()
-    rows = conn.execute("SELECT name FROM vessels ORDER BY name").fetchall()
-    conn.close()
-    return [r["name"] for r in rows]
 
 @st.cache_data(ttl=10)
-def get_components(vessel: str) -> pd.DataFrame:
-    conn = get_db()
-    df = pd.read_sql_query("SELECT * FROM components WHERE vessel_name = ?", conn, params=(vessel,))
-    conn.close()
-    return df
+def get_vessels():
+    c=get_db(); r=c.execute("SELECT name FROM vessels ORDER BY name").fetchall(); c.close()
+    return [x['name'] for x in r]
 
 @st.cache_data(ttl=10)
-def get_other_equipment(vessel: str) -> pd.DataFrame:
-    conn = get_db()
-    df = pd.read_sql_query(
-        "SELECT * FROM other_equipment WHERE vessel_name = ? ORDER BY section, description",
-        conn, params=(vessel,)
-    )
-    conn.close()
-    return df
+def get_comps(vessel):
+    c=get_db()
+    df=pd.read_sql_query("SELECT * FROM components WHERE vessel_name=?",c,params=(vessel,))
+    c.close(); return df
 
 @st.cache_data(ttl=10)
-def get_history(vessel: str) -> pd.DataFrame:
-    conn = get_db()
-    df = pd.read_sql_query("""
-        SELECT filename, report_date, me_total_hrs, me_this_month,
-               parse_confidence, component_count, warning_count, uploaded_at
-        FROM upload_log
-        WHERE vessel_name = ?
-        ORDER BY uploaded_at DESC
-        LIMIT 20
-    """, conn, params=(vessel,))
-    conn.close()
-    return df
+def get_oe(vessel):
+    c=get_db()
+    df=pd.read_sql_query("SELECT * FROM other_equipment WHERE vessel_name=? ORDER BY section,description",c,params=(vessel,))
+    c.close(); return df
 
 @st.cache_data(ttl=10)
-def get_summary() -> pd.DataFrame:
-    conn = get_db()
-    df = pd.read_sql_query("""
-        SELECT vessel_name,
-               SUM(CASE WHEN status='OVERDUE' THEN 1 ELSE 0 END) AS overdue,
-               SUM(CASE WHEN status='HIGH PRIORITY' THEN 1 ELSE 0 END) AS high_priority,
-               SUM(CASE WHEN status='OK' THEN 1 ELSE 0 END) AS ok,
-               SUM(CASE WHEN status='NO DATA' THEN 1 ELSE 0 END) AS no_data,
-               COUNT(*) AS total
-        FROM components
-        GROUP BY vessel_name
-        ORDER BY vessel_name ASC
-    """, conn)
-    conn.close()
-    return df
+def get_history(vessel):
+    c=get_db()
+    df=pd.read_sql_query("SELECT filename,report_date,me_total_hrs,me_this_month,uploaded_at FROM upload_log WHERE vessel_name=? ORDER BY uploaded_at DESC LIMIT 20",c,params=(vessel,))
+    c.close(); return df
 
 @st.cache_data(ttl=10)
-def get_all_fleet_components() -> pd.DataFrame:
-    conn = get_db()
-    df = pd.read_sql_query("SELECT * FROM components", conn)
-    conn.close()
-    return df
+def get_summary():
+    c=get_db()
+    df=pd.read_sql_query("""
+        SELECT c.vessel_name,
+            COUNT(CASE WHEN c.status='OVERDUE'       THEN 1 END) AS overdue,
+            COUNT(CASE WHEN c.status='HIGH PRIORITY' THEN 1 END) AS high_priority,
+            COUNT(CASE WHEN c.status='OK'            THEN 1 END) AS ok,
+            COUNT(*) AS total,
+            MAX(u.uploaded_at) AS last_upload,
+            MAX(u.me_total_hrs) AS me_total_hrs,
+            MAX(u.report_date) AS report_date
+        FROM components c
+        LEFT JOIN upload_log u ON u.vessel_name=c.vessel_name
+        GROUP BY c.vessel_name ORDER BY overdue DESC, high_priority DESC
+    """,c); c.close(); return df
 
-# ============================================================
-# DISPLAY TABLES (ORIGINAL DOC ORDER VIA seq)
-# ============================================================
-STATUS_THEME = {
-    "OVERDUE": {"bg":"#2d0707", "status":"#ff6b6b", "main":"#ff8080", "accent":"#ff3333", "dim":"#773333"},
-    "HIGH PRIORITY": {"bg":"#2d1503", "status":"#ffaa44", "main":"#ff9933", "accent":"#ffcc00", "dim":"#774422"},
-    "OK": {"bg":"#042010", "status":"#4ade80", "main":"#22c55e", "accent":"#4ade80", "dim":"#0f4023"},
-    "NO DATA": {"bg":"#0c1422", "status":"#7da3d8", "main":"#5f7fa6", "accent":"#7da3d8", "dim":"#2a3950"},
+@st.cache_data(ttl=10)
+def get_all_fleet_comps():
+    c = get_db()
+    df = pd.read_sql_query("SELECT * FROM components", c)
+    c.close(); return df
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  ULTRA PREMIUM MASTER RENDERING ENGINE
+# ═══════════════════════════════════════════════════════════════════
+def _sf(x):
+    try:
+        v=float(x); return None if pd.isna(v) else v
+    except: return None
+
+def _cyl(u):
+    m=re.search(r'\d+',str(u)); return int(m.group()) if m else 999
+
+_S = {
+    'OVERDUE':       {'bg':'#1f0505','bgs':'#2d0707','ts':'#ff6b6b','tm':'#ff8080','tn':'#ff3333','td':'#773333'},
+    'HIGH PRIORITY': {'bg':'#1e0d02','bgs':'#2d1503','ts':'#ffaa44','tm':'#ff9933','tn':'#ffcc00','td':'#774422'},
+    'OK':            {'bg':'#021208','bgs':'#042010','ts':'#4ade80','tm':'#22c55e','tn':'#4ade80','td':'#0f4023'},
+    '_':             {'bg':'#090e18','bgs':'#0c1422','ts':'#4a6688','tm':'#334d66','tn':'#334d66','td':'#1a2a38'},
 }
 
-def build_display_df(df: pd.DataFrame, priority: bool=False) -> pd.DataFrame:
+_COL_CFG = {
+    "Status":      st.column_config.TextColumn("Status",      width=130),
+    "Vessel":      st.column_config.TextColumn("Vessel",      width=140),
+    "Component":   st.column_config.TextColumn("Component",   width=205),
+    "Engine":      st.column_config.TextColumn("Engine",      width=80),
+    "Unit":        st.column_config.TextColumn("Unit",        width=68),
+    "Periodicity": st.column_config.NumberColumn("Periodicity", format="%d", width=100),
+    "Last O/H":    st.column_config.TextColumn("Last O/H",    width=100),
+    "Hrs Since":   st.column_config.NumberColumn("Hrs Since",  format="%d hrs", width=100),
+    "% Used":      st.column_config.ProgressColumn(
+                       "% Used", min_value=0, max_value=160, format="%.1f%%", width=120),
+}
+
+def _build_display(df: pd.DataFrame, sort_priority: bool = False) -> pd.DataFrame:
     if df.empty:
-        return pd.DataFrame(columns=[
-            "Status","Vessel","Component","Engine","Unit",
-            "Periodicity","Last O/H","Hrs Since","Used"
-        ])
-
+        return pd.DataFrame(columns=['Status','Vessel','Component','Engine','Unit',
+                                      'Periodicity','Last O/H','Hrs Since','% Used'])
     d = df.copy()
-
-    for col in ["status","vessel_name","description","engine_label","unit",
-                "periodicity","last_oh_date","hrs_since","pct_used","category","seq"]:
-        if col not in d.columns:
-            if col in {"vessel_name","category"}:
-                d[col] = ""
-            elif col == "seq":
-                d[col] = range(len(d))
-            else:
-                d[col] = None
-
-    if priority:
-        order_map = {"OVERDUE":0, "HIGH PRIORITY":1, "OK":2, "NO DATA":3}
-        d["_ord"] = d["status"].map(lambda x: order_map.get(str(x), 9))
-        d["_pct"] = d["pct_used"].fillna(0)
-        sort_cols = ["_ord", "_pct", "vessel_name", "seq"]
-        asc       = [True, False, True, True]
+    if sort_priority:
+        _ORD = {'OVERDUE':0,'HIGH PRIORITY':1,'OK':2,'NO DATA':3}
+        d['_s'] = d['status'].map(lambda s: _ORD.get(str(s),4))
+        d['_p'] = d['pct_used'].apply(lambda x: _sf(x) or 0.0)
+        if 'vessel_name' in d.columns:
+            d = d.sort_values(['_s','_p','vessel_name'], ascending=[True,False,True]).drop(columns=['_s','_p'])
+        else:
+            d = d.sort_values(['_s','_p'], ascending=[True,False]).drop(columns=['_s','_p'])
     else:
-        sort_cols = ["vessel_name", "seq"]
-        asc       = [True, True]
+        d['_k1'] = d['description'].str.upper()
+        d['_k2'] = d['unit'].apply(_cyl)
+        if 'vessel_name' in d.columns:
+            d = d.sort_values(['vessel_name','_k1','_k2']).drop(columns=['_k1','_k2'])
+        else:
+            d = d.sort_values(['_k1','_k2']).drop(columns=['_k1','_k2'])
 
-    d = d.sort_values(sort_cols, ascending=asc)
-
-    out = pd.DataFrame()
-    out["Status"]      = d["status"]
-    out["Vessel"]      = d["vessel_name"]
-    out["Component"]   = d["description"]
-    out["Engine"]      = d["engine_label"]
-    out["Unit"]        = d["unit"]
-    out["Periodicity"] = d["periodicity"].apply(lambda x: int(x) if pd.notna(x) else None)
-    out["Last O/H"]    = d["last_oh_date"].fillna("")
-    out["Hrs Since"]   = d["hrs_since"].apply(lambda x: int(x) if pd.notna(x) else None)
-    out["Used"]        = d["pct_used"].apply(lambda x: round(float(x) * 100, 1) if pd.notna(x) else 0.0)
+    out = pd.DataFrame(index=range(len(d)))
+    out['Status']      = d['status'].values
+    out['Vessel']      = d.get('vessel_name', pd.Series(['—']*len(d))).values
+    out['Component']   = d['description'].values
+    out['Engine']      = d['engine_label'].values
+    out['Unit']        = d['unit'].values
+    out['Periodicity'] = [int(float(x)) if _sf(x) else None for x in d['periodicity'].values]
+    out['Last O/H']    = [str(x) if x and str(x) not in ('nan','None','') else '—' for x in d['last_oh_date'].values]
+    out['Hrs Since']   = [int(float(x)) if _sf(x) else None for x in d['hrs_since'].values]
+    out['% Used']      = [round(float(x)*100,1) if _sf(x) else 0.0 for x in d['pct_used'].values]
     return out
 
-def apply_style(df: pd.DataFrame):
-    def style_row(row):
-        s = STATUS_THEME.get(str(row["Status"]), STATUS_THEME["NO DATA"])
+def _apply_style(df: pd.DataFrame):
+    def rs(row):
+        c = _S.get(str(row.get('Status','')), _S['_'])
         return [
-            f"background-color:{s['bg']}; color:{s['status']}; font-weight:700",
-            f"background-color:{s['bg']}; color:{s['main']}; font-weight:600",
-            f"background-color:{s['bg']}; color:{s['main']}",
-            f"background-color:{s['bg']}; color:{s['dim']}",
-            f"background-color:{s['bg']}; color:{s['dim']}",
-            f"background-color:{s['bg']}; color:{s['dim']}",
-            f"background-color:{s['bg']}; color:{s['main']}; font-weight:600",
-            f"background-color:{s['bg']}; color:{s['accent']}; font-weight:700",
-            f"background-color:{s['bg']}; color:{s['accent']}; font-weight:700",
+            f"background-color:{c['bgs']};color:{c['ts']};font-weight:700",   
+            f"background-color:{c['bg']};color:#c0d0e8;font-weight:700",      
+            f"background-color:{c['bg']};color:{c['tm']};font-weight:600",     
+            f"background-color:{c['bg']};color:{c['td']}",                     
+            f"background-color:{c['bg']};color:{c['td']}",                     
+            f"background-color:{c['bg']};color:{c['td']}",                     
+            f"background-color:{c['bg']};color:{c['td']}",                     
+            f"background-color:{c['bg']};color:{c['tm']};font-weight:600",     
+            f"background-color:{c['bg']};color:{c['tn']};font-weight:700",     
         ]
-    return df.style.apply(style_row, axis=1)
+    return df.style.apply(rs, axis=1)
 
-COLCFG = {
-    "Status": st.column_config.TextColumn("Status", width=130),
-    "Vessel": st.column_config.TextColumn("Vessel", width=130),
-    "Component": st.column_config.TextColumn("Component", width=230),
-    "Engine": st.column_config.TextColumn("Engine", width=90),
-    "Unit": st.column_config.TextColumn("Unit", width=80),
-    "Periodicity": st.column_config.NumberColumn("Periodicity", format="%d", width=105),
-    "Last O/H": st.column_config.TextColumn("Last O/H", width=110),
-    "Hrs Since": st.column_config.NumberColumn("Hrs Since", format="%d hrs", width=110),
-    "Used": st.column_config.ProgressColumn("Used", min_value=0, max_value=160, format="%.1f%%", width=120),
-}
+def render_table(df: pd.DataFrame, height: int = None, priority: bool = False):
+    if isinstance(df, list): df = pd.DataFrame(df)
+    if df.empty: st.info("No data to display."); return
+    tbl = _build_display(df, sort_priority=priority)
+    h   = height or min(850, 38*(len(tbl)+1)+4)
+    st.dataframe(_apply_style(tbl), use_container_width=True, hide_index=True, height=h, column_config=_COL_CFG)
 
-def render_table(df: pd.DataFrame, height: Optional[int]=None, priority: bool=False):
-    if isinstance(df, list):
-        df = pd.DataFrame(df)
-    if df.empty:
-        st.info("No data to display.")
-        return
-    tbl = build_display_df(df, priority=priority)
-    h = height or min(900, 38 * len(tbl) + 44)
-    st.dataframe(
-        apply_style(tbl),
-        use_container_width=True,
-        hide_index=True,
-        height=h,
-        column_config=COLCFG
-    )
 
-# ============================================================
-# SIDEBAR
-# ============================================================
+# ═══════════════════════════════════════════════════════════════════
+#  UI LAYOUT INJECTION ENGINE
+# ═══════════════════════════════════════════════════════════════════
+def kpi(val, lbl, color="gold", delay=0):
+    return (f'<div class="kc {color}" style="animation-delay:{delay}s">'
+            f'<div class="kc-val">{val}</div><div class="kc-lbl">{lbl}</div></div>')
+
+def ph(icon, title, eye=""):
+    e = f'<div class="ph-eye">{eye}</div>' if eye else ''
+    return f'<div class="ph">{e}<h1>{icon}&nbsp;&nbsp;{title}</h1></div><div class="ph-line"></div>'
+
+def sl(txt):
+    return f'<div class="sl">{txt}</div>'
+
+def filter_count(total, od, hp, ok):
+    return (f'<div class="filter-count">Showing <b>{total}</b> records — '
+            f'<span class="od">{od} overdue</span> · '
+            f'<span class="hp">{hp} high priority</span> · '
+            f'<span class="ok">{ok} OK</span></div>')
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  SIDEBAR PRESENTATION LAYER
+# ═══════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("<h2>FLEET MONITOR</h2>", unsafe_allow_html=True)
-    page = st.selectbox(
-        "Navigation",
-        ["Fleet Overview", "Vessel Detail", "Upload Report", "Upload History"],
-        label_visibility="collapsed",
-    )
+    st.markdown('<div class="logo">⚓ FLEET MONITOR</div>'
+                '<div class="logo-tag">Running Hours Management System</div>'
+                '<div class="logo-rule"></div>', unsafe_allow_html=True)
+
+    page = st.selectbox("nav",
+        ["🗺️  Fleet Overview","🚢  Vessel Detail",
+         "📤  Upload Report","📋  Upload History"],
+        label_visibility="collapsed")
+
+    st.markdown("<br>", unsafe_allow_html=True)
     vessels = get_vessels()
-    selected_vessel = st.selectbox(
-        "Active Vessel", vessels if vessels else ["—"], disabled=not bool(vessels)
-    )
-    st.markdown("<hr>", unsafe_allow_html=True)
-    db_kb = DB_PATH.stat().st_size / 1024 if DB_PATH.exists() else 0
-    st.write(f"DB: {DB_PATH.name} · {db_kb:.0f} kB · {len(vessels)} vessels")
+    sel_v   = st.selectbox("Active Vessel", vessels) if vessels else None
+    if not vessels: st.info("No data — upload a report to begin.")
 
-# ============================================================
-# PAGES
-# ============================================================
-if page == "Fleet Overview":
-    st.markdown("<h1>Fleet Master Matrix</h1>", unsafe_allow_html=True)
+    if vessels:
+        smry = get_summary()
+        if not smry.empty:
+            st.markdown('<div class="logo-rule"></div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-family:var(--fi);font-size:.56rem;text-transform:uppercase;'
+                        'letter-spacing:.2em;color:var(--t3);margin-bottom:.5rem">Vessel Status</div>',
+                        unsafe_allow_html=True)
+            for idx,(_, row) in enumerate(smry.iterrows()):
+                od=int(row['overdue']); hp=int(row['high_priority'])
+                cls='crit' if od>0 else ('warn' if hp>0 else 'safe')
+                tags=''
+                if od>0: tags+=f'<span class="vt od">{od} OD</span>'
+                if hp>0: tags+=f'<span class="vt hp">{hp} HP</span>'
+                if od==0 and hp==0: tags+='<span class="vt ok">✓ OK</span>'
+                st.markdown(
+                    f'<div class="vc {cls}" style="animation-delay:{idx*.04}s">'
+                    f'<div class="vc-name">{row["vessel_name"]}</div>'
+                    f'<div class="vc-tags">{tags}</div></div>',
+                    unsafe_allow_html=True)
+
+    st.markdown('<div class="logo-rule"></div>', unsafe_allow_html=True)
+    db_kb = DB_PATH.stat().st_size/1024 if DB_PATH.exists() else 0
+    st.markdown(f'<div style="font-family:var(--fm);font-size:.58rem;color:var(--t3)">'
+                f'db {db_kb:.0f} kb · {len(vessels)} vessels · v7.0</div>',
+                unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  PAGE LAYOUT CONTROLLERS
+# ═══════════════════════════════════════════════════════════════════
+
+# ── PAGE: FLEET MASTER MATRIX (ULTRA-PREMIUM CONTROL DECK) ─────────
+if page == "🗺️  Fleet Overview":
+    st.markdown(ph("🗺️", "Fleet Master Matrix", "Universal Fleet Telemetry"), unsafe_allow_html=True)
+
     smry = get_summary()
-    all_comps = get_all_fleet_components()
+    all_comps = get_all_fleet_comps()
+    
     if smry.empty or all_comps.empty:
-        st.info("No data loaded. Upload a report to begin.")
-        st.stop()
+        st.info("No data loaded. Upload a report to begin."); st.stop()
 
-    cols = st.columns(5)
-    metrics = [
-        (len(smry), "Vessels", "blue"),
-        (len(all_comps), "Components", "gold"),
-        (int((all_comps["status"] == "OVERDUE").sum()), "Overdue", "red"),
-        (int((all_comps["status"] == "HIGH PRIORITY").sum()), "High Priority", "orange"),
-        (int((all_comps["status"] == "OK").sum()), "OK", "green"),
-    ]
-    for c, (v, l, cl) in zip(cols, metrics):
-        with c:
-            st.markdown(kpi(v, l, cl), unsafe_allow_html=True)
+    tv = len(smry); tc = len(all_comps)
+    tod = int((all_comps['status'] == 'OVERDUE').sum())
+    thp = int((all_comps['status'] == 'HIGH PRIORITY').sum())
+    tok = int((all_comps['status'] == 'OK').sum())
+    
+    k1,k2,k3,k4,k5 = st.columns(5)
+    for col,(val,lbl,clr,dly) in zip([k1,k2,k3,k4,k5],[
+        (tv,"Vessels","blue",0),(tc,"Components","gold",.07),
+        (tod,"Overdue","red",.14),(thp,"High Priority","orange",.21),(tok,"OK","green",.28)]):
+        with col: st.markdown(kpi(val,lbl,clr,dly), unsafe_allow_html=True)
 
-    vessel_f = st.selectbox("Filter Vessel", ["All Fleet"] + sorted(all_comps["vessel_name"].unique().tolist()))
-    status_f = st.selectbox("Filter Status", ["All", "Critical Focus", "Overdue Only", "High Priority Only", "OK Only", "No Data Only"])
-    comp_f = st.selectbox("Filter Component", ["All"] + sorted(all_comps["description"].unique().tolist()))
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(sl("Universal Component Control Grid"), unsafe_allow_html=True)
+
+    f1, f2, f3, f4 = st.columns([1.5, 1.5, 2, 2])
+    with f1:
+        vessel_f = st.selectbox("Filter Vessel Context", ["All Fleet"] + sorted(all_comps['vessel_name'].unique().tolist()), key="mst_v")
+    with f2:
+        cat_f = st.selectbox("Filter Machinery Type", ["All", "Main Engine", "Aux Engines"], key="mst_cat")
+    with f3:
+        st_f = st.selectbox("Filter Component Urgency", ["🔴 Critical Focus (Overdue + High Pri)", "All Statuses", "🔴 Overdue Only", "🟡 High Priority Only", "🟢 OK Only"], key="mst_st")
+    with f4:
+        comp_f = st.selectbox("Search Component Definition", ["All"] + sorted(all_comps['description'].unique().tolist()), key="mst_comp")
 
     filt = all_comps.copy()
-    if vessel_f != "All Fleet":
-        filt = filt[filt["vessel_name"] == vessel_f]
+    if vessel_f != "All Fleet": filt = filt[filt['vessel_name'] == vessel_f]
+    if cat_f == "Main Engine":    filt = filt[filt['category'] == 'MAIN_ENGINE']
+    elif cat_f == "Aux Engines":  filt = filt[filt['category'] == 'AUX_ENGINE']
+    
+    if st_f == "🔴 Critical Focus (Overdue + High Pri)": filt = filt[filt['status'].isin(['OVERDUE', 'HIGH PRIORITY'])]
+    elif st_f == "🔴 Overdue Only":      filt = filt[filt['status'] == 'OVERDUE']
+    elif st_f == "🟡 High Priority Only": filt = filt[filt['status'] == 'HIGH PRIORITY']
+    elif st_f == "🟢 OK Only":           filt = filt[filt['status'] == 'OK']
+        
+    if comp_f != "All": filt = filt[filt['description'] == comp_f]
 
-    if status_f == "Critical Focus":
-        filt = filt[filt["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
-    elif status_f == "Overdue Only":
-        filt = filt[filt["status"] == "OVERDUE"]
-    elif status_f == "High Priority Only":
-        filt = filt[filt["status"] == "HIGH PRIORITY"]
-    elif status_f == "OK Only":
-        filt = filt[filt["status"] == "OK"]
-    elif status_f == "No Data Only":
-        filt = filt[filt["status"] == "NO DATA"]
+    ns = len(filt); no = int((filt['status'] == 'OVERDUE').sum())
+    nh = int((filt['status'] == 'HIGH PRIORITY').sum()); nk = int((filt['status'] == 'OK').sum())
+    st.markdown(filter_count(ns, no, nh, nk), unsafe_allow_html=True)
 
-    if comp_f != "All":
-        filt = filt[filt["description"] == comp_f]
+    if filt.empty:
+        st.markdown('<div class="ac">✓ No records match the current filter matrix</div>', unsafe_allow_html=True)
+    else:
+        render_table(filt, priority=True)
 
-    render_table(filt, priority=True)
+# ── PAGE: VESSEL DETAIL ANALYSIS ─────────────────────────────────────
+elif page == "🚢  Vessel Detail":
+    if not sel_v: st.info("Select a vessel from the sidebar."); st.stop()
+    st.markdown(ph("🚢", sel_v, "Component Analysis"), unsafe_allow_html=True)
 
-elif page == "Vessel Detail":
-    if not vessels or selected_vessel == "—":
-        st.info("Select a vessel from the sidebar.")
-        st.stop()
-    st.markdown(f"<h1>{selected_vessel}</h1>", unsafe_allow_html=True)
-    df = get_components(selected_vessel)
-    oe = get_other_equipment(selected_vessel)
-    if df.empty:
-        st.info("No data for this vessel.")
-        st.stop()
+    df = get_comps(sel_v)
+    oe = get_oe(sel_v)
+    if df.empty: st.info("No data for this vessel."); st.stop()
 
-    cols = st.columns(5)
-    metrics = [
-        (len(df), "Total", "gold"),
-        (int((df["status"] == "OVERDUE").sum()), "Overdue", "red"),
-        (int((df["status"] == "HIGH PRIORITY").sum()), "High Priority", "orange"),
-        (int((df["status"] == "OK").sum()), "OK", "green"),
-        (int((df["status"] == "NO DATA").sum()), "No Data", "blue"),
-    ]
-    for c, (v, l, cl) in zip(cols, metrics):
-        with c:
-            st.markdown(kpi(v, l, cl), unsafe_allow_html=True)
+    n_tot=len(df); n_od=int((df['status']=='OVERDUE').sum())
+    n_hp=int((df['status']=='HIGH PRIORITY').sum()); n_ok=int((df['status']=='OK').sum())
+    n_nd=int((df['status']=='NO DATA').sum())
 
-    hist = get_history(selected_vessel)
+    k1,k2,k3,k4,k5=st.columns(5)
+    for col,(val,lbl,clr,dly) in zip([k1,k2,k3,k4,k5],[
+        (n_tot,"Total","gold",0),(n_od,"Overdue","red",.07),
+        (n_hp,"High Priority","orange",.14),(n_ok,"OK","green",.21),(n_nd,"No Data","blue",.28)]):
+        with col: st.markdown(kpi(val,lbl,clr,dly), unsafe_allow_html=True)
+
+    hist = get_history(sel_v)
     if not hist.empty:
-        last = hist.iloc[0]
-        st.write(f"Latest file: {last['filename']} · Confidence {float(last['parse_confidence']):.2f}")
+        last=hist.iloc[0]
+        mt=f"{int(last['me_total_hrs']):,}" if pd.notna(last['me_total_hrs']) else "—"
+        mm=f"{int(last['me_this_month']):,}" if pd.notna(last['me_this_month']) else "—"
+        st.markdown(f"""
+        <div class="ml">
+          <span>📄 <b>{last['filename']}</b></span>
+          <span>Report: <b>{last['report_date'] or '—'}</b></span>
+          <span>M/E: <b>{mt}</b> total · <b>{mm}</b> this month</span>
+          <span>Uploaded: <b>{str(last['uploaded_at'])[:16]}</b></span>
+        </div>""", unsafe_allow_html=True)
 
-    tabs = st.tabs(["Alerts", "All Components (Report Order)", "Other Equipment"])
+    st.markdown("---")
+    tabs = st.tabs(["⚠️  Alerts","⚙️  Main Engine","🔩  Aux Engines","🛠️  Other Equipment"])
+
     with tabs[0]:
-        alerts = df[df["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
-        render_table(alerts, priority=True)
-    with tabs[1]:
-        render_table(df)  # original DOC order via seq
-    with tabs[2]:
-        if oe.empty:
-            st.info("No other equipment data.")
+        st.markdown(sl("Urgent Interrupt Diagnostics — Attention Required"), unsafe_allow_html=True)
+        alerts = df[df['status'].isin(['OVERDUE','HIGH PRIORITY'])]
+        if alerts.empty:
+            st.markdown('<div class="ac">✓ All machinery components within acceptable operational bounds</div>', unsafe_allow_html=True)
         else:
-            st.dataframe(oe, use_container_width=True, hide_index=True)
+            no=int((alerts['status']=='OVERDUE').sum()); nh=int((alerts['status']=='HIGH PRIORITY').sum())
+            st.markdown(filter_count(len(alerts),no,nh,0), unsafe_allow_html=True)
+            render_table(alerts, priority=True)
 
-elif page == "Upload Report":
-    st.markdown("<h1>Upload Report</h1>", unsafe_allow_html=True)
-    uploaded = st.file_uploader("Upload TEC-004 .doc", type=["doc"], label_visibility="collapsed")
+    with tabs[1]:
+        me = df[df['category']=='MAIN_ENGINE']
+        if me.empty: st.info("No Main Engine data available.")
+        else:
+            st.markdown(sl("Main Engine Telemetry Matrix"), unsafe_allow_html=True)
+            fa,fb = st.columns(2)
+            with fa: sel_mc=st.selectbox("Machinery Element",['All'] + sorted(me['description'].unique().tolist()),key="me_c")
+            with fb: sel_ms=st.selectbox("Machinery Status",['All','🔴 Overdue only','🟡 High Priority +','🟢 OK only'],key="me_s")
+            v=me.copy()
+            if sel_mc!='All': v=v[v['description']==sel_mc]
+            if sel_ms=='🔴 Overdue only': v=v[v['status']=='OVERDUE']
+            elif sel_ms=='🟡 High Priority +': v=v[v['status'].isin(['OVERDUE','HIGH PRIORITY'])]
+            elif sel_ms=='🟢 OK only': v=v[v['status']=='OK']
+            no=int((v['status']=='OVERDUE').sum()); nh=int((v['status']=='HIGH PRIORITY').sum()); nk=int((v['status']=='OK').sum())
+            st.markdown(filter_count(len(v),no,nh,nk), unsafe_allow_html=True)
+            render_table(v, priority=False)
+
+    with tabs[2]:
+        aux = df[df['category']=='AUX_ENGINE']
+        if aux.empty: st.info("No Auxiliary Engine data available.")
+        else:
+            st.markdown(sl("Auxiliary Prime Movers Telemetry Matrix"), unsafe_allow_html=True)
+            fa,fb = st.columns(2)
+            with fa: sel_ae=st.selectbox("Aux Generator Node",['All'] + sorted(aux['engine_label'].unique().tolist()),key="aux_e")
+            with fb: sel_as=st.selectbox("Node Condition",['All','🔴 Overdue only','🟡 High Priority +','🟢 OK only'],key="aux_s")
+            v=aux.copy()
+            if sel_ae!='All': v=v[v['engine_label']==sel_ae]
+            if sel_as=='🔴 Overdue only': v=v[v['status']=='OVERDUE']
+            elif sel_as=='🟡 High Priority +': v=v[v['status'].isin(['OVERDUE','HIGH PRIORITY'])]
+            elif sel_as=='🟢 OK only': v=v[v['status']=='OK']
+            no=int((v['status']=='OVERDUE').sum()); nh=int((v['status']=='HIGH PRIORITY').sum()); nk=int((v['status']=='OK').sum())
+            st.markdown(filter_count(len(v),no,nh,nk), unsafe_allow_html=True)
+            render_table(v, priority=False)
+
+    with tabs[3]:
+        if oe.empty: st.info("No auxiliary plant or extension machinery metrics located.")
+        else:
+            for sec in sorted(oe['section'].unique()):
+                st.markdown(sl(sec), unsafe_allow_html=True)
+                sd=oe[oe['section']==sec][['description','periodicity','last_date','run_hrs']].copy()
+                sd.columns=['Machinery Description','Maintenance Periodicity','Inspection Date','Logged Hours']
+                st.dataframe(sd, use_container_width=True, hide_index=True)
+
+# ── PAGE: REPORT INGESTION MANAGEMENT ────────────────────────────────
+elif page == "📤  Upload Report":
+    st.markdown(ph("📤","Upload Report","TEC-004 Log Processing"), unsafe_allow_html=True)
+
+    col_up, col_info = st.columns([3,2], gap="large")
+    with col_up:
+        uploaded = st.file_uploader("file", type=["doc"], label_visibility="collapsed")
+    with col_info:
+        st.markdown("""
+        <div class="ic">
+          <div class="ic-title">Accepted Specification</div>
+          TEC-004 Running Hours Monthly Log Report<br>
+          Supported Frameworks &nbsp;·&nbsp; <b>Native .doc binary streams only</b><br><br>
+          <div class="ic-title">Automated Extraction Vectors</div>
+          ✦ Vessel Identifier &amp; Structural Report Date<br>
+          ✦ M/E Absolute Combined &amp; Monthly Deltas<br>
+          ✦ Complete Main Engine Structural Wear Sub-matrices<br>
+          ✦ Auxiliary Generating Assemblies (3 Units × up to 7 Cylinders)<br>
+          ✦ Turbocharging Plants, Compressors, &amp; Plant Systems<br>
+          ✦ Fatigue Threshold Computations calculated synchronously
+        </div>""", unsafe_allow_html=True)
+
     if uploaded:
         raw = uploaded.read()
-        file_hash = hashlib.md5(raw).hexdigest()
-        with st.spinner("Converting and parsing..."):
-            docx_bytes = convert_doc_to_docx(raw)
-            parsed = parse_doc_bytes(docx_bytes)
+        fh  = hashlib.md5(raw).hexdigest()
+        
+        # Premium Extraction sequence with Toast notifications
+        st.toast('Received .doc stream. Initializing headless engine...', icon='⚙️')
+        
+        with st.spinner("Executing secure LibreOffice conversion and wide-row extraction logic..."):
+            try:    docx = convert_doc_to_docx(raw)
+            except Exception as e: st.error(f"Headless server file decryption faulted: `{e}`"); st.stop()
+            try:    parsed = parse_doc_bytes(docx)
+            except ValueError as e: st.error(f"Telemetry stream interpretation broke down: `{e}`"); st.stop()
 
-        st.write(f"Vessel: {parsed['vessel_name']}")
-        st.write(f"Report date: {parsed['report_date'] or '—'}")
-        st.write(f"Confidence: {parsed['parse_confidence']:.2f}")
-        st.write(f"Components: {len(parsed['components'])}")
-        if parsed["warnings"]:
-            for w in parsed["warnings"]:
-                st.warning(w)
+        st.toast(f'Extraction Complete. {len(parsed["components"])} components identified.', icon='✅')
 
-        pre = pd.DataFrame(parsed["components"])
-        if not pre.empty:
-            pre["vessel_name"] = parsed["vessel_name"]
-            st.subheader("Preview (Report Order)")
-            render_table(pre)
+        comps  = parsed['components']
+        nc  = len(comps); nod = sum(1 for c in comps if c['status']=='OVERDUE')
+        nhp = sum(1 for c in comps if c['status']=='HIGH PRIORITY'); nok = sum(1 for c in comps if c['status']=='OK')
+        noe = len(parsed['other_equipment'])
 
-        if st.button("Commit to Database"):
-            try:
-                save_parsed(parsed, uploaded.name, file_hash)
-                for fn in [get_vessels, get_components, get_other_equipment, get_history, get_summary, get_all_fleet_components]:
-                    fn.clear()
-                st.success("Saved successfully.")
-            except Exception as e:
-                st.error(str(e))
+        st.markdown(sl("Extracted Telemetry Stream Preview"), unsafe_allow_html=True)
+        c1,c2,c3,c4,c5 = st.columns(5)
+        c1.metric("Asset",            parsed['vessel_name'])
+        c2.metric("Report Window",    parsed['report_date'] or "—")
+        c3.metric("M/E Accumulated",  f"{parsed['me_total_hrs']:,}"  if parsed['me_total_hrs']  else "—")
+        c4.metric("Monthly Increment", f"{parsed['me_this_month']:,}" if parsed['me_this_month'] else "—")
+        c5.metric("Data Channels",    nc)
 
-elif page == "Upload History":
-    st.markdown("<h1>Upload History</h1>", unsafe_allow_html=True)
-    if not vessels or selected_vessel == "—":
-        st.info("Select a vessel from the sidebar.")
-        st.stop()
-    hist = get_history(selected_vessel)
+        st.markdown(f"""
+        <div class="ps-row">
+          <div class="ps red"    style="animation-delay:0s">   <div class="ps-val">{nod}</div><div class="ps-lbl">Overdue</div></div>
+          <div class="ps orange" style="animation-delay:.07s"> <div class="ps-val">{nhp}</div><div class="ps-lbl">High Priority</div></div>
+          <div class="ps green"  style="animation-delay:.14s"> <div class="ps-val">{nok}</div><div class="ps-lbl">OK</div></div>
+          <div class="ps blue"   style="animation-delay:.21s"> <div class="ps-val">{noe}</div><div class="ps-lbl">External Systems</div></div>
+        </div>""", unsafe_allow_html=True)
+
+        for w in parsed['warnings']: st.warning(f"⚠ Extraction Notification: {w}")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(sl("Extracted Telemetry Matrices — Pre-Commit Review"), unsafe_allow_html=True)
+        
+        df_preview = pd.DataFrame(parsed['components']) if parsed['components'] else pd.DataFrame()
+        prev_tabs = st.tabs(["⚙️ Main Engine Matrix", "🔩 Aux Engines Matrix", "🛠️ Other Equipment"])
+        
+        with prev_tabs[0]:
+            if not df_preview.empty:
+                me_prev = df_preview[df_preview['category'] == 'MAIN_ENGINE']
+                if not me_prev.empty: render_table(me_prev, height=400, priority=True)
+                else: st.info("No Main Engine telemetry extracted from this report.")
+            else: st.info("No component data available.")
+
+        with prev_tabs[1]:
+            if not df_preview.empty:
+                aux_prev = df_preview[df_preview['category'] == 'AUX_ENGINE']
+                if not aux_prev.empty: render_table(aux_prev, height=400, priority=True)
+                else: st.info("No Auxiliary Engine telemetry extracted from this report.")
+            else: st.info("No component data available.")
+
+        with prev_tabs[2]:
+            if parsed['other_equipment']:
+                oe_prev = pd.DataFrame(parsed['other_equipment'])
+                oe_prev.columns = ['Machinery Category', 'Description', 'Periodicity', 'Last Inspected', 'Logged Hours']
+                st.dataframe(oe_prev, use_container_width=True, hide_index=True, height=400)
+            else: st.info("No Auxiliary Plant or Other Equipment data extracted from this report.")
+
+        st.markdown("---")
+        col_btn,_ = st.columns([1,4])
+        with col_btn:
+            if st.button("✅  COMMIT STREAM TO DATABASE", use_container_width=True):
+                save_parsed(parsed, uploaded.name, fh)
+                for fn in [get_vessels, get_comps, get_oe, get_summary, get_history, get_all_fleet_comps]: fn.clear()
+                st.markdown(f"""
+                <div class="sb"><span style="font-size:1.4rem">✓</span>
+                  <span>System Telemetry Confirmed — <b>{parsed['vessel_name']}</b> committed to database structure ({nc} lines mapped).</span>
+                </div>""", unsafe_allow_html=True)
+                st.balloons()
+
+# ── PAGE: AUDIT TRAIL LOG SYSTEM ─────────────────────────────────────
+elif page == "📋  Upload History":
+    st.markdown(ph("📋","Upload History","System Audit Trails"), unsafe_allow_html=True)
+    if not sel_v: st.info("Select a tracking asset from the sidebar selector."); st.stop()
+    st.markdown(sl(f"Chronological Logs: {sel_v}"), unsafe_allow_html=True)
+    hist = get_history(sel_v)
     if hist.empty:
-        st.info("No history available.")
+        st.info("No transaction trail entries recorded for this hull identification.")
     else:
-        st.dataframe(hist, use_container_width=True, hide_index=True)
+        d=hist.copy()
+        d.columns=['Logged Filename','Extracted Target Date','M/E Combined Total','M/E Monthly Increment','Transaction Timestamp']
+        d['M/E Combined Total']  = d['M/E Combined Total'].apply(lambda x:f"{int(x):,}" if pd.notna(x) else '—')
+        d['M/E Monthly Increment'] = d['M/E Monthly Increment'].apply(lambda x:f"{int(x):,}" if pd.notna(x) else '—')
+        st.dataframe(d, use_container_width=True, hide_index=True)
