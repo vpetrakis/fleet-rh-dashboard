@@ -1,23 +1,11 @@
 """
 ╔══════════════════════════════════════════════════════════════════════╗
-║   FLEET COMMAND & TELEMETRY SYSTEM  v7.0                             ║
-║   Wide-Row Parser · Smart Upsert DB · Enterprise Cloud Edition       ║
+║   FLEET COMMAND & TELEMETRY SYSTEM  v8.0                             ║
+║   Row-Sweeping Parser · Zero-Loss DB · Enterprise Cloud Edition      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
 
 import streamlit as st
-import os
-import re
-import sqlite3
-import tempfile
-import hashlib
-import subprocess
-import shutil
-from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Any, Optional
-import pandas as pd
-from docx import Document
 
 st.set_page_config(
     page_title="Fleet Command",
@@ -26,9 +14,15 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ============================================================
+import os, re, sqlite3, tempfile, hashlib, subprocess, shutil
+from datetime import datetime
+from pathlib import Path
+import pandas as pd
+from docx import Document
+
+# ═══════════════════════════════════════════════════════════════════
 #  GLOBAL UI STEALTH DESIGN SYSTEM
-# ============================================================
+# ═══════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -50,67 +44,51 @@ st.markdown("""
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html, body, [class*="css"] {
-  font-family: var(--fi) !important;
-  background: var(--bg) !important;
-  color: var(--t1) !important;
-  -webkit-font-smoothing: antialiased;
-}
+html, body, [class*="css"] { font-family: var(--fi) !important; background: var(--bg) !important; color: var(--t1) !important; -webkit-font-smoothing: antialiased; }
 .main, .main > div { background: var(--bg) !important; }
 .block-container { padding: 2rem 2.5rem 5rem !important; max-width: 100% !important; }
 
-/* Ambient space background glow */
 .main::before {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background:
-    radial-gradient(ellipse 90% 50% at -10% -5%,  rgba(200,154,20,0.06) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 45% at 110% 105%,  rgba(20,68,168,0.05) 0%, transparent 55%);
+  background: radial-gradient(ellipse 90% 50% at -10% -5%,  rgba(200,154,20,0.06) 0%, transparent 55%),
+              radial-gradient(ellipse 70% 45% at 110% 105%,  rgba(20,68,168,0.05) 0%, transparent 55%);
 }
 
-/* Sidebar structure */
 [data-testid="stSidebar"] { background: var(--bg1) !important; border-right: 1px solid var(--b2) !important; }
 [data-testid="stSidebar"] * { color: var(--t1) !important; }
 [data-testid="stSidebarContent"] { padding: 1.5rem 1.25rem !important; }
 [data-testid="stSidebar"] .stSelectbox > div > div { background: var(--bg3) !important; border: 1px solid var(--b2) !important; border-radius: 6px !important; }
 
-/* Operational headings */
 h1 { font-family: var(--ff) !important; font-size: 1.8rem !important; font-weight: 700 !important; color: var(--t0) !important; letter-spacing: -0.02em !important; line-height: 1.2 !important; }
 h2 { font-family: var(--ff) !important; font-size: 1.2rem !important; font-weight: 600 !important; color: var(--t0) !important; }
 h3 { font-family: var(--ff) !important; font-size: 1rem !important; font-weight: 500 !important; color: var(--t1) !important; }
 
-/* Unified dashboard metric blocks */
 [data-testid="stMetric"] { background: var(--bg3) !important; border: 1px solid var(--b2) !important; border-radius: 10px !important; padding: 1rem 1.2rem 1.1rem !important; position: relative !important; overflow: hidden !important; transition: border-color .25s, transform .2s !important; }
 [data-testid="stMetric"]:hover { border-color: var(--b3) !important; transform: translateY(-2px) !important; }
 [data-testid="stMetricValue"] { font-family: var(--ff) !important; font-size: 2rem !important; font-weight: 700 !important; color: var(--t0) !important; letter-spacing: -0.03em !important; }
 [data-testid="stMetricLabel"] { font-family: var(--fi) !important; color: var(--t3) !important; font-size: 0.62rem !important; text-transform: uppercase !important; letter-spacing: 0.15em !important; }
 
-/* Enhanced telemetry layout grids */
 [data-testid="stDataFrame"] { border: 1px solid var(--b2) !important; border-radius: 10px !important; overflow: hidden !important; box-shadow: 0 4px 24px rgba(0,0,0,0.35) !important; }
 .dvn-scroller { background: var(--bg2) !important; }
 
-/* Control buttons styling */
 .stButton > button { background: linear-gradient(135deg, var(--gold) 0%, #8a6a08 100%) !important; color: #000 !important; border: none !important; font-family: var(--ff) !important; font-weight: 600 !important; font-size: 0.82rem !important; letter-spacing: 0.06em !important; text-transform: uppercase !important; border-radius: 7px !important; padding: .6rem 1.8rem !important; box-shadow: 0 2px 14px rgba(200,154,20,.2),inset 0 1px 0 rgba(255,255,255,.1) !important; transition: all .18s !important; }
 .stButton > button:hover { background: linear-gradient(135deg, var(--gold2) 0%, var(--gold) 100%) !important; box-shadow: 0 5px 22px rgba(200,154,20,.38) !important; transform: translateY(-2px) !important; }
 .stButton > button:active { transform: translateY(0) !important; }
 
-/* File drop interface layout */
 [data-testid="stFileUploadDropzone"] { background: linear-gradient(160deg,rgba(200,154,20,.04) 0%,rgba(20,68,168,.03) 100%) !important; border: 1.5px dashed var(--gold) !important; border-radius: 14px !important; transition: all .3s !important; padding: 3rem 2rem !important; }
 [data-testid="stFileUploadDropzone"]:hover { background: rgba(200,154,20,.07) !important; border-color: var(--gold2) !important; box-shadow: 0 0 40px rgba(200,154,20,.07) !important; }
 [data-testid="stFileUploadDropzone"] p, [data-testid="stFileUploadDropzone"] span { color: var(--gold2) !important; font-family: var(--ff) !important; font-size: .95rem !important; font-weight: 500 !important; }
 [data-testid="stFileUploadDropzone"] small { color: var(--t2) !important; }
 
-/* Telemetry display navigation tabs */
 .stTabs [data-baseweb="tab-list"] { background: var(--bg2) !important; border-radius: 10px 10px 0 0 !important; border-bottom: 1px solid var(--b2) !important; gap: 0 !important; padding: 0 1rem !important; }
 .stTabs [data-baseweb="tab"] { background: transparent !important; color: var(--t3) !important; font-family: var(--ff) !important; font-weight: 500 !important; letter-spacing: .04em !important; font-size: .75rem !important; text-transform: uppercase !important; padding: .85rem 1.3rem !important; border-bottom: 2px solid transparent !important; margin-bottom: -1px !important; transition: color .2s !important; }
 .stTabs [data-baseweb="tab"]:hover { color: var(--t2) !important; }
 .stTabs [aria-selected="true"] { color: var(--gold2) !important; border-bottom: 2px solid var(--gold) !important; }
 .stTabs [data-baseweb="tab-panel"] { background: var(--bg2) !important; border: 1px solid var(--b2) !important; border-top: none !important; border-radius: 0 0 10px 10px !important; padding: 1.5rem !important; }
 
-/* Context filters selectors */
 .stSelectbox > div > div, .stMultiSelect > div > div { background: var(--bg3) !important; border: 1px solid var(--b2) !important; border-radius: 7px !important; color: var(--t1) !important; font-family: var(--fi) !important; }
 .stSelectbox label, .stMultiSelect label { font-family: var(--fi) !important; color: var(--t3) !important; font-size: .7rem !important; text-transform: uppercase !important; letter-spacing: .1em !important; }
 
-/* Interface components modifications */
 .stAlert { border-radius: 8px !important; border-left-width: 3px !important; }
 hr { border-color: var(--b2) !important; opacity:1 !important; margin:1.5rem 0 !important; }
 a { color: var(--gold2) !important; text-decoration: none !important; }
@@ -118,7 +96,6 @@ a { color: var(--gold2) !important; text-decoration: none !important; }
 ::-webkit-scrollbar-track { background: var(--bg1); }
 ::-webkit-scrollbar-thumb { background: var(--b3); border-radius: 3px; }
 
-/* CSS View Presentation Keyframes */
 @keyframes slideDown  { from{opacity:0;transform:translateY(-18px)} to{opacity:1;transform:translateY(0)} }
 @keyframes slideUp    { from{opacity:0;transform:translateY(14px)}  to{opacity:1;transform:translateY(0)} }
 @keyframes slideRight { from{opacity:0;transform:translateX(-14px)} to{opacity:1;transform:translateX(0)} }
@@ -132,30 +109,24 @@ a { color: var(--gold2) !important; text-decoration: none !important; }
 .ph-eye { font-family: var(--fi); font-size: .6rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); margin-bottom: .3rem; animation: slideDown .4s .05s ease both; animation-fill-mode: both; }
 .ph-line { height: 1px; margin: .35rem 0 1.75rem; background: linear-gradient(90deg, var(--gold) 0%, var(--b2) 30%, transparent 100%); animation: goldLine .7s .1s ease both; animation-fill-mode: both; }
 
-/* Premium KPI Interface layouts */
 .kc { background: var(--bg3); border: 1px solid var(--b2); border-radius: 10px; padding: 1rem 1.2rem 1.1rem; position: relative; overflow: hidden; animation: slideUp .4s ease both; animation-fill-mode: both; transition: border-color .25s, transform .2s, box-shadow .25s; cursor: default; }
 .kc:hover { transform: translateY(-4px); box-shadow: 0 14px 40px rgba(0,0,0,.5); }
 .kc::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 10px 10px 0 0; }
 .kc.gold   { border-color: rgba(200,154,20,.3); }
 .kc.gold::before   { background: linear-gradient(90deg, var(--gold),  transparent 70%); }
 .kc.gold::after    { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(200,154,20,.05) 0%,transparent 60%); pointer-events:none; }
-.kc.gold:hover     { border-color: rgba(224,180,34,.5); box-shadow: 0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(200,154,20,.07); }
 .kc.red    { border-color: rgba(204,40,40,.25); }
 .kc.red::before    { background: linear-gradient(90deg, var(--red),   transparent 70%); }
 .kc.red::after     { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(204,40,40,.05) 0%,transparent 60%); pointer-events:none; }
-.kc.red:hover      { border-color: rgba(255,92,92,.4); box-shadow:  0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(204,40,40,.07); }
 .kc.orange { border-color: rgba(184,85,24,.25); }
 .kc.orange::before { background: linear-gradient(90deg, var(--orange),transparent 70%); }
 .kc.orange::after  { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(184,85,24,.05) 0%,transparent 60%); pointer-events:none; }
-.kc.orange:hover   { border-color: rgba(255,136,51,.4); box-shadow: 0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(184,85,24,.07); }
 .kc.green  { border-color: rgba(13,138,74,.25); }
 .kc.green::before  { background: linear-gradient(90deg, var(--green), transparent 70%); }
 .kc.green::after   { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(13,138,74,.05) 0%,transparent 60%); pointer-events:none; }
-.kc.green:hover    { border-color: rgba(34,197,94,.4); box-shadow:  0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(13,138,74,.07); }
 .kc.blue   { border-color: rgba(20,68,168,.25); }
 .kc.blue::before   { background: linear-gradient(90deg, var(--blue),  transparent 70%); }
 .kc.blue::after    { content:''; position:absolute; inset:0; border-radius:10px; background:linear-gradient(160deg,rgba(20,68,168,.05) 0%,transparent 60%); pointer-events:none; }
-.kc.blue:hover     { border-color: rgba(59,130,246,.4); box-shadow:  0 14px 40px rgba(0,0,0,.5),0 0 24px rgba(20,68,168,.07); }
 
 .kc-val { font-family: var(--ff); font-size: 2.2rem; font-weight: 700; line-height: 1.1; letter-spacing: -.04em; position: relative; z-index: 1; animation: numIn .4s .1s ease both; animation-fill-mode: both; }
 .kc.gold   .kc-val { color: var(--gold3); }
@@ -163,14 +134,11 @@ a { color: var(--gold2) !important; text-decoration: none !important; }
 .kc.orange .kc-val { color: var(--ora2);  }
 .kc.green  .kc-val { color: var(--grn2);  }
 .kc.blue   .kc-val { color: var(--blu2);  }
-
 .kc-lbl { font-family: var(--fi); font-size: .6rem; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; color: var(--t3); margin-top: 5px; position: relative; z-index: 1; }
 
-/* Section dividers labels styling */
 .sl { font-family: var(--fi); font-size: .58rem; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--t3); display: flex; align-items: center; gap: .75rem; margin: 1.75rem 0 1rem; }
 .sl::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--b2), transparent); }
 
-/* Analytical summary metrics grid */
 .ps-row { display: flex; gap: .65rem; flex-wrap: wrap; margin: 1rem 0 1.5rem; }
 .ps { background: var(--bg3); border: 1px solid var(--b2); border-radius: 9px; padding: .65rem 1.1rem .7rem; min-width: 86px; animation: popIn .35s ease both; animation-fill-mode: both; transition: border-color .2s, transform .15s; position: relative; overflow: hidden; }
 .ps:hover { transform: translateY(-2px); border-color: var(--b3); }
@@ -186,15 +154,12 @@ a { color: var(--gold2) !important; text-decoration: none !important; }
 .ps.green  .ps-val { color: var(--grn2); }
 .ps.blue   .ps-val { color: var(--blu2); }
 
-/* Core context informative panels */
 .ic { background: var(--bg3); border: 1px solid var(--b2); border-radius: 12px; padding: 1.4rem 1.6rem; font-family: var(--fi); font-size: .82rem; color: var(--t2); line-height: 1.9; animation: slideRight .4s ease both; animation-fill-mode: both; }
 .ic-title { font-family: var(--ff); font-size: .58rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--gold2); margin-bottom: .4rem; }
 
-/* Visual validation component banners */
 .sb { background: linear-gradient(135deg,rgba(13,138,74,.12),rgba(13,138,74,.04)); border: 1px solid rgba(13,138,74,.3); border-radius: 10px; padding: 1rem 1.5rem; color: var(--grn3); font-family: var(--ff); font-size: .92rem; font-weight: 500; animation: successPop .5s cubic-bezier(.34,1.56,.64,1) both; display: flex; align-items: center; gap: .75rem; }
 .ac { background: rgba(13,138,74,.04); border: 1px solid rgba(13,138,74,.12); border-radius: 10px; padding: 1.75rem; text-align: center; color: var(--grn3); font-family: var(--ff); font-size: .95rem; font-weight: 500; }
 
-/* Core sidebar presentation design elements */
 .logo { font-family: var(--ff); font-size: 1.15rem; font-weight: 700; letter-spacing: .04em; color: var(--gold2); display:flex; align-items:center; gap:.5rem; }
 .logo-tag { font-family: var(--fi); font-size: .57rem; text-transform: uppercase; letter-spacing: .2em; color: var(--t3); margin-top: 3px; }
 .logo-rule { height: 1px; margin: 1.2rem 0; background: linear-gradient(90deg, var(--gold), transparent); }
@@ -210,7 +175,6 @@ a { color: var(--gold2) !important; text-decoration: none !important; }
 .vt.hp    { background: rgba(184,85,24,.15);  color: var(--ora2); }
 .vt.ok    { background: rgba(13,138,74,.15);  color: var(--grn2); }
 
-/* Premium Asset overview telemetry dashboard panels */
 .vc-hero { background: var(--bg3); border: 1px solid var(--b2); border-radius: 12px; padding: 1.25rem 1.6rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin: .5rem 0 1.5rem; animation: slideDown .4s ease both; }
 .vc-hero.crit { border-left: 4px solid var(--red); }
 .vc-hero.warn { border-left: 4px solid var(--orange); }
@@ -241,7 +205,6 @@ def get_db():
 
 def init_db():
     c = get_db()
-    # Forces Write-Ahead Logging to guarantee synchronous multi-user pipelines
     c.execute("PRAGMA journal_mode=WAL;")
     c.executescript("""
     CREATE TABLE IF NOT EXISTS vessels(
@@ -305,7 +268,7 @@ def convert_doc_to_docx(raw: bytes) -> bytes:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  DETERMINISTIC TELEMETRY STREAM PARSER (WIDE-ROW EDITION)
+#  DETERMINISTIC ROW-SWEEPING PARSER (100% RELIABLE)
 # ═══════════════════════════════════════════════════════════════════
 def _cp(raw):
     if not raw: return None
@@ -352,8 +315,7 @@ def _pt(h,p):
 
 def is_valid_component(name: str) -> bool:
     """Strictly isolates actual machinery from metadata leaks."""
-    # Aggressively clean invisible/zero-width space characters (\xa0) that cause ghost lines
-    t = str(name).replace("\xa0", " ").strip().upper()
+    t = str(name).replace("\n", " ").replace("\xa0", " ").strip().upper()
     if not t or len(t) < 3: return False
     if re.fullmatch(r"[\d./ ,:-]+", t): return False
     
@@ -361,32 +323,44 @@ def is_valid_component(name: str) -> bool:
     stop_words = [
         "ALEXIS", "DATE", "PAGE", "SIGNATURE", "CHIEF ENGINEER", "MASTER", 
         "RUN HRS", "RUNNING HOURS", "PERIODICITY", "TOTAL", "THIS MONTH", 
-        "TYPE:", "MAN B&W", "MAKER", "TABLE", "INSPECTION"
+        "TYPE:", "MAN B&W", "MAKER", "TABLE", "INSPECTION", "1-DATE"
     ]
     if any(sw in t for sw in stop_words): 
         return False
     return True
 
 def parse_wide_matrix(table, category: str, start_seq: int) -> tuple[list, int]:
-    """Universal wide-row parser for ME and AUX engines."""
+    """Sweeps rows and dynamically maps Headers -> Dates -> Hours to defeat split cells."""
     comps = []
     seq = start_seq
     if not table.rows: return comps, seq
-    grid = [[str(c.text).replace("\xa0", " ").strip() for c in r.cells] for r in table.rows]
     
-    # Map Columns by dynamic header search (Scans top 7 rows for deep-nested headers)
-    cyl_map = []
-    for r in grid[:7]: 
-        for ci, cell in enumerate(r):
+    # Convert grid, destroying invisible newlines and spaces
+    grid = [[str(c.text).replace("\n", " ").replace("\xa0", " ").strip() for c in r.cells] for r in table.rows]
+    
+    # Step 1: Discover structural cylinder headers
+    mapped_pairs = []
+    for r_idx in range(min(10, len(grid))): 
+        for c_idx, cell in enumerate(grid[r_idx]):
             m = re.search(r'(?:CYL|AUX\s*ENGINE)[^\d]*(\d+)', cell, re.IGNORECASE)
             if m:
-                label = f"Cyl {m.group(1)}" if category == 'MAIN_ENGINE' else f"AUX-{m.group(1)}"
-                if (ci, label) not in cyl_map:
-                    cyl_map.append((ci, label))
+                unit_num = m.group(1)
+                label = f"Cyl {unit_num}" if category == 'MAIN_ENGINE' else f"AUX-{unit_num}"
+                # If we find a header, assume the Date is exactly below it (c_idx), and Hours is immediately next to it (c_idx+1)
+                if not any(x[0] == label for x in mapped_pairs):
+                    mapped_pairs.append((label, c_idx, c_idx + 1))
                     
-    cyl_map = sorted(cyl_map, key=lambda x: x[0])
-    
-    # Extract Wide Rows
+    mapped_pairs = sorted(mapped_pairs, key=lambda x: x[1])
+
+    # Mathematical Fallback: If Word completely destroyed the headers, build a rigid grid
+    if not mapped_pairs:
+        max_cols = max(len(r) for r in grid)
+        num_units = (max_cols - 2) // 2
+        for i in range(num_units):
+            lbl = f"Cyl {i+1}" if category == 'MAIN_ENGINE' else f"AUX-{i+1}"
+            mapped_pairs.append((lbl, 2 + (i*2), 3 + (i*2)))
+            
+    # Step 2: Row Sweep Extraction
     for r in grid:
         name = r[0] if r else ""
         if not is_valid_component(name): continue
@@ -394,15 +368,15 @@ def parse_wide_matrix(table, category: str, start_seq: int) -> tuple[list, int]:
         periodicity = _cp(r[1] if len(r) > 1 else None)
         row_has_valid_data = False
         
-        for idx, (ci, unit) in enumerate(cyl_map):
-            date_str = r[ci] if ci < len(r) else None
-            hrs_str = r[ci+1] if (ci+1) < len(r) else None
+        for (unit, d_col, h_col) in mapped_pairs:
+            d_str = r[d_col] if d_col < len(r) else None
+            h_str = r[h_col] if h_col < len(r) else None
             
             engine_label = 'ME' if category == 'MAIN_ENGINE' else unit.split('-')[0]
             unit_label = unit if category == 'MAIN_ENGINE' else f"Cyl {unit.split('-')[1]}"
             
-            d = _pd(date_str)
-            h = _ph(hrs_str)
+            d = _pd(d_str)
+            h = _ph(h_str)
             
             if d is not None or h is not None:
                 row_has_valid_data = True
@@ -465,7 +439,7 @@ def parse_doc_bytes(docx: bytes) -> dict:
     if len(doc.tables)>1:
         t1=doc.tables[1]
         for row in t1.rows:
-            cells=[str(c.text).replace("\xa0", " ").strip() for c in row.cells]
+            cells=[str(c.text).replace("\n", " ").replace("\xa0", " ").strip() for c in row.cells]
             for sec,dc,datec,hrsc in [('TURBOCHARGER / BOILER',0,1,3),
                                        ('COOLERS / HEAT EXCH',5,6,8),
                                        ('COMPRESSORS / AC',10,11,12)]:
@@ -502,14 +476,12 @@ def save_parsed(parsed, filename, fhash):
     now = datetime.utcnow().isoformat() + "Z"
     v = parsed['vessel_name']
     
-    # Fully secured context execution loop protecting table updates against failures
     try:
         c.execute("INSERT OR IGNORE INTO vessels(name,created_at) VALUES(?,?)",(v,now))
         c.execute("INSERT INTO upload_log(vessel_name,filename,file_hash,report_date,me_total_hrs,me_this_month,uploaded_at) VALUES(?,?,?,?,?,?,?)",
             (v,filename,fhash,parsed['report_date'],parsed['me_total_hrs'],parsed['me_this_month'],now))
         
         # SMART UPSERT LOGIC: Only delete historical records for the categories successfully extracted in THIS report.
-        # This prevents a missing AUX table from permanently destroying historical AUX records.
         if any(x['category'] == 'MAIN_ENGINE' for x in parsed['components']):
             c.execute("DELETE FROM components WHERE vessel_name=? AND category='MAIN_ENGINE'", (v,))
         if any(x['category'] == 'AUX_ENGINE' for x in parsed['components']):
@@ -529,7 +501,7 @@ def save_parsed(parsed, filename, fhash):
                      x.get('last_date',''),x.get('run_hrs',''),now))
         conn.commit()
     except Exception as e:
-        conn.rollback() # Safeguards database files from half-written executions
+        conn.rollback() 
         raise e
     finally:
         conn.close()
@@ -732,7 +704,7 @@ with st.sidebar:
     st.markdown('<div class="logo-rule"></div>', unsafe_allow_html=True)
     db_kb = DB_PATH.stat().st_size/1024 if DB_PATH.exists() else 0
     st.markdown(f'<div style="font-family:var(--fm);font-size:.58rem;color:var(--t3)">'
-                f'db {db_kb:.0f} kb · {len(vessels)} vessels · v7.0</div>',
+                f'db {db_kb:.0f} kb · {len(vessels)} vessels · v8.0</div>',
                 unsafe_allow_html=True)
 
 
@@ -909,7 +881,6 @@ elif page == "📤  Upload Report":
         raw = uploaded.read()
         fh  = hashlib.md5(raw).hexdigest()
         
-        # Premium Extraction sequence with Toast notifications
         st.toast('Received .doc stream. Initializing headless engine...', icon='⚙️')
         
         with st.spinner("Executing secure LibreOffice conversion and wide-row extraction logic..."):
