@@ -946,93 +946,169 @@ if page == "🗺️  Fleet Overview":
         render_table(filt, height=min(900, 38 * (ns + 1) + 4), priority=True)
 
 # ── PAGE: VESSEL DETAIL ANALYSIS ─────────────────────────────────────
+# ── PAGE: VESSEL DETAIL ANALYSIS ─────────────────────────────────────
 elif page == "🚢  Vessel Detail":
-    if not sel_v: st.info("Select a vessel from the sidebar."); st.stop()
+    if not sel_v:
+        st.info("Select a vessel from the sidebar.")
+        st.stop()
+
     st.markdown(ph("🚢", sel_v, "Component Analysis"), unsafe_allow_html=True)
 
     df = get_comps(sel_v)
     oe = get_oe(sel_v)
-    if df.empty: st.info("No data for this vessel."); st.stop()
 
-    n_tot=len(df); n_od=int((df['status']=='OVERDUE').sum())
-    n_hp=int((df['status']=='HIGH PRIORITY').sum()); n_ok=int((df['status']=='OK').sum())
-    n_nd=int((df['status']=='NO DATA').sum())
+    if df.empty:
+        st.info("No data for this vessel.")
+        st.stop()
 
-    k1,k2,k3,k4,k5=st.columns(5)
-    for col,(val,lbl,clr,dly) in zip([k1,k2,k3,k4,k5],[
-        (n_tot,"Total","gold",0),(n_od,"Overdue","red",.07),
-        (n_hp,"High Priority","orange",.14),(n_ok,"OK","green",.21),(n_nd,"No Data","blue",.28)]):
-        with col: st.markdown(kpi(val,lbl,clr,dly), unsafe_allow_html=True)
+    # Topline status counts
+    n_tot = len(df)
+    n_od  = int((df["status"] == "OVERDUE").sum())
+    n_hp  = int((df["status"] == "HIGH PRIORITY").sum())
+    n_ok  = int((df["status"] == "OK").sum())
+    n_nd  = int((df["status"] == "NO DATA").sum())
 
+    k1, k2, k3, k4, k5 = st.columns(5)
+    for col, (val, lbl, clr, dly) in zip(
+        [k1, k2, k3, k4, k5],
+        [
+            (n_tot, "Total",        "gold",   0.00),
+            (n_od,  "Overdue",      "red",    0.07),
+            (n_hp,  "High Priority","orange", 0.14),
+            (n_ok,  "OK",           "green",  0.21),
+            (n_nd,  "No Data",      "blue",   0.28),
+        ],
+    ):
+        with col:
+            st.markdown(kpi(val, lbl, clr, dly), unsafe_allow_html=True)
+
+    # Last upload meta
     hist = get_history(sel_v)
     if not hist.empty:
-        last=hist.iloc[0]
-        mt=f"{int(last['me_total_hrs']):,}" if pd.notna(last['me_total_hrs']) else "—"
-        mm=f"{int(last['me_this_month']):,}" if pd.notna(last['me_this_month']) else "—"
-        st.markdown(f"""
-        <div class="ml">
-          <span>📄 <b>{last['filename']}</b></span>
-          <span>Report: <b>{last['report_date'] or '—'}</b></span>
-          <span>M/E: <b>{mt}</b> total · <b>{mm}</b> this month</span>
-          <span>Uploaded: <b>{str(last['uploaded_at'])[:16]}</b></span>
-        </div>""", unsafe_allow_html=True)
+        last = hist.iloc[0]
+        mt = f"{int(last['me_total_hrs']):,}"   if pd.notna(last["me_total_hrs"])   else "—"
+        mm = f"{int(last['me_this_month']):,}" if pd.notna(last["me_this_month"]) else "—"
+        st.markdown(
+            f"""
+            <div class="ml">
+              <span>📄 <b>{last['filename']}</b></span>
+              <span>Report: <b>{last['report_date'] or '—'}</b></span>
+              <span>M/E: <b>{mt}</b> total · <b>{mm}</b> this month</span>
+              <span>Uploaded: <b>{str(last['uploaded_at'])[:16]}</b></span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
-    tabs = st.tabs(["⚠️  Alerts","⚙️  Main Engine","🔩  Aux Engines","🛠️  Other Equipment"])
+    tabs = st.tabs(["⚠️  Alerts", "⚙️  Main Engine", "🔩  Aux Engines", "🛠️  Other Equipment"])
 
+    # Alerts tab
     with tabs[0]:
         st.markdown(sl("Urgent Interrupt Diagnostics — Attention Required"), unsafe_allow_html=True)
-        alerts = df[df['status'].isin(['OVERDUE','HIGH PRIORITY'])]
+        alerts = df[df["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
         if alerts.empty:
-            st.markdown('<div class="ac">✓ All machinery components within acceptable operational bounds</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="ac">✓ All machinery components within acceptable operational bounds</div>',
+                unsafe_allow_html=True,
+            )
         else:
-            no=int((alerts['status']=='OVERDUE').sum()); nh=int((alerts['status']=='HIGH PRIORITY').sum())
-            st.markdown(filter_count(len(alerts),no,nh,0), unsafe_allow_html=True)
+            no = int((alerts["status"] == "OVERDUE").sum())
+            nh = int((alerts["status"] == "HIGH PRIORITY").sum())
+            st.markdown(filter_count(len(alerts), no, nh, 0), unsafe_allow_html=True)
             render_table(alerts, priority=True)
 
+    # Main Engine tab
     with tabs[1]:
-        me = df[df['category']=='MAIN_ENGINE']
-        if me.empty: st.info("No Main Engine data available.")
+        me = df[df["category"] == "MAIN_ENGINE"]
+        if me.empty:
+            st.info("No Main Engine data available.")
         else:
             st.markdown(sl("Main Engine Telemetry Matrix"), unsafe_allow_html=True)
-            fa,fb = st.columns(2)
-            with fa: sel_mc=st.selectbox("Machinery Element",['All'] + sorted(me['description'].unique().tolist()),key="me_c")
-            with fb: sel_ms=st.selectbox("Machinery Status",['All','🔴 Overdue only','🟡 High Priority +','🟢 OK only'],key="me_s")
-            v=me.copy()
-            if sel_mc!='All': v=v[v['description']==sel_mc]
-            if sel_ms=='🔴 Overdue only': v=v[v['status']=='OVERDUE']
-            elif sel_ms=='🟡 High Priority +': v=v[v['status'].isin(['OVERDUE','HIGH PRIORITY'])]
-            elif sel_ms=='🟢 OK only': v=v[v['status']=='OK']
-            no=int((v['status']=='OVERDUE').sum()); nh=int((v['status']=='HIGH PRIORITY').sum()); nk=int((v['status']=='OK').sum())
-            st.markdown(filter_count(len(v),no,nh,nk), unsafe_allow_html=True)
+            fa, fb = st.columns(2)
+            with fa:
+                sel_mc = st.selectbox(
+                    "Machinery Element",
+                    ["All"] + sorted(me["description"].unique().tolist()),
+                    key="me_c",
+                )
+            with fb:
+                sel_ms = st.selectbox(
+                    "Machinery Status",
+                    ["All", "🔴 Overdue only", "🟡 High Priority +", "🟢 OK only"],
+                    key="me_s",
+                )
+
+            v = me.copy()
+            if sel_mc != "All":
+                v = v[v["description"] == sel_mc]
+            if sel_ms == "🔴 Overdue only":
+                v = v[v["status"] == "OVERDUE"]
+            elif sel_ms == "🟡 High Priority +":
+                v = v[v["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
+            elif sel_ms == "🟢 OK only":
+                v = v[v["status"] == "OK"]
+
+            no = int((v["status"] == "OVERDUE").sum())
+            nh = int((v["status"] == "HIGH PRIORITY").sum())
+            nk = int((v["status"] == "OK").sum())
+            st.markdown(filter_count(len(v), no, nh, nk), unsafe_allow_html=True)
             render_table(v, priority=False)
 
+    # Aux Engines tab
     with tabs[2]:
-        aux = df[df['category']=='AUX_ENGINE']
-        if aux.empty: st.info("No Auxiliary Engine data available.")
+        aux = df[df["category"] == "AUX_ENGINE"]
+        if aux.empty:
+            st.info("No Auxiliary Engine data available.")
         else:
             st.markdown(sl("Auxiliary Prime Movers Telemetry Matrix"), unsafe_allow_html=True)
-            fa,fb = st.columns(2)
-            with fa: sel_ae=st.selectbox("Aux Generator Node",['All'] + sorted(aux['engine_label'].unique().tolist()),key="aux_e")
-            with fb: sel_as=st.selectbox("Node Condition",['All','🔴 Overdue only','🟡 High Priority +','🟢 OK only'],key="aux_s")
-            v=aux.copy()
-            if sel_ae!='All': v=v[v['engine_label']==sel_ae]
-            if sel_as=='🔴 Overdue only': v=v[v['status']=='OVERDUE']
-            elif sel_as=='🟡 High Priority +': v=v[v['status'].isin(['OVERDUE','HIGH PRIORITY'])]
-            elif sel_as=='🟢 OK only': v=v[v['status']=='OK']
-            no=int((v['status']=='OVERDUE').sum()); nh=int((v['status']=='HIGH PRIORITY').sum()); nk=int((v['status']=='OK').sum())
-            st.markdown(filter_count(len(v),no,nh,nk), unsafe_allow_html=True)
+            fa, fb = st.columns(2)
+            with fa:
+                sel_ae = st.selectbox(
+                    "Aux Generator Node",
+                    ["All"] + sorted(aux["engine_label"].unique().tolist()),
+                    key="aux_e",
+                )
+            with fb:
+                sel_as = st.selectbox(
+                    "Node Condition",
+                    ["All", "🔴 Overdue only", "🟡 High Priority +", "🟢 OK only"],
+                    key="aux_s",
+                )
+
+            v = aux.copy()
+            if sel_ae != "All":
+                v = v[v["engine_label"] == sel_ae]
+            if sel_as == "🔴 Overdue only":
+                v = v[v["status"] == "OVERDUE"]
+            elif sel_as == "🟡 High Priority +":
+                v = v[v["status"].isin(["OVERDUE", "HIGH PRIORITY"])]
+            elif sel_as == "🟢 OK only":
+                v = v[v["status"] == "OK"]
+
+            no = int((v["status"] == "OVERDUE").sum())
+            nh = int((v["status"] == "HIGH PRIORITY").sum())
+            nk = int((v["status"] == "OK").sum())
+            st.markdown(filter_count(len(v), no, nh, nk), unsafe_allow_html=True)
             render_table(v, priority=False)
 
+    # Other Equipment tab
     with tabs[3]:
-        if oe.empty: st.info("No auxiliary plant or extension machinery metrics located.")
+        if oe.empty:
+            st.info("No auxiliary plant or extension machinery metrics located.")
         else:
-            for sec in sorted(oe['section'].unique()):
+            for sec in sorted(oe["section"].unique()):
                 st.markdown(sl(sec), unsafe_allow_html=True)
-                sd=oe[oe['section']==sec][['description','periodicity','last_date','run_hrs']].copy()
-                sd.columns=['Machinery Description','Maintenance Periodicity','Inspection Date','Logged Hours']
+                sd = oe[oe["section"] == sec][
+                    ["description", "periodicity", "last_date", "run_hrs"]
+                ].copy()
+                sd.columns = [
+                    "Machinery Description",
+                    "Maintenance Periodicity",
+                    "Inspection Date",
+                    "Logged Hours",
+                ]
                 st.dataframe(sd, use_container_width=True, hide_index=True)
-
 # ── PAGE: REPORT INGESTION MANAGEMENT ────────────────────────────────
 elif page == "📤  Upload Report":
     st.markdown(ph("📤","Upload Report","TEC-004 Log Processing"), unsafe_allow_html=True)
