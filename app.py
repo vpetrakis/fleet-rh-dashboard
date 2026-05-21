@@ -1059,14 +1059,27 @@ elif page == "📤  Upload Report":
         raw = uploaded.read()
         fh  = hashlib.md5(raw).hexdigest()
         with st.spinner("Executing secure LibreOffice conversion and structural extraction loops..."):
-            try:    docx = convert_doc_to_docx(raw)
-            except Exception as e: st.error(f"Headless server file decryption faulted: `{e}`"); st.stop()
-            try:    parsed = parse_doc_bytes(docx)
-            except ValueError as e: st.error(f"Telemetry stream interpretation broke down: `{e}`"); st.stop()
+            try:
+                docx = convert_doc_to_docx(raw)
+            except Exception as e:
+                st.error(f"Headless server file decryption faulted: `{e}`")
+                st.stop()
+            try:
+                parsed = parse_doc_bytes(docx)
+            except ValueError as e:
+                st.error(f"Telemetry stream interpretation broke down: `{e}`")
+                st.stop()
+
+        # 🔁 Auto‑commit immediately after successful parse (no manual commit button)
+        save_parsed(parsed, uploaded.name, fh)
+        for fn in [get_vessels, get_comps, get_oe, get_summary, get_all_fleet_comps]:
+            fn.clear()
 
         comps  = parsed['components']
-        nc  = len(comps); nod = sum(1 for c in comps if c['status']=='OVERDUE')
-        nhp = sum(1 for c in comps if c['status']=='HIGH PRIORITY'); nok = sum(1 for c in comps if c['status']=='OK')
+        nc  = len(comps)
+        nod = sum(1 for c in comps if c['status'] == 'OVERDUE')
+        nhp = sum(1 for c in comps if c['status'] == 'HIGH PRIORITY')
+        nok = sum(1 for c in comps if c['status'] == 'OK')
         noe = len(parsed['other_equipment'])
 
         st.markdown(sl("Extracted Telemetry Stream Preview"), unsafe_allow_html=True)
@@ -1084,53 +1097,22 @@ elif page == "📤  Upload Report":
           <div class="ps blue"   style="animation-delay:.21s"> <div class="ps-val">{noe}</div><div class="ps-lbl">External Systems</div></div>
         </div>""", unsafe_allow_html=True)
 
-        for w in parsed['warnings']: st.warning(f"⚠ Core structural indicator anomaly: {w}")
-        
+        # Always show a success banner (commit already done)
+        st.markdown(
+            f'<div class="sb"><span style="font-size:1.4rem">✓</span>'
+            f'<span>System Telemetry Confirmed — <b>{parsed["vessel_name"]}</b> '
+            f'committed to database structure ({nc} lines mapped).</span>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        for w in parsed['warnings']:
+            st.warning(f"⚠ Core structural indicator anomaly: {w}")
+
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(sl("Extracted Telemetry Matrices — Pre-Commit Review"), unsafe_allow_html=True)
-        
+        st.markdown(sl("Extracted Telemetry Matrices — Live View"), unsafe_allow_html=True)
+
         df_preview = pd.DataFrame(parsed['components']) if parsed['components'] else pd.DataFrame()
-        prev_tabs = st.tabs(["⚙️ Main Engine Matrix", "🔩 Aux Engines Matrix", "🛠️ Other Equipment"])
-        
-        with prev_tabs[0]:
-            if not df_preview.empty:
-                me_prev = df_preview[df_preview['category'] == 'MAIN_ENGINE']
-                if not me_prev.empty:
-                    render_table(me_prev, height=400, priority=True)
-                else:
-                    st.info("No Main Engine telemetry extracted from this report.")
-            else:
-                st.info("No component data available.")
-
-        with prev_tabs[1]:
-            if not df_preview.empty:
-                aux_prev = df_preview[df_preview['category'] == 'AUX_ENGINE']
-                if not aux_prev.empty:
-                    render_table(aux_prev, height=400, priority=True)
-                else:
-                    st.info("No Auxiliary Engine telemetry extracted from this report.")
-            else:
-                st.info("No component data available.")
-
-        with prev_tabs[2]:
-            if parsed['other_equipment']:
-                oe_prev = pd.DataFrame(parsed['other_equipment'])
-                oe_prev.columns = ['Machinery Category', 'Description', 'Periodicity', 'Last Inspected', 'Logged Hours']
-                st.dataframe(oe_prev, use_container_width=True, hide_index=True, height=400)
-            else:
-                st.info("No Auxiliary Plant or Other Equipment data extracted from this report.")
-
-        st.markdown("---")
-        col_btn,_ = st.columns([1,4])
-        with col_btn:
-            if st.button("✅  COMMIT STREAM TO DATABASE", use_container_width=True):
-                save_parsed(parsed, uploaded.name, fh)
-                for fn in [get_vessels, get_comps, get_oe, get_summary, get_all_fleet_comps]: fn.clear()
-                st.markdown(f"""
-                <div class="sb"><span style="font-size:1.4rem">✓</span>
-                  <span>System Telemetry Confirmed — <b>{parsed['vessel_name']}</b> committed to database structure ({nc} lines mapped).</span>
-                </div>""", unsafe_allow_html=True)
-                st.balloons()
 
 # ── PAGE: AUDIT TRAIL LOG SYSTEM ─────────────────────────────────────
 elif page == "📋  Upload History":
