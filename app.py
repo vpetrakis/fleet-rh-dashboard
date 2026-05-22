@@ -8,7 +8,6 @@ st.set_page_config(
 
 import os
 import re
-import io
 import json
 import shutil
 import sqlite3
@@ -111,24 +110,12 @@ section[data-testid="stSidebar"] {
   display: none !important;
 }
 
-.hr-card {
-  background: var(--bg3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 1rem 1.1rem;
-}
-
 .hr-title {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: .14em;
   color: var(--gold2);
   margin-bottom: .2rem;
-}
-
-.hr-sub {
-  color: var(--muted);
-  font-size: .92rem;
 }
 
 .kpi-wrap {
@@ -303,7 +290,7 @@ init_db()
 # ============================================================
 # HELPERS
 # ============================================================
-PARSER_VERSION = "tec004_v1.1_keyerror_safe"
+PARSER_VERSION = "tec004_v1.2_schema_safe"
 
 STATUS_ORDER = {
     "OVERDUE": 0,
@@ -337,8 +324,7 @@ def clean_name(text: str) -> str:
     t = re.sub(r'(?i)ALEXIS\s*Date?', '', t)
     t = re.sub(r'(?i)Page\s*\d+\s*of\s*\d+', '', t)
     t = re.sub(r'(?i)MTS Marine Ltd.*', '', t)
-    t = normalize_whitespace(t)
-    return t
+    return normalize_whitespace(t)
 
 def is_component_name(name: str) -> bool:
     u = normalize_whitespace(str(name or "")).upper()
@@ -359,8 +345,7 @@ def is_component_name(name: str) -> bool:
     return bool(re.search(r'[A-Z]', u))
 
 def parse_date_value(text: str) -> str:
-    s = first_line(text)
-    s = s.replace("[", "").replace("]", "").strip()
+    s = first_line(text).replace("[", "").replace("]", "").strip()
     if not s:
         return ""
     if s.upper() in {"N/A", "NA", "-", "CENTRAL", "COOLER"}:
@@ -444,17 +429,66 @@ def make_issue(severity: str, code: str, message: str, table_idx: int = None, ro
         "row_key": rkey,
     }
 
+def normalize_row_record(rec: Dict[str, Any]) -> Dict[str, Any]:
+    rec = rec or {}
+    out = dict(rec)
+    defaults = {
+        "category": "",
+        "engine_label": "",
+        "unit": "",
+        "description": "",
+        "periodicity_raw": "",
+        "periodicity_hours": 0.0,
+        "last_oh_date": "",
+        "hrs_since": 0.0,
+        "pct_used": 0.0,
+        "status": "NO DATA",
+        "source_table_index": "",
+        "source_row_start": "",
+        "source_row_end": "",
+        "source_col_date": "",
+        "source_col_hours": "",
+        "raw_date_text": "",
+        "raw_hours_text": "",
+        "confidence": 0.0,
+        "issue_count": 0,
+    }
+    for k, v in defaults.items():
+        out.setdefault(k, v)
+    return out
+
+def normalize_rows_payload(rows) -> List[Dict[str, Any]]:
+    if rows is None:
+        return []
+    if isinstance(rows, pd.DataFrame):
+        rows = rows.to_dict("records")
+    if not isinstance(rows, list):
+        return []
+    out = []
+    for r in rows:
+        if isinstance(r, dict):
+            out.append(normalize_row_record(r))
+        else:
+            out.append(normalize_row_record({}))
+    return out
+
 def normalize_parsed_payload(parsed: dict) -> dict:
     parsed = parsed or {}
     parsed.setdefault("vessel_name", "UNKNOWN")
     parsed.setdefault("report_date", "")
     parsed.setdefault("me_total_hrs", 0)
     parsed.setdefault("me_this_month", 0)
-    parsed.setdefault("me_comps", [])
-    parsed.setdefault("aux_comps", [])
-    parsed.setdefault("components", [])
+    parsed["me_comps"] = normalize_rows_payload(parsed.get("me_comps", []))
+    parsed["aux_comps"] = normalize_rows_payload(parsed.get("aux_comps", []))
+    parsed["components"] = normalize_rows_payload(parsed.get("components", []))
     parsed.setdefault("other_equipment", [])
+    if isinstance(parsed.get("other_equipment"), pd.DataFrame):
+        parsed["other_equipment"] = parsed["other_equipment"].to_dict("records")
+    if not isinstance(parsed.get("other_equipment"), list):
+        parsed["other_equipment"] = []
     parsed.setdefault("issues", [])
+    if not isinstance(parsed.get("issues"), list):
+        parsed["issues"] = []
     parsed.setdefault("uploaded_at", now_iso())
     return parsed
 
@@ -556,7 +590,7 @@ def detect_vessel_and_date(doc) -> Tuple[str, str, List[Dict[str, Any]]]:
 
     return vessel, report_date, issues
 
-def detect_me_totals(grid: List[List[str]]) -> Tuple[Optional[float], Optional[float]]:
+def detect_me_totals(grid: List[List[str]]) -> Tuple[float, float]:
     me_total = 0
     me_month = 0
     flat = " | ".join([" | ".join(row) for row in grid[:3]])
@@ -636,7 +670,7 @@ def parse_me_table(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[str
                     local_issues.append(make_issue("info", "ME_NON_NUMERIC_PERIOD", f"Non-numeric or observational periodicity '{period_raw}' for {name}.", table_idx, r))
 
                 if date_val or hrs_val > 0:
-                    rec = {
+                    rec = normalize_row_record({
                         "category": "MAIN_ENGINE",
                         "engine_label": "ME",
                         "unit": f"Cyl {cyl}",
@@ -656,7 +690,7 @@ def parse_me_table(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[str
                         "raw_hours_text": first_line(hrs_txt),
                         "confidence": confidence_score(date_txt, hrs_txt, period_raw, local_issues),
                         "issue_count": len(local_issues),
-                    }
+                    })
                     records.append(rec)
                     rk = row_key(rec)
                     for it in local_issues:
@@ -752,7 +786,7 @@ def parse_aux_table(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[st
                         local_issues.append(make_issue("info", "AUX_NON_NUMERIC_PERIOD", f"Non-numeric or observational periodicity '{period_raw}' for {name}.", table_idx, r))
 
                     if date_val or hrs_val > 0:
-                        rec = {
+                        rec = normalize_row_record({
                             "category": "AUX_ENGINE",
                             "engine_label": eng_label,
                             "unit": f"Cyl {cyl}",
@@ -772,7 +806,7 @@ def parse_aux_table(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[st
                             "raw_hours_text": first_line(hrs_txt),
                             "confidence": confidence_score(date_txt, hrs_txt, period_raw, local_issues),
                             "issue_count": len(local_issues),
-                        }
+                        })
                         records.append(rec)
                         rk = row_key(rec)
                         for it in local_issues:
@@ -826,7 +860,7 @@ def dedupe_rows(records: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Li
     issues = []
     seen = set()
 
-    for rec in records:
+    for rec in normalize_rows_payload(records):
         k = (
             rec.get("category"),
             rec.get("engine_label"),
@@ -877,7 +911,6 @@ def parse_docx_bytes(docx_bytes: bytes) -> Dict[str, Any]:
 
     me_total_hrs = 0
     me_this_month = 0
-
     all_me = []
     all_aux = []
     all_oe = []
@@ -913,8 +946,8 @@ def parse_docx_bytes(docx_bytes: bytes) -> Dict[str, Any]:
         "report_date": report_date,
         "me_total_hrs": me_total_hrs,
         "me_this_month": me_this_month,
-        "me_comps": [x for x in combined if x["category"] == "MAIN_ENGINE"],
-        "aux_comps": [x for x in combined if x["category"] == "AUX_ENGINE"],
+        "me_comps": [x for x in combined if x.get("category") == "MAIN_ENGINE"],
+        "aux_comps": [x for x in combined if x.get("category") == "AUX_ENGINE"],
         "components": combined,
         "other_equipment": all_oe,
         "issues": issues,
@@ -950,7 +983,7 @@ def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
     conn = get_conn()
     try:
         vessel_id = ensure_vessel(conn, parsed["vessel_name"])
-        if report_exists(conn, parsed["vessel_name"], parsed["report_date"], parsed["file_hash"]):
+        if report_exists(conn, parsed["vessel_name"], parsed["report_date"], parsed.get("file_hash", "")):
             return False, "This exact report already exists in the database."
 
         cur = conn.cursor()
@@ -973,7 +1006,7 @@ def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
         ))
         report_id = cur.lastrowid
 
-        for rec in parsed.get("components", []):
+        for rec in normalize_rows_payload(parsed.get("components", [])):
             cur.execute("""
                 INSERT INTO parsed_rows (
                     report_id, category, engine_label, unit, description,
@@ -1007,6 +1040,8 @@ def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
             ))
 
         for issue in parsed.get("issues", []):
+            if not isinstance(issue, dict):
+                continue
             cur.execute("""
                 INSERT INTO parse_issues (
                     report_id, row_key, severity, issue_code, message,
@@ -1073,21 +1108,55 @@ def cyl_num(unit: str) -> int:
     return int(m.group(1)) if m else 999
 
 def build_preview_df(records: List[Dict[str, Any]], include_trace: bool = False, mode: str = "matrix") -> pd.DataFrame:
-    if not records:
-        cols = [
-            "Status", "Component", "Engine", "Unit",
-            "Periodicity", "Last O/H", "Hrs Since", "Used %",
-            "Confidence", "Issues"
-        ]
-        if include_trace:
-            cols += ["Table", "Rows", "Raw Date", "Raw Hrs"]
-        return pd.DataFrame(columns=cols)
+    base_cols = [
+        "Status", "Component", "Engine", "Unit",
+        "Periodicity", "Last O/H", "Hrs Since", "Used %",
+        "Confidence", "Issues"
+    ]
+    if include_trace:
+        base_cols += ["Table", "Rows", "Raw Date", "Raw Hrs"]
 
-    df = pd.DataFrame(records)
+    if not records:
+        return pd.DataFrame(columns=base_cols)
+
+    if isinstance(records, pd.DataFrame):
+        df = records.copy()
+    else:
+        safe_records = []
+        for r in records:
+            if isinstance(r, dict):
+                safe_records.append(normalize_row_record(r))
+            else:
+                safe_records.append(normalize_row_record({}))
+        df = pd.DataFrame(safe_records)
+
+    required_defaults = {
+        "status": "NO DATA",
+        "description": "",
+        "engine_label": "",
+        "unit": "",
+        "periodicity_hours": 0.0,
+        "periodicity_raw": "",
+        "last_oh_date": "",
+        "hrs_since": 0.0,
+        "pct_used": 0.0,
+        "confidence": 0.0,
+        "issue_count": 0,
+        "source_table_index": "",
+        "source_row_start": "",
+        "source_row_end": "",
+        "raw_date_text": "",
+        "raw_hours_text": "",
+    }
+
+    for col, default in required_defaults.items():
+        if col not in df.columns:
+            df[col] = default
+
     df["_status_order"] = df["status"].map(lambda x: STATUS_ORDER.get(str(x), 9))
     df["_pct"] = df["pct_used"].map(safe_float)
-    df["_desc"] = df["description"].str.upper()
-    df["_cyl"] = df["unit"].map(cyl_num)
+    df["_desc"] = df["description"].astype(str).str.upper()
+    df["_cyl"] = df["unit"].astype(str).map(cyl_num)
 
     if mode == "priority":
         df = df.sort_values(["_status_order", "_pct"], ascending=[True, False])
@@ -1101,24 +1170,49 @@ def build_preview_df(records: List[Dict[str, Any]], include_trace: bool = False,
         "OK": "🟢 OK",
         "NO DATA": "🔵 NO DATA",
     }.get(str(s), "🔵 NO DATA"))
-    out["Component"] = df["description"]
-    out["Engine"] = df["engine_label"]
-    out["Unit"] = df["unit"]
+
+    out["Component"] = df["description"].astype(str)
+    out["Engine"] = df["engine_label"].astype(str)
+    out["Unit"] = df["unit"].astype(str)
+
     out["Periodicity"] = [
-        f"{int(float(x))}" if safe_float(x) > 0 else (str(raw) if str(raw).strip() else "—")
+        f"{int(float(x))}" if safe_float(x) > 0 else (str(raw).strip() if str(raw).strip() else "—")
         for x, raw in zip(df["periodicity_hours"], df["periodicity_raw"])
     ]
-    out["Last O/H"] = [x if str(x).strip() else "—" for x in df["last_oh_date"]]
-    out["Hrs Since"] = [f"{int(float(x))}" if safe_float(x) > 0 else "—" for x in df["hrs_since"]]
-    out["Used %"] = [round(safe_float(x) * 100, 1) if safe_float(x) > 0 else 0.0 for x in df["pct_used"]]
-    out["Confidence"] = [round(safe_float(x) * 100, 0) for x in df["confidence"]]
-    out["Issues"] = df["issue_count"]
+
+    out["Last O/H"] = [
+        str(x).strip() if str(x).strip() and str(x).strip().lower() not in {"nan", "none"} else "—"
+        for x in df["last_oh_date"]
+    ]
+
+    out["Hrs Since"] = [
+        f"{int(float(x))}" if safe_float(x) > 0 else "—"
+        for x in df["hrs_since"]
+    ]
+
+    out["Used %"] = [
+        round(safe_float(x) * 100, 1) if safe_float(x) > 0 else 0.0
+        for x in df["pct_used"]
+    ]
+
+    out["Confidence"] = [
+        round(safe_float(x) * 100, 0)
+        for x in df["confidence"]
+    ]
+
+    out["Issues"] = [
+        int(safe_float(x))
+        for x in df["issue_count"]
+    ]
 
     if include_trace:
-        out["Table"] = df["source_table_index"]
-        out["Rows"] = [f"{a}-{b}" for a, b in zip(df["source_row_start"], df["source_row_end"])]
-        out["Raw Date"] = df["raw_date_text"]
-        out["Raw Hrs"] = df["raw_hours_text"]
+        out["Table"] = df["source_table_index"].astype(str)
+        out["Rows"] = [
+            f"{a}-{b}" if str(a).strip() or str(b).strip() else "—"
+            for a, b in zip(df["source_row_start"], df["source_row_end"])
+        ]
+        out["Raw Date"] = df["raw_date_text"].astype(str)
+        out["Raw Hrs"] = df["raw_hours_text"].astype(str)
 
     return out
 
@@ -1127,14 +1221,14 @@ PREVIEW_CONFIG = {
     "Component": st.column_config.TextColumn("Component", width=250),
     "Engine": st.column_config.TextColumn("Engine", width=85),
     "Unit": st.column_config.TextColumn("Unit", width=75),
-    "Periodicity": st.column_config.TextColumn("Periodicity", width=105),
+    "Periodicity": st.column_config.TextColumn("Periodicity", width=120),
     "Last O/H": st.column_config.TextColumn("Last O/H", width=115),
     "Hrs Since": st.column_config.TextColumn("Hrs Since", width=100),
     "Used %": st.column_config.ProgressColumn("Used %", min_value=0, max_value=150, format="%.1f%%", width=130),
     "Confidence": st.column_config.ProgressColumn("Confidence", min_value=0, max_value=100, format="%d%%", width=110),
     "Issues": st.column_config.NumberColumn("Issues", width=75),
-    "Table": st.column_config.NumberColumn("Table", width=70),
-    "Rows": st.column_config.TextColumn("Rows", width=70),
+    "Table": st.column_config.TextColumn("Table", width=70),
+    "Rows": st.column_config.TextColumn("Rows", width=80),
     "Raw Date": st.column_config.TextColumn("Raw Date", width=120),
     "Raw Hrs": st.column_config.TextColumn("Raw Hrs", width=100),
 }
@@ -1147,7 +1241,13 @@ def show_df(df: pd.DataFrame, height: int = None):
 def issues_df(issues: List[Dict[str, Any]]) -> pd.DataFrame:
     if not issues:
         return pd.DataFrame(columns=["Severity", "Code", "Message", "Table", "Row", "Row Key"])
-    df = pd.DataFrame(issues)
+    safe_issues = [x for x in issues if isinstance(x, dict)]
+    if not safe_issues:
+        return pd.DataFrame(columns=["Severity", "Code", "Message", "Table", "Row", "Row Key"])
+    df = pd.DataFrame(safe_issues)
+    for col in ["severity", "issue_code", "message", "table_index", "row_index", "row_key"]:
+        if col not in df.columns:
+            df[col] = ""
     out = pd.DataFrame()
     out["Severity"] = df["severity"]
     out["Code"] = df["issue_code"]
@@ -1200,7 +1300,7 @@ with st.expander("Upload TEC-004 .doc report", expanded=(st.session_state.parsed
         raw = uploaded.read()
         fhash = md5_bytes(raw)
 
-        current_parsed = st.session_state.parsed or {}
+        current_parsed = normalize_parsed_payload(st.session_state.parsed or {})
         current_hash = current_parsed.get("file_hash")
 
         if current_hash != fhash:
@@ -1230,14 +1330,14 @@ if st.session_state.parsed is None:
 
 p = normalize_parsed_payload(st.session_state.parsed or {})
 
-all_rows = p.get("components", [])
-me_rows = p.get("me_comps", [])
-aux_rows = p.get("aux_comps", [])
-oe_rows = p.get("other_equipment", [])
-all_issues = p.get("issues", [])
+all_rows = normalize_rows_payload(p.get("components") or [])
+me_rows = normalize_rows_payload(p.get("me_comps") or [])
+aux_rows = normalize_rows_payload(p.get("aux_comps") or [])
+oe_rows = p.get("other_equipment") or []
+all_issues = p.get("issues") or []
 
-err_count = sum(1 for i in all_issues if i.get("severity") == "error")
-warn_count = sum(1 for i in all_issues if i.get("severity") == "warning")
+err_count = sum(1 for i in all_issues if isinstance(i, dict) and i.get("severity") == "error")
+warn_count = sum(1 for i in all_issues if isinstance(i, dict) and i.get("severity") == "warning")
 od_count = sum(1 for r in all_rows if r.get("status") == "OVERDUE")
 hp_count = sum(1 for r in all_rows if r.get("status") == "HIGH PRIORITY")
 
@@ -1377,9 +1477,11 @@ if not oe_rows:
     st.info("No other equipment preview rows extracted.")
 else:
     oe_df = pd.DataFrame(oe_rows)
-    show_cols = [c for c in ["section", "description", "last_date", "run_hrs", "source_table_index", "source_row"] if c in oe_df.columns]
+    for col in ["section", "description", "last_date", "run_hrs", "source_table_index", "source_row"]:
+        if col not in oe_df.columns:
+            oe_df[col] = ""
     st.dataframe(
-        oe_df[show_cols],
+        oe_df[["section", "description", "last_date", "run_hrs", "source_table_index", "source_row"]],
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -1387,8 +1489,8 @@ else:
             "description": st.column_config.TextColumn("Description", width=300),
             "last_date": st.column_config.TextColumn("Last Date", width=140),
             "run_hrs": st.column_config.TextColumn("Run Hrs", width=120),
-            "source_table_index": st.column_config.NumberColumn("Table", width=80),
-            "source_row": st.column_config.NumberColumn("Row", width=80),
+            "source_table_index": st.column_config.TextColumn("Table", width=80),
+            "source_row": st.column_config.TextColumn("Row", width=80),
         }
     )
 
@@ -1412,8 +1514,8 @@ else:
             "Severity": st.column_config.TextColumn("Severity", width=90),
             "Code": st.column_config.TextColumn("Code", width=160),
             "Message": st.column_config.TextColumn("Message", width=500),
-            "Table": st.column_config.NumberColumn("Table", width=70),
-            "Row": st.column_config.NumberColumn("Row", width=70),
+            "Table": st.column_config.TextColumn("Table", width=70),
+            "Row": st.column_config.TextColumn("Row", width=70),
             "Row Key": st.column_config.TextColumn("Row Key", width=320),
         }
     )
