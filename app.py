@@ -1,6 +1,6 @@
 import streamlit as st
 st.set_page_config(
-    page_title="Fleet Running Hours Monitor 10.10",
+    page_title="Fleet Running Hours Monitor 10.10 Debug-Operational",
     page_icon="⚓",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -172,8 +172,8 @@ div[data-baseweb="select"] > div,
 # ══════════════════════════════════════════════════════════════════
 #  CONSTANTS / DB
 # ══════════════════════════════════════════════════════════════════
-DB_PATH = "tec004_operational_v1010.db"
-PARSER_VERSION = "10.10_sectional_parser"
+DB_PATH = "tec004_debug_operational_v1010.db"
+PARSER_VERSION = "10.10_debug_first_dual_parser"
 
 STATUS_ORDER = {'OVERDUE': 0, 'HIGH PRIORITY': 1, 'OK': 2, 'NO DATA': 3}
 STATUS_MAP = {
@@ -228,8 +228,8 @@ def init_db():
         source_row_end INTEGER,
         source_col_date INTEGER,
         source_col_hours INTEGER,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(report_id) REFERENCES reports(id)
+        parser_source TEXT,
+        created_at TEXT NOT NULL
     )
     """)
     cur.execute("""
@@ -312,18 +312,16 @@ def make_issue(severity: str, code: str, message: str, table_index=None, row_ind
         "row_key": row_key
     }
 
-def row_key(rec: Dict[str, Any]) -> str:
-    return f"{rec.get('category','')} | {rec.get('description','')} | {rec.get('engine_label','')} | {rec.get('unit','')}"
-
 def is_component_name(name: str) -> bool:
     u = fl(name).upper()
     if not u or len(u) < 2:
         return False
     bad = (
         'DESCRIPTION','REMARKS','COMPONENT','PERIODICITY','PERIODICTLY',
-        'DATE OF LAST','RUNNING HOURS','MAIN ENGINE','AUX. ENGINE',
-        'TYPE:','TOTAL RUNNING HOURS','THIS MONTH','CYL. NO.','SERIAL NR',
-        'HOURS THIS MONTH','TOTAL HOURS','AUX. ENGINE MAKER / TYPE'
+        'DATE OF LAST','RUNNING HOURS','MAIN ENGINE','AUX. ENGINE','TYPE:',
+        'TOTAL RUNNING HOURS','THIS MONTH','CYL. NO.','SERIAL NR',
+        'HOURS THIS MONTH','TOTAL HOURS','AUX. ENGINE MAKER / TYPE',
+        'TURBOCHARGER','COOLERS','A/C & REFR. COMPRESSORS','MAIN AIR COMPRESSORS'
     )
     if any(b in u for b in bad):
         return False
@@ -360,7 +358,7 @@ def parse_date(txt: Any) -> str:
         return ''
     if re.fullmatch(r'^\d+$', s):
         return ''
-    if len(s) > 26:
+    if len(s) > 28:
         return ''
     s = s.replace('[', '').replace(']', '').strip()
     if re.match(r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$', s):
@@ -395,7 +393,7 @@ def parse_date(txt: Any) -> str:
             return f"{day:02d} {months[mon]} {year}"
     return s if re.search(r'[A-Za-z/]', s) else ''
 
-def make_row(cat, eng, unit, name, period, date, hrs, table_idx=None, row_start=None, row_end=None, col_date=None, col_hours=None):
+def make_row(cat, eng, unit, name, period, date, hrs, table_idx=None, row_start=None, row_end=None, col_date=None, col_hours=None, parser_source='grid'):
     return {
         'category': cat,
         'engine_label': eng,
@@ -411,6 +409,7 @@ def make_row(cat, eng, unit, name, period, date, hrs, table_idx=None, row_start=
         'source_row_end': row_end,
         'source_col_date': col_date,
         'source_col_hours': col_hours,
+        'parser_source': parser_source,
     }
 
 # ══════════════════════════════════════════════════════════════════
@@ -448,11 +447,26 @@ def convert_doc_to_docx(raw: bytes) -> bytes:
 # ══════════════════════════════════════════════════════════════════
 #  TABLE NORMALIZATION
 # ══════════════════════════════════════════════════════════════════
-def visual_rect_grid(table) -> List[List[str]]:
+def raw_grid(table) -> List[List[str]]:
+    grid = []
+    max_cols = 0
+    for row in table.rows:
+        cells = []
+        for cell in row.cells:
+            raw = re.sub(r'[\x0b\r]', '\n', cell.text).replace('\x07', '')
+            lines = [ln.replace('\xa0', ' ').replace('\t', ' ').strip()
+                     for ln in raw.split('\n') if ln.strip()]
+            cells.append(lines[0] if lines else '')
+        max_cols = max(max_cols, len(cells))
+        grid.append(cells)
+    for row in grid:
+        while len(row) < max_cols:
+            row.append('')
+    return grid
+
+def dedup_grid(table) -> List[List[str]]:
     """
-    Build a visually usable rectangular grid while de-duplicating obvious
-    horizontal merged-cell repeats within the same row.
-    python-docx can repeat merged cells in row.cells. [web:47][web:70]
+    De-duplicate obvious repeated merged cells inside the same row.
     """
     grid = []
     max_cols = 0
@@ -478,62 +492,56 @@ def visual_rect_grid(table) -> List[List[str]]:
 def table_text(grid: List[List[str]]) -> str:
     return "\n".join(" | ".join(fl(c) for c in row) for row in grid)
 
-# ══════════════════════════════════════════════════════════════════
-#  SECTION DETECTION
-# ══════════════════════════════════════════════════════════════════
-def detect_table_type(grid: List[List[str]]) -> str:
+def classify_table(grid: List[List[str]]) -> str:
     txt = table_text(grid).upper()
-    if 'MAIN ENGINE' in txt and 'CYL. NO.1' in txt:
+    if 'MAIN ENGINE' in txt or ('CYL. NO.1' in txt and 'REMARKS' in txt):
         return 'ME'
     if 'AUX. ENGINE MAKER / TYPE' in txt or ('AUX. ENGINE NO.1' in txt and 'DESCRIPTION' in txt and 'PERIODICTLY' in txt):
         return 'AUX'
-    if 'D/G NO1' in txt or 'D/G NO.1' in txt:
+    if 'D/G NO1' in txt or 'D/G NO.1' in txt or 'D/G NO2' in txt:
         return 'DG'
-    if 'TURBOCHARGER' in txt or 'A/C & REFR. COMPRESSORS' in txt or 'MAIN AIR COMPRESSORS' in txt:
+    if 'TURBOCHARGER' in txt or 'A/C & REFR. COMPRESSORS' in txt or 'MAIN AIR COMPRESSORS' in txt or 'COOLERS' in txt:
         return 'OE'
     return 'UNKNOWN'
 
 # ══════════════════════════════════════════════════════════════════
-#  MAIN ENGINE PARSER
+#  GRID PARSERS
 # ══════════════════════════════════════════════════════════════════
-def parse_me(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def parse_me_from_grid(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     rows = []
     if not grid:
         return rows
 
     rem_col = None
-    first_cyl = None
     cyl_map = []
+    header_band = grid[:5]
 
-    header_band = grid[:4]
     for c in range(len(grid[0])):
         coltxt = " ".join(norm_upper(header_band[r][c]) if c < len(header_band[r]) else '' for r in range(len(header_band)))
         if 'REMARK' in coltxt and rem_col is None:
             rem_col = c
-        if 'CYL. NO.' in coltxt or re.search(r'CYL\.\s*NO\.\s*\d+', coltxt):
-            if first_cyl is None:
-                first_cyl = c
-            m = re.search(r'CYL\.\s*NO\.\s*(\d+)', coltxt)
-            cyl_num_val = int(m.group(1)) if m else len(cyl_map) + 1
-            cyl_map.append((c, cyl_num_val))
+        m = re.search(r'CYL\.\s*NO\.\s*(\d+)', coltxt)
+        if m:
+            cyl_map.append((c, int(m.group(1))))
 
-    if first_cyl is None:
-        for c in range(len(grid[0])):
-            if norm_upper(grid[1][c]).startswith('CYL. NO.') or norm_upper(grid[2][c]).startswith('CYL. NO.'):
-                first_cyl = c
     if rem_col is None:
         rem_col = len(grid[0]) - 1
 
-    if not cyl_map and first_cyl is not None:
-        for c in range(first_cyl, rem_col):
-            cyl_map.append((c, len(cyl_map) + 1))
+    if not cyl_map:
+        # fallback: detect the first run of columns before remarks after marker column
+        for r, row in enumerate(header_band):
+            for c, cell in enumerate(row):
+                if re.search(r'CYL\.\s*NO\.\s*1', norm_upper(cell)):
+                    cyl_map = [(x, i + 1) for i, x in enumerate(range(c, rem_col))]
+                    break
+            if cyl_map:
+                break
 
     if not cyl_map:
-        issues.append(make_issue('error', 'ME_CYL_HEADERS_NOT_FOUND', 'Main Engine cylinder headers could not be detected.', table_idx, None))
         return rows
 
     period_col = 1
-    marker_col = first_cyl - 1 if first_cyl and first_cyl >= 2 else 2
+    marker_col = cyl_map[0][0] - 1 if cyl_map and cyl_map[0][0] >= 2 else 2
 
     end = len(grid)
     for r, row in enumerate(grid):
@@ -547,37 +555,22 @@ def parse_me(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]
         name = clean_name(grid[r][0] if len(grid[r]) > 0 else '')
         period = parse_number(grid[r][period_col] if period_col < len(grid[r]) else '')
         marker = fl(grid[r][marker_col] if marker_col < len(grid[r]) else '')
-
         if is_component_name(name) and marker == '1':
             nxt = grid[r + 1] if r + 1 < len(grid) else []
-            next_marker = fl(nxt[marker_col] if marker_col < len(nxt) else '')
-            if next_marker != '2':
-                issues.append(make_issue('warning', 'ME_PAIR_MISSING', f'Expected paired hours row after component {name}.', table_idx, r, name))
-
             for col_idx, cyl_no in cyl_map:
                 date = parse_date(grid[r][col_idx] if col_idx < len(grid[r]) else '')
                 hrs = parse_number(nxt[col_idx] if col_idx < len(nxt) else '')
                 if date or hrs > 0:
                     rows.append(make_row(
                         'MAIN_ENGINE', 'ME', f'Cyl {cyl_no}', name, period, date, hrs,
-                        table_idx, r, min(r + 1, len(grid) - 1), col_idx, col_idx
+                        table_idx, r, min(r + 1, len(grid) - 1), col_idx, col_idx, 'grid'
                     ))
             r += 2
         else:
             r += 1
-
     return rows
 
-# ══════════════════════════════════════════════════════════════════
-#  AUX ENGINE PARSER
-# ══════════════════════════════════════════════════════════════════
-def find_aux_layout(grid: List[List[str]]) -> Tuple[int, int, List[Tuple[str, int, int]]]:
-    """
-    Returns:
-    desc_row,
-    first_data_col,
-    engine_groups = [(engine_label, start_col, end_col_exclusive), ...]
-    """
+def find_aux_groups_from_grid(grid: List[List[str]]) -> Tuple[int, List[Tuple[str, int, int]]]:
     desc_row = None
     for i, row in enumerate(grid):
         rowtxt = " | ".join(norm_upper(c) for c in row)
@@ -585,72 +578,46 @@ def find_aux_layout(grid: List[List[str]]) -> Tuple[int, int, List[Tuple[str, in
             desc_row = i
             break
     if desc_row is None:
-        return -1, -1, []
-
-    serial_row = None
-    aux_header_row = None
-    for i, row in enumerate(grid[:desc_row + 1]):
-        rowtxt = " | ".join(norm_upper(c) for c in row)
-        if 'AUX. ENGINE NO.1' in rowtxt or 'AUX. ENGINE NO.2' in rowtxt or 'AUX. ENGINE NO.3' in rowtxt:
-            aux_header_row = i
-        if 'SERIAL NR' in rowtxt:
-            serial_row = i
+        return -1, []
 
     engine_groups = []
-    if aux_header_row is not None:
-        row = grid[aux_header_row]
-        positions = []
+    for i, row in enumerate(grid[:desc_row + 1]):
+        labels = []
         for c, cell in enumerate(row):
             u = norm_upper(cell)
             if 'AUX. ENGINE NO.1' in u:
-                positions.append(('AUX-1', c))
+                labels.append(('AUX-1', c))
             elif 'AUX. ENGINE NO.2' in u:
-                positions.append(('AUX-2', c))
+                labels.append(('AUX-2', c))
             elif 'AUX. ENGINE NO.3' in u:
-                positions.append(('AUX-3', c))
-        positions = sorted(positions, key=lambda x: x[1])
-        for idx, (label, start) in enumerate(positions):
-            end = positions[idx + 1][1] if idx + 1 < len(positions) else len(grid[desc_row])
-            engine_groups.append((label, start, end))
+                labels.append(('AUX-3', c))
+        if labels:
+            labels = sorted(labels, key=lambda x: x[1])
+            for j, (lbl, start) in enumerate(labels):
+                end = labels[j + 1][1] if j + 1 < len(labels) else len(grid[desc_row])
+                engine_groups.append((lbl, start, end))
+            return desc_row, engine_groups
 
-    first_data_col = 2
-    if not engine_groups:
-        # fallback: detect groups from repeated 1..6 header pattern on desc_row
-        nums = []
-        for c in range(2, len(grid[desc_row])):
-            txt = fl(grid[desc_row][c])
-            if re.fullmatch(r'\d+', txt):
-                nums.append((c, int(txt)))
-        if nums:
-            blocks = []
-            block_start = None
-            last_num = None
-            for c, n in nums:
-                if n == 1:
-                    if block_start is not None:
-                        blocks.append((block_start, c))
-                    block_start = c
-                last_num = n
-            if block_start is not None:
-                blocks.append((block_start, len(grid[desc_row])))
-            labels = ['AUX-1', 'AUX-2', 'AUX-3']
-            for i, (s, e) in enumerate(blocks[:3]):
-                engine_groups.append((labels[i], s, e))
-            first_data_col = nums[0][0]
+    # fallback from repeated 1..6 headers
+    nums = []
+    for c in range(2, len(grid[desc_row])):
+        txt = fl(grid[desc_row][c])
+        if re.fullmatch(r'\d+', txt):
+            nums.append((c, int(txt)))
+    if nums:
+        starts = [c for c, n in nums if n == 1]
+        labels = ['AUX-1', 'AUX-2', 'AUX-3']
+        for i, s in enumerate(starts[:3]):
+            e = starts[i + 1] if i + 1 < len(starts) else len(grid[desc_row])
+            engine_groups.append((labels[i], s, e))
+    return desc_row, engine_groups
 
-    return desc_row, first_data_col, engine_groups
-
-def parse_aux(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def parse_aux_from_grid(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     rows = []
     if not grid:
         return rows
-
-    desc_row, first_data_col, engine_groups = find_aux_layout(grid)
-    if desc_row < 0:
-        return rows
-
-    if not engine_groups:
-        issues.append(make_issue('error', 'AUX_GROUPS_NOT_FOUND', 'Could not detect AUX engine column groups.', table_idx, desc_row))
+    desc_row, groups = find_aux_groups_from_grid(grid)
+    if desc_row < 0 or not groups:
         return rows
 
     r = desc_row + 1
@@ -660,43 +627,34 @@ def parse_aux(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]
         marker = fl(grid[r][2] if len(grid[r]) > 2 else '')
         if is_component_name(name) and marker == '1':
             nxt = grid[r + 1] if r + 1 < len(grid) else []
-            next_marker = fl(nxt[2] if len(nxt) > 2 else '')
-            if next_marker != '2':
-                issues.append(make_issue('warning', 'AUX_PAIR_MISSING', f'Expected paired hours row after AUX component {name}.', table_idx, r, name))
-
-            for eng_label, start, end in engine_groups:
-                unit_index = 1
+            for eng_label, start, end in groups:
                 for ci in range(start, min(end, len(grid[r]))):
                     hdr = fl(grid[desc_row][ci] if ci < len(grid[desc_row]) else '')
                     if not re.fullmatch(r'\d+', hdr):
                         continue
-                    unit_index = int(hdr)
+                    unit_no = int(hdr)
                     date = parse_date(grid[r][ci] if ci < len(grid[r]) else '')
                     hrs = parse_number(nxt[ci] if ci < len(nxt) else '')
                     if date or hrs > 0:
                         rows.append(make_row(
-                            'AUX_ENGINE', eng_label, f'Cyl {unit_index}', name, period, date, hrs,
-                            table_idx, r, min(r + 1, len(grid) - 1), ci, ci
+                            'AUX_ENGINE', eng_label, f'Cyl {unit_no}', name, period, date, hrs,
+                            table_idx, r, min(r + 1, len(grid) - 1), ci, ci, 'grid'
                         ))
             r += 2
         else:
             r += 1
     return rows
 
-# ══════════════════════════════════════════════════════════════════
-#  OTHER EQUIPMENT PARSER
-# ══════════════════════════════════════════════════════════════════
-def parse_oe(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    oe = []
+def parse_oe_from_grid(grid: List[List[str]], table_idx: int) -> List[Dict[str, Any]]:
+    rows = []
     if not grid:
-        return oe
+        return rows
 
     section_maps = [
         ('Turbocharger / Aux Boiler', 0, 1, 2, 3),
         ('Coolers / Exh Gas Boiler', 5, 6, 7, 8),
         ('A/C & Compressors', 10, 11, 11, 12),
     ]
-
     skip = {
         'TURBOCHARGER','AUXILIARY BOILER','COOLERS','EXH GAS BOILER','EXH GAS  BOILER',
         'A/C & REFR. COMPRESSORS','MAIN AIR COMPRESSORS','PERIODICTLY','DATE OF LAST INSPECTION',
@@ -713,7 +671,7 @@ def parse_oe(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]
             dt = parse_date(gc(dtc))
             hrs = parse_number(gc(hrc))
             if dt or hrs > 0 or periodicity > 0:
-                oe.append({
+                rows.append({
                     'section': sec,
                     'description': desc,
                     'periodicity': periodicity,
@@ -722,36 +680,20 @@ def parse_oe(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]
                     'source_table_index': table_idx,
                     'source_row': r
                 })
-    return oe
+    return rows
 
-# ══════════════════════════════════════════════════════════════════
-#  D/G PARSER
-# ══════════════════════════════════════════════════════════════════
-def parse_dg(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def parse_dg_from_grid(grid: List[List[str]], table_idx: int) -> List[Dict[str, Any]]:
     rows = []
     if not grid:
         return rows
-
-    # Two side-by-side D/G tables in one grid
-    group_defs = [
-        (0, 'DG_LEFT'),
-        (8, 'DG_RIGHT'),
-    ]
-
-    for base, _label in group_defs:
-        # expect description, periodicity, DG1, DG2, DG3
+    for base in [0, 8]:
         r = 0
         while r < len(grid) - 1:
             desc = clean_name(grid[r][base] if base < len(grid[r]) else '')
             period = parse_number(grid[r][base + 1] if base + 1 < len(grid[r]) else '')
             marker = fl(grid[r][base + 2] if base + 2 < len(grid[r]) else '')
-
             if is_component_name(desc) and marker == '1':
                 nxt = grid[r + 1] if r + 1 < len(grid) else []
-                next_marker = fl(nxt[base + 2] if base + 2 < len(nxt) else '')
-                if next_marker != '2':
-                    issues.append(make_issue('warning', 'DG_PAIR_MISSING', f'Expected paired hours row after D/G component {desc}.', table_idx, r, desc))
-
                 for i, eng_label in enumerate(['D/G 1', 'D/G 2', 'D/G 3']):
                     ci = base + 2 + i
                     date = parse_date(grid[r][ci] if ci < len(grid[r]) else '')
@@ -770,8 +712,180 @@ def parse_dg(grid: List[List[str]], table_idx: int, issues: List[Dict[str, Any]]
                 r += 2
             else:
                 r += 1
-
     return rows
+
+# ══════════════════════════════════════════════════════════════════
+#  TEXT FALLBACK PARSERS
+# ══════════════════════════════════════════════════════════════════
+DATE_RX = r'(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+[A-Za-z\.]+\s+\d{2,4})'
+NUM_RX = r'\[?\d[\d,\.]*\]?'
+
+def lines_from_doc(doc) -> List[str]:
+    lines = []
+    for p in doc.paragraphs:
+        txt = fl(p.text)
+        if txt:
+            lines.append(txt)
+    for table in doc.tables:
+        rg = raw_grid(table)
+        for row in rg:
+            for cell in row:
+                txt = fl(cell)
+                if txt:
+                    lines.append(txt)
+    return lines
+
+def extract_stream_between(lines: List[str], start_markers: List[str], end_markers: List[str]) -> List[str]:
+    start = None
+    end = len(lines)
+    for i, line in enumerate(lines):
+        up = line.upper()
+        if start is None and any(m in up for m in start_markers):
+            start = i
+            continue
+        if start is not None and any(m in up for m in end_markers):
+            end = i
+            break
+    return lines[start:end] if start is not None else []
+
+def parse_me_from_text(lines: List[str], table_idx_hint: int = -1) -> List[Dict[str, Any]]:
+    rows = []
+    seg = extract_stream_between(
+        lines,
+        ['MAIN ENGINE', 'CYL. NO.1'],
+        ['NOTE 1', 'TURBOCHARGER', 'AUX. ENGINE MAKER / TYPE']
+    )
+    if not seg:
+        return rows
+
+    cyl_headers = [f'CYL. NO.{i}' for i in range(1, 8)]
+    data = [x for x in seg if fl(x)]
+
+    i = 0
+    while i < len(data):
+        name = clean_name(data[i])
+        if is_component_name(name):
+            period = parse_number(data[i + 1]) if i + 1 < len(data) else 0.0
+            marker1 = fl(data[i + 2]) if i + 2 < len(data) else ''
+            if marker1 == '1':
+                date_vals = []
+                j = i + 3
+                while j < len(data) and len(date_vals) < 7 and fl(data[j]) != '2':
+                    tok = fl(data[j])
+                    if tok.upper() not in ('REMARKS',):
+                        date_vals.append(tok)
+                    j += 1
+                if j < len(data) and fl(data[j]) == '2':
+                    j += 1
+                    hrs_vals = []
+                    while j < len(data) and len(hrs_vals) < 7:
+                        tok = fl(data[j])
+                        if is_component_name(tok):
+                            break
+                        hrs_vals.append(tok)
+                        j += 1
+
+                    for idx in range(7):
+                        d = parse_date(date_vals[idx]) if idx < len(date_vals) else ''
+                        h = parse_number(hrs_vals[idx]) if idx < len(hrs_vals) else 0.0
+                        if d or h > 0:
+                            rows.append(make_row(
+                                'MAIN_ENGINE', 'ME', f'Cyl {idx+1}', name, period, d, h,
+                                table_idx_hint, None, None, None, None, 'text'
+                            ))
+                    i = j
+                    continue
+        i += 1
+    return rows
+
+def parse_aux_from_text(lines: List[str], table_idx_hint: int = -1) -> List[Dict[str, Any]]:
+    rows = []
+    seg = extract_stream_between(
+        lines,
+        ['AUX. ENGINE MAKER / TYPE', 'AUX. ENGINE NO.1'],
+        ['DESCRIPTION', 'D/G NO1', 'TURBOCHARGER (2)', '1ST COPY']
+    )
+    if not seg:
+        # broader fallback
+        seg = extract_stream_between(
+            lines,
+            ['AUX. ENGINE NO.1', 'SERIAL NR:'],
+            ['D/G NO1', 'TURBOCHARGER (2)', '1ST COPY']
+        )
+    all_lines = seg if seg else lines
+
+    # look for repeated 1..6 x 3 header then parse component blocks
+    start_idx = None
+    for i, line in enumerate(all_lines):
+        if 'DESCRIPTION' in line.upper() and 'PERIODICTLY' in line.upper():
+            start_idx = i
+            break
+    if start_idx is None:
+        return rows
+
+    data = [fl(x) for x in all_lines[start_idx + 1:] if fl(x)]
+    i = 0
+    while i < len(data):
+        name = clean_name(data[i])
+        if is_component_name(name):
+            period = parse_number(data[i + 1]) if i + 1 < len(data) else 0.0
+            marker1 = fl(data[i + 2]) if i + 2 < len(data) else ''
+            if marker1 == '1':
+                date_vals = []
+                j = i + 3
+                while j < len(data) and len(date_vals) < 18 and fl(data[j]) != '2':
+                    tok = fl(data[j])
+                    if is_component_name(tok) and len(date_vals) < 18:
+                        break
+                    date_vals.append(tok)
+                    j += 1
+                if j < len(data) and fl(data[j]) == '2':
+                    j += 1
+                    hrs_vals = []
+                    while j < len(data) and len(hrs_vals) < 18:
+                        tok = fl(data[j])
+                        if is_component_name(tok):
+                            break
+                        hrs_vals.append(tok)
+                        j += 1
+
+                    for eng_i, eng_label in enumerate(['AUX-1', 'AUX-2', 'AUX-3']):
+                        base = eng_i * 6
+                        for cyl in range(6):
+                            idx = base + cyl
+                            d = parse_date(date_vals[idx]) if idx < len(date_vals) else ''
+                            h = parse_number(hrs_vals[idx]) if idx < len(hrs_vals) else 0.0
+                            if d or h > 0:
+                                rows.append(make_row(
+                                    'AUX_ENGINE', eng_label, f'Cyl {cyl+1}', name, period, d, h,
+                                    table_idx_hint, None, None, None, None, 'text'
+                                ))
+                    i = j
+                    continue
+        i += 1
+    return rows
+
+# ══════════════════════════════════════════════════════════════════
+#  MERGE / DEDUPE
+# ══════════════════════════════════════════════════════════════════
+def dedupe_component_rows(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    best = {}
+    for r in records:
+        key = (r.get('category'), r.get('description'), r.get('engine_label'), r.get('unit'))
+        score = 0
+        if r.get('last_oh_date'):
+            score += 1
+        if sf(r.get('hrs_since')) > 0:
+            score += 1
+        if r.get('parser_source') == 'grid':
+            score += 1
+        prev = best.get(key)
+        if prev is None:
+            best[key] = (score, r)
+        else:
+            if score > prev[0]:
+                best[key] = (score, r)
+    return [v[1] for v in best.values()]
 
 # ══════════════════════════════════════════════════════════════════
 #  DOCUMENT PARSER
@@ -820,18 +934,16 @@ def parse_doc_bytes(docx_bytes: bytes, filename: str = '') -> Dict[str, Any]:
     me_total_hrs = None
     me_this_month = None
 
-    me_rows, aux_rows = [], []
+    me_grid_rows, aux_grid_rows = [], []
     oe_rows, dg_rows = [], []
     debug_tables = []
 
     for ti, table in enumerate(doc.tables):
-        grid = visual_rect_grid(table)
-        if not grid:
-            continue
+        rg = raw_grid(table)
+        dg = dedup_grid(table)
 
-        txt = table_text(grid).upper()
         if me_total_hrs is None or me_this_month is None:
-            for row in grid[:3]:
+            for row in rg[:4]:
                 line = " ".join(str(x) for x in row)
                 if me_total_hrs is None:
                     if m := re.search(r'Total Running Hours[\s:ǀ|]+([\d,]+)', line, re.I):
@@ -840,51 +952,65 @@ def parse_doc_bytes(docx_bytes: bytes, filename: str = '') -> Dict[str, Any]:
                     if m := re.search(r'This Month[\s:]+([\d,]+)', line, re.I):
                         me_this_month = int(parse_number(m.group(1)))
 
-        tt = detect_table_type(grid)
-        me_n = aux_n = oe_n = dg_n = 0
+        raw_type = classify_table(rg)
+        dedup_type = classify_table(dg)
 
-        if tt == 'ME':
-            chunk = parse_me(grid, ti, issues)
-            me_rows.extend(chunk)
-            me_n = len(chunk)
-        elif tt == 'AUX':
-            chunk = parse_aux(grid, ti, issues)
-            aux_rows.extend(chunk)
-            aux_n = len(chunk)
-        elif tt == 'OE':
-            chunk = parse_oe(grid, ti, issues)
-            oe_rows.extend(chunk)
-            oe_n = len(chunk)
-        elif tt == 'DG':
-            chunk = parse_dg(grid, ti, issues)
-            dg_rows.extend(chunk)
-            dg_n = len(chunk)
-        else:
-            # mixed tables can contain OE and DG together
-            chunk_oe = parse_oe(grid, ti, issues)
-            chunk_dg = parse_dg(grid, ti, issues)
-            if chunk_oe:
-                oe_rows.extend(chunk_oe)
-                oe_n += len(chunk_oe)
-            if chunk_dg:
-                dg_rows.extend(chunk_dg)
-                dg_n += len(chunk_dg)
+        me_chunk = parse_me_from_grid(rg, ti, issues)
+        if not me_chunk:
+            me_chunk = parse_me_from_grid(dg, ti, issues)
+        if me_chunk:
+            me_grid_rows.extend(me_chunk)
+
+        aux_chunk = parse_aux_from_grid(rg, ti, issues)
+        if not aux_chunk:
+            aux_chunk = parse_aux_from_grid(dg, ti, issues)
+        if aux_chunk:
+            aux_grid_rows.extend(aux_chunk)
+
+        oe_chunk = parse_oe_from_grid(rg, ti)
+        if not oe_chunk:
+            oe_chunk = parse_oe_from_grid(dg, ti)
+        if oe_chunk:
+            oe_rows.extend(oe_chunk)
+
+        dg_chunk = parse_dg_from_grid(rg, ti)
+        if not dg_chunk:
+            dg_chunk = parse_dg_from_grid(dg, ti)
+        if dg_chunk:
+            dg_rows.extend(dg_chunk)
 
         debug_tables.append({
-            "table_index": ti,
-            "type": tt,
-            "rows": len(grid),
-            "cols": max(len(r) for r in grid) if grid else 0,
-            "me_rows": me_n,
-            "aux_rows": aux_n,
-            "oe_rows": oe_n,
-            "dg_rows": dg_n,
-            "sample": grid[:10]
+            'table_index': ti,
+            'raw_type': raw_type,
+            'dedup_type': dedup_type,
+            'raw_rows': len(rg),
+            'raw_cols': max(len(r) for r in rg) if rg else 0,
+            'dedup_rows': len(dg),
+            'dedup_cols': max(len(r) for r in dg) if dg else 0,
+            'me_rows': len(me_chunk),
+            'aux_rows': len(aux_chunk),
+            'oe_rows': len(oe_chunk),
+            'dg_rows': len(dg_chunk),
+            'raw_sample': rg[:10],
+            'dedup_sample': dg[:10],
         })
 
+    # Text fallback
+    all_lines = lines_from_doc(doc)
+    me_text_rows = parse_me_from_text(all_lines)
+    aux_text_rows = parse_aux_from_text(all_lines)
+
+    if me_text_rows and not me_grid_rows:
+        issues.append(make_issue('info', 'ME_TEXT_FALLBACK_USED', 'Main Engine rows were extracted using text fallback.'))
+    if aux_text_rows and not aux_grid_rows:
+        issues.append(make_issue('info', 'AUX_TEXT_FALLBACK_USED', 'Auxiliary Engine rows were extracted using text fallback.'))
+
+    me_rows = dedupe_component_rows(me_grid_rows + me_text_rows)
+    aux_rows = dedupe_component_rows(aux_grid_rows + aux_text_rows)
     components = me_rows + aux_rows
+
     if not components:
-        issues.append(make_issue('error', 'NO_COMPONENTS', 'No ME/AUX components were extracted.'))
+        issues.append(make_issue('error', 'NO_COMPONENTS', 'No ME/AUX components were extracted. Review raw and dedup grids in Parser Debug.'))
         warnings.append('No ME/AUX components extracted.')
 
     return {
@@ -902,10 +1028,15 @@ def parse_doc_bytes(docx_bytes: bytes, filename: str = '') -> Dict[str, Any]:
         'debug': {
             'tables_scanned': len(doc.tables),
             'table_debug': debug_tables,
+            'me_grid_rows_total': len(me_grid_rows),
+            'me_text_rows_total': len(me_text_rows),
+            'aux_grid_rows_total': len(aux_grid_rows),
+            'aux_text_rows_total': len(aux_text_rows),
             'me_rows_total': len(me_rows),
             'aux_rows_total': len(aux_rows),
             'oe_rows_total': len(oe_rows),
             'dg_rows_total': len(dg_rows),
+            'all_lines_preview': all_lines[:220],
         },
         'uploaded_at': now_iso(),
         'filename': filename,
@@ -947,13 +1078,13 @@ def save_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
                     report_id, category, engine_label, unit, description,
                     periodicity, last_oh_date, hrs_since, pct_used, status,
                     source_table_index, source_row_start, source_row_end,
-                    source_col_date, source_col_hours, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_col_date, source_col_hours, parser_source, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 report_id, r.get('category'), r.get('engine_label'), r.get('unit'), r.get('description'),
                 r.get('periodicity'), r.get('last_oh_date'), r.get('hrs_since'), r.get('pct_used'), r.get('status'),
                 r.get('source_table_index'), r.get('source_row_start'), r.get('source_row_end'),
-                r.get('source_col_date'), r.get('source_col_hours'), now_iso()
+                r.get('source_col_date'), r.get('source_col_hours'), r.get('parser_source'), now_iso()
             ))
 
         for i in parsed.get('issues', []):
@@ -997,7 +1128,7 @@ def load_recent_reports(limit: int = 30) -> pd.DataFrame:
 #  DATAFRAME RENDERING
 # ══════════════════════════════════════════════════════════════════
 def build_component_df(records: List[Dict[str, Any]], include_trace: bool = False, mode: str = 'matrix') -> pd.DataFrame:
-    cols = ['Status','Component','Engine','Unit','Periodicity','Last O/H','Hrs Since','Used %']
+    cols = ['Status','Component','Engine','Unit','Periodicity','Last O/H','Hrs Since','Used %','Parser']
     if include_trace:
         cols += ['Table','Rows','Cols']
     if not records:
@@ -1008,7 +1139,7 @@ def build_component_df(records: List[Dict[str, Any]], include_trace: bool = Fals
         'status':'NO DATA','description':'','engine_label':'','unit':'',
         'periodicity':0.0,'last_oh_date':'','hrs_since':0.0,'pct_used':0.0,
         'source_table_index':'','source_row_start':'','source_row_end':'',
-        'source_col_date':'','source_col_hours':''
+        'source_col_date':'','source_col_hours':'','parser_source':''
     }.items():
         if c not in df.columns:
             df[c] = d
@@ -1024,7 +1155,7 @@ def build_component_df(records: List[Dict[str, Any]], include_trace: bool = Fals
     elif mode == 'priority':
         df = df.sort_values(['_s','_p'], ascending=[True, False]).drop(columns=['_s','_p'])
     else:
-        df = df.sort_values(['source_table_index','source_row_start','source_col_date']).drop(columns=['_s','_p'])
+        df = df.sort_values(['parser_source','source_table_index','source_row_start','source_col_date']).drop(columns=['_s','_p'])
 
     out = pd.DataFrame(index=range(len(df)))
     out['Status'] = df['status'].map(lambda x: STATUS_MAP.get(str(x), '🔵 NO DATA'))
@@ -1035,6 +1166,7 @@ def build_component_df(records: List[Dict[str, Any]], include_trace: bool = Fals
     out['Last O/H'] = [str(x) if x and str(x) not in ('nan','None','') else '—' for x in df['last_oh_date'].values]
     out['Hrs Since'] = [f"{int(float(x))}" if sf(x) > 0 else "—" for x in df['hrs_since'].values]
     out['Used %'] = [round(float(x) * 100, 1) if sf(x) > 0 else 0.0 for x in df['pct_used'].values]
+    out['Parser'] = df['parser_source'].values
     if include_trace:
         out['Table'] = [str(x) if str(x) != 'nan' else '—' for x in df['source_table_index'].values]
         out['Rows'] = [f"{a}-{b}" if str(a) != 'nan' and str(b) != 'nan' else '—'
@@ -1063,11 +1195,12 @@ def build_issue_df(issues: List[Dict[str, Any]]) -> pd.DataFrame:
 
 def build_oe_df(records: List[Dict[str, Any]]) -> pd.DataFrame:
     if not records:
-        return pd.DataFrame(columns=['Section','Description','Periodicity','Last Date / O/H','Run Hrs','Table','Row'])
+        return pd.DataFrame(columns=['Section','Description','Engine','Periodicity','Last Date / O/H','Run Hrs','Table','Row'])
     df = pd.DataFrame(records)
     out = pd.DataFrame()
     out['Section'] = df.get('section', '')
     out['Description'] = df.get('description', '')
+    out['Engine'] = df.get('engine_label', '')
     out['Periodicity'] = [f"{int(float(x))}" if sf(x) > 0 else "—" for x in df.get('periodicity', pd.Series([0]*len(df)))]
     out['Last Date / O/H'] = [str(x) if x else '—' for x in df.get('last_date', pd.Series(['']*len(df)))]
     out['Run Hrs'] = [str(int(x)) if sf(x) > 0 else "—" for x in df.get('run_hrs', pd.Series([0]*len(df)))]
@@ -1084,6 +1217,7 @@ CC = {
     'Last O/H': st.column_config.TextColumn('Last O/H', width=115),
     'Hrs Since': st.column_config.TextColumn('Hrs Since', width=100),
     'Used %': st.column_config.ProgressColumn('Used %', min_value=0, max_value=150, format='%.1f%%', width=134),
+    'Parser': st.column_config.TextColumn('Parser', width=70),
     'Table': st.column_config.TextColumn('Table', width=60),
     'Rows': st.column_config.TextColumn('Rows', width=75),
     'Cols': st.column_config.TextColumn('Cols', width=80),
@@ -1113,10 +1247,10 @@ if 'save_feedback' not in st.session_state:
 # ══════════════════════════════════════════════════════════════════
 st.markdown("""
 <div class="hero-k">Fleet Running Hours Monitor</div>
-<div class="hero-h">TEC‑004 Operational Parser 10.10</div>
+<div class="hero-h">TEC‑004 10.10 Debug-Operational Build</div>
 <div class="hero-s">
-Section-specific parser for Main Engine, Auxiliary Engines, Other Equipment, and D/G tables,
-with matrix preview before save, SQLite-backed report history, and source trace columns for fast parser validation.
+Debug-first parser with raw-grid and dedup-grid visibility, dual extraction paths for Main Engine and Auxiliary Engines,
+matrix preview before save, and SQLite-backed report history.
 </div>
 <div class="hero-rule"></div>
 """, unsafe_allow_html=True)
@@ -1133,14 +1267,16 @@ with uc:
         accept_multiple_files=True,
         label_visibility='collapsed'
     )
-    st.markdown('<div class="muted">Upload one or many TEC‑004 legacy <b>.doc</b> reports. Files are converted to DOCX, parsed by section shape, previewed as matrices, and saved only after review.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="muted">This build never leaves you blind with just “No data.” It always stores raw extraction previews, deduplicated table previews, parser classification, and fallback results so you can see exactly what the runtime produced.</div>', unsafe_allow_html=True)
 with ic:
     st.markdown("""
     <div class="muted">
-    <b>ME</b> 7-cylinder paired rows<br>
-    <b>AUX</b> 3 engine-groups × 6 cylinders<br>
-    <b>OE / D/G</b> separate layout parser<br><br>
-    <b>Persistence</b><br>SQLite report ledger
+    <b>Extraction paths</b><br>
+    Grid parser + text fallback<br><br>
+    <b>Debug</b><br>
+    Raw grid · Dedup grid · Classification<br><br>
+    <b>Persistence</b><br>
+    SQLite report ledger
     </div>
     """, unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
@@ -1260,9 +1396,9 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 if n_err:
-    st.markdown(f'<div class="banner err"><b>{n_err}</b> parser errors detected. Review matrices and debug previews before save.</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="banner err"><b>{n_err}</b> parser errors detected. Open Parser Debug to inspect raw tables and fallback results.</div>', unsafe_allow_html=True)
 elif n_warn:
-    st.markdown(f'<div class="banner warn"><b>{n_warn}</b> parser warnings detected. Matrix rows were still emitted where section parsers found valid row pairs.</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="banner warn"><b>{n_warn}</b> parser warnings detected. Parsed rows are still shown where either extraction path succeeded.</div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="banner ok">No parser issues detected for the active report.</div>', unsafe_allow_html=True)
 
@@ -1302,7 +1438,7 @@ tab_me, tab_aux, tab_oe, tab_dg, tab_issues, tab_debug, tab_history = st.tabs([
 ])
 
 with tab_me:
-    st.markdown(f'<div class="bar"><div class="bar-i">⚙</div><div><div class="bar-t">Main Engine Matrix</div><div class="bar-s">7-cylinder paired-row parser</div></div><div class="bar-r"></div><div class="bar-b">rows: {len(me)}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="bar"><div class="bar-i">⚙</div><div><div class="bar-t">Main Engine Matrix</div><div class="bar-s">grid parser + text fallback</div></div><div class="bar-r"></div><div class="bar-b">rows: {len(me)}</div></div>', unsafe_allow_html=True)
     mf1, mf2, mf3, mf4 = st.columns([2.0, 1.8, 1.4, 2.2])
     with mf1:
         me_comp = st.selectbox('Component', ['All'] + sorted({c['description'] for c in me}), key='me_comp')
@@ -1327,7 +1463,7 @@ with tab_me:
     show_component_matrix(me_view, include_trace=me_trace, mode=mode)
 
 with tab_aux:
-    st.markdown(f'<div class="bar"><div class="bar-i">🔩</div><div><div class="bar-t">Auxiliary Engines Matrix</div><div class="bar-s">3-engine-group paired-row parser</div></div><div class="bar-r"></div><div class="bar-b">rows: {len(aux)}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="bar"><div class="bar-i">🔩</div><div><div class="bar-t">Auxiliary Engines Matrix</div><div class="bar-s">grid parser + text fallback</div></div><div class="bar-r"></div><div class="bar-b">rows: {len(aux)}</div></div>', unsafe_allow_html=True)
     af1, af2, af3, af4, af5 = st.columns([1.4, 2.0, 1.8, 1.4, 2.2])
     with af1:
         ax_eng = st.selectbox('Engine', ['All'] + sorted({c['engine_label'] for c in aux}), key='ax_eng')
@@ -1356,32 +1492,22 @@ with tab_aux:
     show_component_matrix(ax_view, include_trace=ax_trace, mode=mode)
 
 with tab_oe:
-    st.markdown(f'<div class="bar"><div class="bar-i">🛠</div><div><div class="bar-t">Other Equipment</div><div class="bar-s">turbocharger · coolers · A/C · compressors</div></div><div class="bar-r"></div><div class="bar-b">rows: {len(oe)}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="bar"><div class="bar-i">🛠</div><div><div class="bar-t">Other Equipment</div><div class="bar-s">grid extraction</div></div><div class="bar-r"></div><div class="bar-b">rows: {len(oe)}</div></div>', unsafe_allow_html=True)
     oe_df = build_oe_df(oe)
     if oe_df.empty:
         st.info("No other equipment data found.")
     else:
         st.dataframe(
             oe_df, use_container_width=True, hide_index=True,
-            height=min(760, 38 * len(oe_df) + 44),
-            column_config={
-                'Section': st.column_config.TextColumn('Section', width=220),
-                'Description': st.column_config.TextColumn('Description', width=320),
-                'Periodicity': st.column_config.TextColumn('Periodicity', width=100),
-                'Last Date / O/H': st.column_config.TextColumn('Last Date / O/H', width=160),
-                'Run Hrs': st.column_config.TextColumn('Run Hrs', width=100),
-                'Table': st.column_config.TextColumn('Table', width=60),
-                'Row': st.column_config.TextColumn('Row', width=60),
-            }
+            height=min(760, 38 * len(oe_df) + 44)
         )
 
 with tab_dg:
-    st.markdown(f'<div class="bar"><div class="bar-i">⚡</div><div><div class="bar-t">D/G Equipment</div><div class="bar-s">paired-row D/G side-by-side parser</div></div><div class="bar-r"></div><div class="bar-b">rows: {len(dg)}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="bar"><div class="bar-i">⚡</div><div><div class="bar-t">D/G Equipment</div><div class="bar-s">grid extraction</div></div><div class="bar-r"></div><div class="bar-b">rows: {len(dg)}</div></div>', unsafe_allow_html=True)
     dg_df = build_oe_df(dg)
     if dg_df.empty:
         st.info("No D/G equipment data found.")
     else:
-        dg_df = dg_df.rename(columns={'Section':'Section'})
         st.dataframe(
             dg_df, use_container_width=True, hide_index=True,
             height=min(760, 38 * len(dg_df) + 44)
@@ -1398,41 +1524,46 @@ with tab_issues:
             idf = idf[idf['Severity'].isin(sev)]
         st.dataframe(
             idf, use_container_width=True, hide_index=True,
-            height=min(700, 38 * len(idf) + 44),
-            column_config={
-                'Severity': st.column_config.TextColumn('Severity', width=90),
-                'Code': st.column_config.TextColumn('Code', width=170),
-                'Message': st.column_config.TextColumn('Message', width=520),
-                'Table': st.column_config.TextColumn('Table', width=65),
-                'Row': st.column_config.TextColumn('Row', width=65),
-                'Row Key': st.column_config.TextColumn('Row Key', width=320),
-            }
+            height=min(700, 38 * len(idf) + 44)
         )
 
 with tab_debug:
-    st.markdown('<div class="bar"><div class="bar-i">🧪</div><div><div class="bar-t">Parser Debug</div><div class="bar-s">table classification and raw previews</div></div><div class="bar-r"></div><div class="bar-b">debug</div></div>', unsafe_allow_html=True)
-    d1, d2, d3, d4, d5 = st.columns(5)
+    st.markdown('<div class="bar"><div class="bar-i">🧪</div><div><div class="bar-t">Parser Debug</div><div class="bar-s">raw grid · dedup grid · text fallback preview</div></div><div class="bar-r"></div><div class="bar-b">debug</div></div>', unsafe_allow_html=True)
+    d1, d2, d3, d4, d5, d6 = st.columns(6)
     with d1:
         st.metric("Tables scanned", debug.get('tables_scanned', 0))
     with d2:
-        st.metric("ME rows", debug.get('me_rows_total', 0))
+        st.metric("ME grid", debug.get('me_grid_rows_total', 0))
     with d3:
-        st.metric("AUX rows", debug.get('aux_rows_total', 0))
+        st.metric("ME text", debug.get('me_text_rows_total', 0))
     with d4:
-        st.metric("OE rows", debug.get('oe_rows_total', 0))
+        st.metric("AUX grid", debug.get('aux_grid_rows_total', 0))
     with d5:
-        st.metric("D/G rows", debug.get('dg_rows_total', 0))
+        st.metric("AUX text", debug.get('aux_text_rows_total', 0))
+    with d6:
+        st.metric("Final ME+AUX", len(all_))
 
     tdbg = pd.DataFrame(debug.get('table_debug', []))
     if not tdbg.empty:
-        show_cols = [c for c in ['table_index','type','rows','cols','me_rows','aux_rows','oe_rows','dg_rows'] if c in tdbg.columns]
-        st.markdown("### Section counts")
+        show_cols = [c for c in ['table_index','raw_type','dedup_type','raw_rows','raw_cols','dedup_rows','dedup_cols','me_rows','aux_rows','oe_rows','dg_rows'] if c in tdbg.columns]
+        st.markdown("### Table classification")
         st.dataframe(tdbg[show_cols], use_container_width=True, hide_index=True)
 
-        st.markdown("### Raw table previews")
+        st.markdown("### Raw / dedup previews")
         for item in debug.get('table_debug', []):
-            with st.expander(f"Table {item['table_index']} · {item['type']} · {item['rows']} rows · {item['cols']} cols"):
-                st.dataframe(pd.DataFrame(item['sample']), use_container_width=True, hide_index=True)
+            with st.expander(f"Table {item['table_index']} · raw {item['raw_type']} · dedup {item['dedup_type']}"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown("**Raw grid**")
+                    st.dataframe(pd.DataFrame(item['raw_sample']), use_container_width=True, hide_index=True)
+                with c2:
+                    st.markdown("**Dedup grid**")
+                    st.dataframe(pd.DataFrame(item['dedup_sample']), use_container_width=True, hide_index=True)
+
+    lines = debug.get('all_lines_preview', [])
+    if lines:
+        st.markdown("### Text stream preview")
+        st.dataframe(pd.DataFrame({"line": lines}), use_container_width=True, hide_index=True, height=420)
 
 with tab_history:
     st.markdown('<div class="bar"><div class="bar-i">🗄</div><div><div class="bar-t">Saved Reports</div><div class="bar-s">SQLite-backed report history</div></div><div class="bar-r"></div><div class="bar-b">history</div></div>', unsafe_allow_html=True)
@@ -1442,16 +1573,5 @@ with tab_history:
     else:
         st.dataframe(
             hist, use_container_width=True, hide_index=True,
-            height=min(700, 38 * len(hist) + 44),
-            column_config={
-                'id': st.column_config.NumberColumn('ID', width=60),
-                'vessel_name': st.column_config.TextColumn('Vessel', width=150),
-                'report_date': st.column_config.TextColumn('Report Date', width=120),
-                'filename': st.column_config.TextColumn('Filename', width=260),
-                'parser_version': st.column_config.TextColumn('Parser', width=180),
-                'me_total_hrs': st.column_config.NumberColumn('ME Total', width=100, format="%d"),
-                'me_this_month': st.column_config.NumberColumn('ME Month', width=100, format="%d"),
-                'created_at': st.column_config.TextColumn('Saved At', width=180),
-                'parsed_rows': st.column_config.NumberColumn('Rows', width=70),
-            }
+            height=min(700, 38 * len(hist) + 44)
         )
