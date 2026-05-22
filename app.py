@@ -1,6 +1,6 @@
 import streamlit as st
 st.set_page_config(
-    page_title="TEC-004 Running Hours Parser",
+    page_title="Fleet Running Hours Command",
     page_icon="⚓",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -9,6 +9,7 @@ st.set_page_config(
 import os
 import re
 import json
+import math
 import shutil
 import sqlite3
 import hashlib
@@ -21,189 +22,324 @@ from typing import List, Dict, Any, Tuple, Optional
 import pandas as pd
 
 # ============================================================
-# DESIGN
+# THEME
 # ============================================================
 st.markdown("""
 <style>
-:root {
-  --bg: #071018;
-  --bg2: #0b1724;
-  --bg3: #102030;
-  --line: #1f3347;
-  --line2: #294764;
-  --text: #d9e8f5;
-  --muted: #93abc2;
-  --soft: #5e768e;
-  --gold: #d2a532;
-  --gold2: #f0c24f;
-  --red: #ef5350;
-  --amber: #ffb74d;
-  --green: #66bb6a;
-  --blue: #64b5f6;
-  --radius: 12px;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  --bg:#060b12;
+  --bg2:#0b111a;
+  --bg3:#0f1722;
+  --bg4:#131d2a;
+  --line:#1f2d3f;
+  --line2:#2c4058;
+  --text:#e6eef7;
+  --muted:#9cb0c7;
+  --soft:#627a92;
+  --gold:#b88a1b;
+  --gold2:#ddb23b;
+  --gold3:#f0c85d;
+  --red:#ef5350;
+  --amber:#ffb74d;
+  --green:#66bb6a;
+  --blue:#64b5f6;
+  --cyan:#4dd0e1;
+  --radius:14px;
+  --radius-sm:10px;
+  --shadow:0 18px 60px rgba(0,0,0,.42);
 }
 
 html, body, [class*="css"] {
   background: var(--bg) !important;
   color: var(--text) !important;
+  font-family: 'Inter', sans-serif !important;
 }
-
-.main, .main > div, .block-container {
-  background: var(--bg) !important;
-}
-
+.main, .main > div, .block-container { background: var(--bg) !important; }
 .block-container {
   max-width: 100% !important;
-  padding-top: 1.25rem !important;
-  padding-bottom: 3rem !important;
-  padding-left: 2rem !important;
-  padding-right: 2rem !important;
+  padding: 1.2rem 1.8rem 3rem !important;
+}
+[data-testid="collapsedControl"], [data-testid="stSidebar"] { display:none !important; }
+
+.main::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  background:
+    radial-gradient(ellipse 70% 50% at 10% 0%, rgba(221,178,59,.08), transparent 60%),
+    radial-gradient(ellipse 70% 55% at 100% 100%, rgba(77,208,225,.05), transparent 55%);
+}
+.block-container > * { position: relative; z-index: 1; }
+
+.hero {
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:1rem;
+  margin-bottom:1rem;
+}
+.hero-kicker{
+  font-size:.7rem;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--gold3);
+  margin-bottom:.35rem;
+  font-weight:700;
+}
+.hero-title{
+  font-family:'Manrope',sans-serif;
+  font-size:2rem;
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-.04em;
+  color:var(--text);
+}
+.hero-sub{
+  color:var(--muted);
+  font-size:.95rem;
+  max-width:900px;
+  margin-top:.45rem;
+  line-height:1.6;
+}
+.hero-rule{
+  height:1px;
+  background:linear-gradient(90deg,var(--gold2) 0%, var(--line) 35%, transparent 100%);
+  margin: .85rem 0 1.35rem;
 }
 
-[data-testid="collapsedControl"] { display: none !important; }
-
-h1, h2, h3 {
-  color: var(--text) !important;
+.panel{
+  background:linear-gradient(180deg, rgba(19,29,42,.94), rgba(11,17,26,.94));
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:1rem 1rem 1rem;
 }
 
-[data-testid="stFileUploadDropzone"] {
-  background: linear-gradient(180deg, rgba(210,165,50,.09), rgba(100,181,246,.05)) !important;
-  border: 1.5px dashed var(--gold) !important;
-  border-radius: 16px !important;
+.upload-panel{
+  background:
+    linear-gradient(180deg, rgba(221,178,59,.06), rgba(100,181,246,.03)),
+    linear-gradient(180deg, rgba(19,29,42,.96), rgba(11,17,26,.96));
+  border:1px solid rgba(221,178,59,.28);
+  border-radius:var(--radius);
+  padding:1rem 1rem 1rem;
+  box-shadow:var(--shadow);
 }
 
-[data-testid="stMetric"] {
-  background: var(--bg3) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: var(--radius) !important;
+[data-testid="stFileUploadDropzone"]{
+  background:rgba(221,178,59,.04) !important;
+  border:1.5px dashed rgba(221,178,59,.55) !important;
+  border-radius:16px !important;
+  padding:2.1rem 1.4rem !important;
+}
+[data-testid="stFileUploadDropzone"]:hover{
+  border-color:var(--gold3) !important;
+  background:rgba(221,178,59,.07) !important;
 }
 
-[data-testid="stDataFrame"] {
-  border: 1px solid var(--line) !important;
-  border-radius: var(--radius) !important;
-  overflow: hidden !important;
+.section-title{
+  font-family:'Manrope',sans-serif;
+  font-size:1.02rem;
+  font-weight:700;
+  color:var(--text);
+  letter-spacing:-.02em;
+  margin:0;
+}
+.section-sub{
+  color:var(--soft);
+  font-size:.76rem;
+  margin-top:.18rem;
+  letter-spacing:.04em;
 }
 
-.stButton > button {
-  background: linear-gradient(135deg, var(--gold2), var(--gold)) !important;
-  color: #0b1117 !important;
-  border: none !important;
-  border-radius: 10px !important;
-  font-weight: 700 !important;
-  padding: 0.6rem 1.2rem !important;
+.kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  gap:.8rem;
+  margin-bottom:1.2rem;
+}
+.kpi{
+  background:linear-gradient(180deg, rgba(15,23,34,.95), rgba(10,16,24,.95));
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:.9rem 1rem 1rem;
+  position:relative;
+  overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.kpi::before{
+  content:"";
+  position:absolute;
+  left:0; right:0; top:0;
+  height:2px;
+  background:linear-gradient(90deg, var(--gold2), transparent 75%);
+}
+.kpi-v{
+  font-family:'Manrope',sans-serif;
+  font-size:1.55rem;
+  font-weight:800;
+  line-height:1.1;
+  letter-spacing:-.04em;
+  color:var(--text);
+}
+.kpi-l{
+  color:var(--soft);
+  font-size:.62rem;
+  text-transform:uppercase;
+  letter-spacing:.18em;
+  margin-top:.38rem;
+}
+.kpi.g::before{ background:linear-gradient(90deg, var(--green), transparent 75%); }
+.kpi.r::before{ background:linear-gradient(90deg, var(--red), transparent 75%); }
+.kpi.a::before{ background:linear-gradient(90deg, var(--amber), transparent 75%); }
+.kpi.b::before{ background:linear-gradient(90deg, var(--blue), transparent 75%); }
+
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  border-radius:999px;
+  padding:.34rem .62rem;
+  font-size:.72rem;
+  font-weight:700;
+  border:1px solid var(--line2);
+  background:rgba(15,23,34,.9);
+}
+.badge.red{ color:#ffd8d8; border-color:rgba(239,83,80,.35); background:rgba(239,83,80,.11);}
+.badge.amber{ color:#ffe7c5; border-color:rgba(255,183,77,.35); background:rgba(255,183,77,.10);}
+.badge.green{ color:#daf6dc; border-color:rgba(102,187,106,.35); background:rgba(102,187,106,.10);}
+.badge.blue{ color:#d7ebff; border-color:rgba(100,181,246,.35); background:rgba(100,181,246,.10);}
+.badge.cyan{ color:#d7fbff; border-color:rgba(77,208,225,.35); background:rgba(77,208,225,.08);}
+
+.banner{
+  border-radius:var(--radius);
+  padding:.9rem 1rem;
+  border:1px solid var(--line);
+  margin-bottom:.95rem;
+  line-height:1.5;
+  box-shadow:var(--shadow);
+}
+.banner.warn{
+  border-color:rgba(255,183,77,.35);
+  background:rgba(255,183,77,.09);
+  color:#ffe8c9;
+}
+.banner.err{
+  border-color:rgba(239,83,80,.35);
+  background:rgba(239,83,80,.10);
+  color:#ffd8d8;
+}
+.banner.ok{
+  border-color:rgba(102,187,106,.35);
+  background:rgba(102,187,106,.10);
+  color:#daf6dc;
 }
 
-.stDownloadButton > button {
-  background: var(--bg3) !important;
-  color: var(--text) !important;
-  border: 1px solid var(--line2) !important;
-  border-radius: 10px !important;
-  font-weight: 600 !important;
+[data-testid="stMetric"]{
+  background:var(--bg4) !important;
+  border:1px solid var(--line) !important;
+  border-radius:var(--radius) !important;
 }
 
-div[data-baseweb="select"] > div {
-  background: var(--bg3) !important;
-  border-color: var(--line2) !important;
+[data-testid="stDataFrame"]{
+  border:1px solid var(--line) !important;
+  border-radius:var(--radius) !important;
+  overflow:hidden !important;
+  box-shadow:var(--shadow);
+}
+.dvn-scroller{ background:var(--bg2) !important; }
+
+.stButton>button{
+  background:linear-gradient(135deg,var(--gold3),var(--gold2)) !important;
+  color:#091017 !important;
+  border:none !important;
+  border-radius:11px !important;
+  font-weight:800 !important;
+  letter-spacing:.05em !important;
+  text-transform:uppercase !important;
+  padding:.72rem 1.15rem !important;
+  box-shadow:0 12px 32px rgba(221,178,59,.22) !important;
+}
+.stButton>button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 18px 36px rgba(221,178,59,.3) !important;
+}
+.stDownloadButton>button{
+  background:var(--bg4) !important;
+  color:var(--text) !important;
+  border:1px solid var(--line2) !important;
+  border-radius:11px !important;
+  font-weight:700 !important;
+  padding:.7rem 1rem !important;
 }
 
-section[data-testid="stSidebar"] {
-  display: none !important;
+div[data-baseweb="select"] > div,
+.stTextInput > div > div > input {
+  background:var(--bg4) !important;
+  color:var(--text) !important;
+  border:1px solid var(--line2) !important;
+  border-radius:10px !important;
+}
+.stCheckbox label, .stRadio label, .stSelectbox label, .stMultiSelect label {
+  color:var(--soft) !important;
+  font-size:.68rem !important;
+  text-transform:uppercase !important;
+  letter-spacing:.12em !important;
 }
 
-.hr-title {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: .14em;
-  color: var(--gold2);
-  margin-bottom: .2rem;
+.streamlit-expanderHeader{
+  background:var(--bg3) !important;
+  border:1px solid var(--line) !important;
+  border-radius:12px !important;
+  color:var(--text) !important;
+}
+.streamlit-expanderContent{
+  background:var(--bg2) !important;
+  border:1px solid var(--line) !important;
+  border-top:none !important;
+  border-radius:0 0 12px 12px !important;
 }
 
-.kpi-wrap {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: .8rem;
-  margin: .8rem 0 1rem;
+.muted{
+  color:var(--muted);
+  font-size:.88rem;
+  line-height:1.6;
 }
-
-.kpi {
-  background: var(--bg3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: .9rem 1rem;
+.micro{
+  font-family:'JetBrains Mono', monospace;
+  color:var(--soft);
+  font-size:.72rem;
 }
+.spacer{ height:.35rem; }
 
-.kpi-v {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--text);
-  line-height: 1.1;
+@media (max-width:1200px){
+  .kpi-grid{ grid-template-columns:repeat(3,1fr); }
 }
-
-.kpi-l {
-  color: var(--soft);
-  font-size: .62rem;
-  text-transform: uppercase;
-  letter-spacing: .16em;
-  margin-top: .35rem;
-}
-
-.tag {
-  display: inline-block;
-  padding: .2rem .55rem;
-  border-radius: 999px;
-  font-size: .72rem;
-  font-weight: 700;
-  border: 1px solid var(--line2);
-}
-
-.tag-red { color: #ffd4d4; background: rgba(239,83,80,.14); border-color: rgba(239,83,80,.35); }
-.tag-amber { color: #ffe4bf; background: rgba(255,183,77,.14); border-color: rgba(255,183,77,.35); }
-.tag-green { color: #d4f5d6; background: rgba(102,187,106,.14); border-color: rgba(102,187,106,.35); }
-.tag-blue { color: #d7ebff; background: rgba(100,181,246,.14); border-color: rgba(100,181,246,.35); }
-
-.small-note {
-  color: var(--muted);
-  font-size: .85rem;
-  line-height: 1.55;
-}
-
-.section-rule {
-  height: 1px;
-  background: linear-gradient(90deg, var(--gold) 0%, var(--line) 30%, transparent 100%);
-  margin: .55rem 0 1.4rem;
-}
-
-.warn-box {
-  background: rgba(255,183,77,.10);
-  border: 1px solid rgba(255,183,77,.35);
-  border-radius: var(--radius);
-  padding: .8rem 1rem;
-  margin-bottom: .7rem;
-}
-
-.err-box {
-  background: rgba(239,83,80,.10);
-  border: 1px solid rgba(239,83,80,.35);
-  border-radius: var(--radius);
-  padding: .8rem 1rem;
-  margin-bottom: .7rem;
-}
-
-.ok-box {
-  background: rgba(102,187,106,.10);
-  border: 1px solid rgba(102,187,106,.35);
-  border-radius: var(--radius);
-  padding: .8rem 1rem;
-  margin-bottom: .7rem;
+@media (max-width:800px){
+  .kpi-grid{ grid-template-columns:repeat(2,1fr); }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
+# CONFIG
+# ============================================================
+DB_PATH = "tec004_reports.db"
+PARSER_VERSION = "tec004_enterprise_v2"
+DATE_PATTERNS = [
+    "%d %b %y", "%d %B %y", "%d %b %Y", "%d %B %Y",
+    "%d %b. %y", "%d %B. %y", "%d %b. %Y", "%d %B. %Y",
+]
+STATUS_ORDER = {"OVERDUE": 0, "HIGH PRIORITY": 1, "OK": 2, "NO DATA": 3}
+ENGINE_ORDER = {"ME": 0, "AUX-1": 1, "AUX-2": 2, "AUX-3": 3}
+SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
+
+# ============================================================
 # DB
 # ============================================================
-DB_PATH = "tec004_app.db"
-
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -254,14 +390,22 @@ def init_db():
         pct_used REAL,
         status TEXT,
         source_table_index INTEGER,
+        section_order INTEGER,
+        component_order INTEGER,
+        engine_order INTEGER,
+        unit_order INTEGER,
         source_row_start INTEGER,
         source_row_end INTEGER,
         source_col_date INTEGER,
         source_col_hours INTEGER,
         raw_date_text TEXT,
         raw_hours_text TEXT,
+        normalized_date_text TEXT,
+        normalized_hours_text TEXT,
         confidence REAL,
         issue_count INTEGER DEFAULT 0,
+        was_repaired INTEGER DEFAULT 0,
+        repair_notes TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY (report_id) REFERENCES reports(id)
     )
@@ -288,43 +432,66 @@ def init_db():
 init_db()
 
 # ============================================================
-# HELPERS
+# GENERIC HELPERS
 # ============================================================
-PARSER_VERSION = "tec004_v1.2_schema_safe"
-
-STATUS_ORDER = {
-    "OVERDUE": 0,
-    "HIGH PRIORITY": 1,
-    "OK": 2,
-    "NO DATA": 3
-}
-
 def now_iso():
     return datetime.utcnow().isoformat()
 
 def md5_bytes(b: bytes) -> str:
     return hashlib.md5(b).hexdigest()
 
-def first_line(text: str) -> str:
-    if text is None:
-        return ""
-    txt = str(text).replace("\x07", "").replace("\xa0", " ").replace("\t", " ")
-    parts = re.split(r'[\r\n\x0b]+', txt)
+def safe_float(x) -> float:
+    try:
+        v = float(x)
+        return 0.0 if pd.isna(v) else v
+    except Exception:
+        return 0.0
+
+def safe_int(x) -> int:
+    try:
+        return int(float(x))
+    except Exception:
+        return 0
+
+def cyl_num(unit: str) -> int:
+    m = re.search(r'(\d+)', str(unit or ""))
+    return int(m.group(1)) if m else 999
+
+def engine_rank(engine_label: str) -> int:
+    return ENGINE_ORDER.get(str(engine_label or ""), 999)
+
+def status_rank(status: str) -> int:
+    return STATUS_ORDER.get(str(status or ""), 999)
+
+def normalize_whitespace(text: Any) -> str:
+    return re.sub(r'\s+', ' ', str(text or '')).strip()
+
+def first_line(text: Any) -> str:
+    raw = str(text or "").replace("\x07", "").replace("\xa0", " ").replace("\t", " ")
+    parts = re.split(r'[\r\n\x0b]+', raw)
     for p in parts:
-        p = re.sub(r'\s+', ' ', p).strip()
+        p = normalize_whitespace(p)
         if p:
             return p
     return ""
 
-def normalize_whitespace(text: str) -> str:
-    return re.sub(r'\s+', ' ', str(text or '')).strip()
-
-def clean_name(text: str) -> str:
+def clean_name(text: Any) -> str:
     t = first_line(text)
     t = re.sub(r'(?i)ALEXIS\s*Date?', '', t)
     t = re.sub(r'(?i)Page\s*\d+\s*of\s*\d+', '', t)
     t = re.sub(r'(?i)MTS Marine Ltd.*', '', t)
+    t = re.sub(r'(?i)^MV\s+', '', t)
     return normalize_whitespace(t)
+
+def make_issue(severity: str, code: str, message: str, table_idx: int = None, row_idx: int = None, row_key: str = "") -> Dict[str, Any]:
+    return {
+        "severity": severity,
+        "issue_code": code,
+        "message": message,
+        "table_index": table_idx,
+        "row_index": row_idx,
+        "row_key": row_key,
+    }
 
 def is_component_name(name: str) -> bool:
     u = normalize_whitespace(str(name or "")).upper()
@@ -332,41 +499,148 @@ def is_component_name(name: str) -> bool:
         return False
     bad_terms = [
         "DESCRIPTION", "REMARKS", "COMPONENT", "PERIODICITY", "PERIODICTLY",
-        "DATE OF LAST", "RUNNING HOURS", "TYPE:", "MAIN ENGINE", "AUX. ENGINE",
-        "AUX ENGINE", "TURBOCHARGER", "CYL. NO", "TOTAL HOURS", "HOURS THIS MONTH",
-        "SERIAL NR", "VESSEL", "COPY", "CHIEF ENGINEER", "NOTE 1", "NOTE 2"
+        "DATE OF LAST", "RUNNING HOURS", "TYPE", "MAIN ENGINE", "AUX. ENGINE",
+        "AUX ENGINE", "TURBOCHARGER", "CYL.", "TOTAL HOURS", "HOURS THIS MONTH",
+        "SERIAL NR", "VESSEL", "TITLE", "COPY", "CHIEF ENGINEER", "NOTE 1", "NOTE 2"
     ]
     if any(bt in u for bt in bad_terms):
         return False
-    if re.fullmatch(r'[\d\s,./:-]+', u):
+    if re.fullmatch(r'[\d\s,./:\-\[\]]+', u):
         return False
-    if len(u) > 80:
+    if len(u) > 90:
         return False
     return bool(re.search(r'[A-Z]', u))
 
-def parse_date_value(text: str) -> str:
-    s = first_line(text).replace("[", "").replace("]", "").strip()
-    if not s:
-        return ""
-    if s.upper() in {"N/A", "NA", "-", "CENTRAL", "COOLER"}:
-        return ""
-    if len(s) > 24:
-        return ""
-    if re.fullmatch(r'\d+', s):
-        return ""
-    return s
+def rect_grid(table) -> List[List[str]]:
+    grid = []
+    if not table.rows:
+        return grid
+    max_cols = max(len(r.cells) for r in table.rows)
+    for row in table.rows:
+        vals = []
+        for cell in row.cells:
+            raw = re.sub(r'[\x0b\r]', '\n', cell.text).replace('\x07', '')
+            lines = [normalize_whitespace(x) for x in raw.split('\n') if normalize_whitespace(x)]
+            vals.append(lines[0] if lines else "")
+        while len(vals) < max_cols:
+            vals.append("")
+        grid.append(vals)
+    return grid
 
-def parse_number(text: str) -> float:
-    s = first_line(text).upper().replace("[", "").replace("]", "").strip()
+# ============================================================
+# REPAIR / NORMALIZATION LAYER
+# ============================================================
+MONTH_WORDS = {
+    "JAN":"JAN", "JANUARY":"JAN",
+    "FEB":"FEB", "FEBRUARY":"FEB",
+    "MAR":"MAR", "MARCH":"MAR",
+    "APR":"APR", "APRIL":"APR",
+    "MAY":"MAY",
+    "JUN":"JUN", "JUNE":"JUN",
+    "JUL":"JUL", "JULY":"JUL",
+    "AUG":"AUG", "AUGUST":"AUG",
+    "SEP":"SEP", "SEPT":"SEP", "SEPTEMBER":"SEP",
+    "OCT":"OCT", "OCTOBER":"OCT",
+    "NOV":"NOV", "NOVEMBER":"NOV",
+    "DEC":"DEC", "DECEMBER":"DEC",
+}
+
+def repair_token(text: Any) -> Dict[str, Any]:
+    raw = first_line(text)
+    token = raw.strip()
+    notes = []
+    repaired = False
+
+    if not token:
+        return {"raw": raw, "clean": "", "repaired": False, "notes": []}
+
+    new_token = token
+
+    if "[" in new_token or "]" in new_token:
+        new_token = new_token.replace("[", "").replace("]", "")
+        repaired = True
+        notes.append("Removed bracket artifacts")
+
+    new_token2 = re.sub(r'\s+', ' ', new_token).strip()
+    if new_token2 != new_token:
+        new_token = new_token2
+        repaired = True
+        notes.append("Collapsed repeated whitespace")
+
+    if re.search(r'^\d{1,6}\s+\d{2,4}$', new_token):
+        left, right = new_token.split()
+        if len(right) <= 3 and len(left) >= 4:
+            new_token = left
+            repaired = True
+            notes.append(f"Trimmed suspicious trailing numeric fragment '{right}'")
+
+    if re.search(r'^[\d,.\s]+$', new_token):
+        compact = new_token.replace(" ", "")
+        if compact != new_token and re.search(r'^\d+$', compact):
+            new_token = compact
+            repaired = True
+            notes.append("Joined split numeric groups")
+
+    new_token = new_token.replace("DEC.", "DEC").replace("OCT.", "OCT").replace("NOV.", "NOV").replace("JAN.", "JAN")
+    new_token = new_token.replace("MARCH.", "MARCH").replace("JUNE.", "JUNE").replace("JULY.", "JULY")
+
+    return {"raw": raw, "clean": normalize_whitespace(new_token), "repaired": repaired, "notes": notes}
+
+def normalize_date_string(text: Any) -> Dict[str, Any]:
+    rep = repair_token(text)
+    s = rep["clean"].upper()
+
+    if not s or s in {"N/A", "NA", "-", "CENTRAL", "COOLER"}:
+        return {"raw": rep["raw"], "value": "", "repaired": rep["repaired"], "notes": rep["notes"]}
+
+    if re.fullmatch(r'\d+', s):
+        return {"raw": rep["raw"], "value": "", "repaired": rep["repaired"], "notes": rep["notes"]}
+
+    s = re.sub(r'(?i)\bSEPT\b', 'SEP', s)
+    s = re.sub(r'(?i)\bMARCH\b', 'MAR', s)
+    s = re.sub(r'(?i)\bJUNE\b', 'JUN', s)
+    s = re.sub(r'(?i)\bJULY\b', 'JUL', s)
+    s = re.sub(r'(?i)\bAPRIL\b', 'APR', s)
+    s = re.sub(r'(?i)\bAUGUST\b', 'AUG', s)
+    s = re.sub(r'(?i)\bOCTOBER\b', 'OCT', s)
+    s = re.sub(r'(?i)\bNOVEMBER\b', 'NOV', s)
+    s = re.sub(r'(?i)\bDECEMBER\b', 'DEC', s)
+    s = re.sub(r'(?i)\bJANUARY\b', 'JAN', s)
+    s = re.sub(r'(?i)\bFEBRUARY\b', 'FEB', s)
+
+    s = re.sub(r'\s+', ' ', s).strip()
+
+    if len(s) > 24:
+        return {"raw": rep["raw"], "value": "", "repaired": True, "notes": rep["notes"] + ["Rejected overlong date token"]}
+
+    return {"raw": rep["raw"], "value": s, "repaired": rep["repaired"], "notes": rep["notes"]}
+
+def normalize_number_string(text: Any) -> Dict[str, Any]:
+    rep = repair_token(text)
+    s = rep["clean"].upper()
+
     if not s or s in {"", "-", "N/A", "NA", "CENTRAL", "COOLER"}:
-        return 0.0
+        return {"raw": rep["raw"], "value": 0.0, "normalized_text": "", "repaired": rep["repaired"], "notes": rep["notes"]}
+
     if any(k in s for k in ["MONTH", "YEAR", "WEEK", "DAY", "OBSERVATION", "OBS"]):
-        return 0.0
-    s = re.sub(r'([,.])\s+', r'\1', s)
-    m = re.search(r'\d[\d,.]*', s)
+        return {"raw": rep["raw"], "value": 0.0, "normalized_text": s, "repaired": rep["repaired"], "notes": rep["notes"]}
+
+    t = re.sub(r'([,.])\s+', r'\1', s)
+
+    m = re.search(r'\d[\d,.\s]*', t)
     if not m:
-        return 0.0
-    block = m.group()
+        return {"raw": rep["raw"], "value": 0.0, "normalized_text": s, "repaired": rep["repaired"], "notes": rep["notes"]}
+
+    block = m.group().strip()
+
+    if re.search(r'^\d{4,6}\s+\d{2,3}$', block):
+        left, right = block.split()
+        block = left
+        rep["repaired"] = True
+        rep["notes"] = rep["notes"] + [f"Removed suspicious trailing fragment '{right}' from numeric token"]
+
+    block = block.replace(" ", "")
+
     sep = max(block.rfind("."), block.rfind(","))
     if sep > 0 and len(block) - sep == 4:
         block = re.sub(r'[,.]', '', block)
@@ -374,13 +648,23 @@ def parse_number(text: str) -> float:
         block = re.sub(r'[,.]', '', block[:sep])
     else:
         block = re.sub(r'[,.]', '', block)
-    try:
-        return float(block)
-    except Exception:
-        return 0.0
 
-def periodicity_value(raw: str) -> float:
-    return parse_number(raw)
+    try:
+        val = float(block)
+    except Exception:
+        val = 0.0
+
+    return {
+        "raw": rep["raw"],
+        "value": val,
+        "normalized_text": block,
+        "repaired": rep["repaired"],
+        "notes": rep["notes"]
+    }
+
+def periodicity_value(raw: Any) -> Dict[str, Any]:
+    n = normalize_number_string(raw)
+    return n
 
 def compute_status(hrs: float, period: float) -> str:
     if hrs <= 0 or period <= 0:
@@ -397,38 +681,22 @@ def compute_pct(hrs: float, period: float) -> float:
         return 0.0
     return round(hrs / period, 4)
 
-def confidence_score(date_txt: str, hrs_txt: str, period_raw: str, issues: List[Dict[str, Any]]) -> float:
+def build_confidence(issue_count: int, repaired: bool, date_ok: bool, hrs_ok: bool, period_ok: bool) -> float:
     score = 1.0
-    if not parse_date_value(date_txt):
-        score -= 0.15
-    if parse_number(hrs_txt) <= 0:
-        score -= 0.15
-    if periodicity_value(period_raw) <= 0:
+    if repaired:
+        score -= 0.08
+    if not date_ok:
+        score -= 0.12
+    if not hrs_ok:
+        score -= 0.12
+    if not period_ok:
         score -= 0.10
-    score -= min(0.50, 0.08 * len(issues))
+    score -= min(0.45, issue_count * 0.07)
     return max(0.0, round(score, 2))
 
-def row_key(rec: Dict[str, Any]) -> str:
-    return " | ".join([
-        str(rec.get("category", "")),
-        str(rec.get("engine_label", "")),
-        str(rec.get("unit", "")),
-        str(rec.get("description", "")),
-        str(rec.get("source_table_index", "")),
-        str(rec.get("source_row_start", "")),
-        str(rec.get("source_col_date", "")),
-    ])
-
-def make_issue(severity: str, code: str, message: str, table_idx: int = None, row_idx: int = None, rkey: str = "") -> Dict[str, Any]:
-    return {
-        "severity": severity,
-        "issue_code": code,
-        "message": message,
-        "table_index": table_idx,
-        "row_index": row_idx,
-        "row_key": rkey,
-    }
-
+# ============================================================
+# RECORD NORMALIZATION
+# ============================================================
 def normalize_row_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     rec = rec or {}
     out = dict(rec)
@@ -444,14 +712,22 @@ def normalize_row_record(rec: Dict[str, Any]) -> Dict[str, Any]:
         "pct_used": 0.0,
         "status": "NO DATA",
         "source_table_index": "",
+        "section_order": 0,
+        "component_order": 0,
+        "engine_order": 0,
+        "unit_order": 0,
         "source_row_start": "",
         "source_row_end": "",
         "source_col_date": "",
         "source_col_hours": "",
         "raw_date_text": "",
         "raw_hours_text": "",
+        "normalized_date_text": "",
+        "normalized_hours_text": "",
         "confidence": 0.0,
         "issue_count": 0,
+        "was_repaired": 0,
+        "repair_notes": "",
     }
     for k, v in defaults.items():
         out.setdefault(k, v)
@@ -472,82 +748,93 @@ def normalize_rows_payload(rows) -> List[Dict[str, Any]]:
             out.append(normalize_row_record({}))
     return out
 
-def normalize_parsed_payload(parsed: dict) -> dict:
+def normalize_other_equipment(rows) -> List[Dict[str, Any]]:
+    if rows is None:
+        return []
+    if isinstance(rows, pd.DataFrame):
+        rows = rows.to_dict("records")
+    if not isinstance(rows, list):
+        return []
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            r = {}
+        r.setdefault("section", "")
+        r.setdefault("description", "")
+        r.setdefault("last_date", "")
+        r.setdefault("run_hrs", "")
+        r.setdefault("source_table_index", "")
+        r.setdefault("source_row", "")
+        r.setdefault("section_order", 0)
+        r.setdefault("item_order", 0)
+        out.append(r)
+    return out
+
+def normalize_parsed_payload(parsed: Dict[str, Any]) -> Dict[str, Any]:
     parsed = parsed or {}
     parsed.setdefault("vessel_name", "UNKNOWN")
     parsed.setdefault("report_date", "")
     parsed.setdefault("me_total_hrs", 0)
     parsed.setdefault("me_this_month", 0)
+    parsed.setdefault("filename", "")
+    parsed.setdefault("file_hash", "")
+    parsed.setdefault("uploaded_at", now_iso())
     parsed["me_comps"] = normalize_rows_payload(parsed.get("me_comps", []))
     parsed["aux_comps"] = normalize_rows_payload(parsed.get("aux_comps", []))
     parsed["components"] = normalize_rows_payload(parsed.get("components", []))
-    parsed.setdefault("other_equipment", [])
-    if isinstance(parsed.get("other_equipment"), pd.DataFrame):
-        parsed["other_equipment"] = parsed["other_equipment"].to_dict("records")
-    if not isinstance(parsed.get("other_equipment"), list):
-        parsed["other_equipment"] = []
+    parsed["other_equipment"] = normalize_other_equipment(parsed.get("other_equipment", []))
     parsed.setdefault("issues", [])
-    if not isinstance(parsed.get("issues"), list):
+    if not isinstance(parsed["issues"], list):
         parsed["issues"] = []
-    parsed.setdefault("uploaded_at", now_iso())
     return parsed
 
+def row_key(rec: Dict[str, Any]) -> str:
+    parts = [
+        str(rec.get("category", "")),
+        str(rec.get("description", "")),
+        str(rec.get("engine_label", "")),
+        str(rec.get("unit", "")),
+        str(rec.get("source_table_index", "")),
+        str(rec.get("source_row_start", "")),
+        str(rec.get("source_col_date", "")),
+    ]
+    return " | ".join(parts)
+
+# ============================================================
+# CONVERSION
+# ============================================================
 def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
     if not os.path.isfile(soffice):
-        raise RuntimeError("LibreOffice not found. Add libreoffice to your environment/packages.")
+        raise RuntimeError("LibreOffice not found. Add libreoffice to the environment.")
     with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as tf:
         tf.write(raw)
         src = tf.name
     outdir = tempfile.mkdtemp(prefix="lo_")
     out = os.path.join(outdir, Path(src).stem + ".docx")
-    profile = f"file:///tmp/lo_profile_{os.getpid()}_{os.urandom(4).hex()}"
+    profile = f"file:///tmp/lo_{os.getpid()}_{os.urandom(4).hex()}"
     try:
         r = subprocess.run(
             [
                 soffice, "--headless", "--norestore", "--nofirststartwizard",
                 f"-env:UserInstallation={profile}",
-                "--convert-to", "docx",
-                src,
-                "--outdir", outdir
+                "--convert-to", "docx", src, "--outdir", outdir
             ],
             capture_output=True,
             timeout=120
         )
         if not os.path.exists(out):
-            stderr = r.stderr.decode("utf-8", "ignore")[:500]
-            stdout = r.stdout.decode("utf-8", "ignore")[:500]
-            raise RuntimeError(f"LibreOffice conversion failed. stdout={stdout} stderr={stderr}")
+            raise RuntimeError(r.stderr.decode("utf-8", "ignore")[:400] or r.stdout.decode("utf-8", "ignore")[:400])
         with open(out, "rb") as f:
             return f.read()
     finally:
-        try:
-            if os.path.exists(src):
-                os.unlink(src)
-        except Exception:
-            pass
-        try:
-            if os.path.exists(out):
-                os.unlink(out)
-        except Exception:
-            pass
+        for p in [src, out]:
+            try:
+                if os.path.exists(p):
+                    os.unlink(p)
+            except Exception:
+                pass
         shutil.rmtree(outdir, ignore_errors=True)
-
-def rect_grid(table) -> List[List[str]]:
-    grid = []
-    if not table.rows:
-        return grid
-    max_cols = max(len(r.cells) for r in table.rows)
-    for row in table.rows:
-        cells = []
-        for cell in row.cells:
-            raw = re.sub(r'[\x0b\r]', '\n', cell.text).replace('\x07', '')
-            lines = [normalize_whitespace(x) for x in raw.split("\n") if normalize_whitespace(x)]
-            cells.append(lines[0] if lines else "")
-        while len(cells) < max_cols:
-            cells.append("")
-        grid.append(cells)
-    return grid
 
 # ============================================================
 # PARSER
@@ -557,156 +844,167 @@ def detect_vessel_and_date(doc) -> Tuple[str, str, List[Dict[str, Any]]]:
     report_date = ""
     issues = []
 
-    joined = "\n".join([normalize_whitespace(p.text) for p in doc.paragraphs if normalize_whitespace(p.text)])
-    if joined:
-        m_v = re.search(r"Vessel[’'`s\s]*Name\s*:\s*(?:MV\s+)?([A-Z][A-Z0-9 \-]+)", joined, re.I)
-        if m_v:
-            vessel = clean_name(m_v.group(1))
-        m_d = re.search(r"Date\s*:\s*([^\n]+)", joined, re.I)
-        if m_d:
-            report_date = parse_date_value(m_d.group(1))
+    for p in doc.paragraphs:
+        txt = normalize_whitespace(p.text)
+        if not txt:
+            continue
+        mv = re.search(r"Vessel[’'`s\s]*Name\s*:?\s*(?:MV\s+)?([A-Z][A-Z0-9 \-]+)", txt, re.I)
+        if mv and vessel == "UNKNOWN":
+            vessel = clean_name(mv.group(1))
+        md = re.search(r"Date\s*:?\s*(.+)", txt, re.I)
+        if md and not report_date:
+            dd = normalize_date_string(md.group(1))
+            report_date = dd["value"]
+        if vessel != "UNKNOWN" and report_date:
+            break
 
     if vessel == "UNKNOWN":
-        for p in doc.paragraphs:
-            txt = normalize_whitespace(p.text)
-            m_v = re.search(r"Vessel[’'`s\s]*Name\s*:\s*(?:MV\s+)?([A-Z][A-Z0-9 \-]+)", txt, re.I)
-            if m_v:
-                vessel = clean_name(m_v.group(1))
-                break
-
+        issues.append(make_issue("warning", "VESSEL_NOT_FOUND", "Could not extract vessel name."))
     if not report_date:
-        for p in doc.paragraphs:
-            txt = normalize_whitespace(p.text)
-            m_d = re.search(r"Date\s*:\s*(.+)", txt, re.I)
-            if m_d:
-                report_date = parse_date_value(m_d.group(1))
-                if report_date:
-                    break
-
-    if vessel == "UNKNOWN":
-        issues.append(make_issue("warning", "VESSEL_NOT_FOUND", "Could not extract vessel name from paragraphs."))
-    if not report_date:
-        issues.append(make_issue("warning", "REPORT_DATE_NOT_FOUND", "Could not extract report date from paragraphs."))
+        issues.append(make_issue("warning", "REPORT_DATE_NOT_FOUND", "Could not extract report date."))
 
     return vessel, report_date, issues
 
 def detect_me_totals(grid: List[List[str]]) -> Tuple[float, float]:
-    me_total = 0
-    me_month = 0
-    flat = " | ".join([" | ".join(row) for row in grid[:3]])
+    me_total = 0.0
+    me_month = 0.0
+    flat = " | ".join([" | ".join(row) for row in grid[:4]])
     m1 = re.search(r"Total Running Hours[\s:ǀ|]+([\d,]+)", flat, re.I)
     m2 = re.search(r"This Month[\s:]+([\d,]+)", flat, re.I)
     if m1:
-        me_total = parse_number(m1.group(1))
+        me_total = normalize_number_string(m1.group(1))["value"]
     if m2:
-        me_month = parse_number(m2.group(1))
+        me_month = normalize_number_string(m2.group(1))["value"]
     return me_total, me_month
 
-def parse_me_table(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def parse_me_table(grid: List[List[str]], table_idx: int, section_base: int = 1000) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     records = []
     issues = []
 
-    header_text = " ".join(" ".join(r) for r in grid[:3]).upper()
-    if "MAIN ENGINE" not in header_text:
+    header = " ".join(" ".join(r) for r in grid[:5]).upper()
+    if "MAIN ENGINE" not in header:
         return records, issues
 
     if len(grid) < 3:
-        issues.append(make_issue("warning", "ME_TABLE_TOO_SHORT", "Main Engine table too short to parse.", table_idx))
+        issues.append(make_issue("warning", "ME_TABLE_TOO_SHORT", "Main engine table too short.", table_idx))
         return records, issues
 
     period_col = 1
+    marker_col = 2
+    first_cyl_col = 3
     remarks_col = len(grid[0]) - 1
 
     for c in range(len(grid[0])):
-        h = " ".join(str(grid[r][c]).upper() for r in range(min(4, len(grid))))
-        if "REMARK" in h:
+        head_text = " ".join(str(grid[r][c]).upper() for r in range(min(4, len(grid))))
+        if "REMARK" in head_text:
             remarks_col = c
+            break
 
-    marker_col = period_col + 1
-    first_cyl_col = period_col + 2
     actual_cyls = max(1, min(7, remarks_col - first_cyl_col))
     if actual_cyls <= 0:
-        actual_cyls = max(1, min(7, len(grid[0]) - first_cyl_col - 1))
+        actual_cyls = 6
 
     end = len(grid)
     for r, row in enumerate(grid):
         joined = " ".join(str(x).upper() for x in row)
-        if any(stop in joined for stop in ["NOTE 1", "TURBOCHARGER", "AUX. ENGINE", "AUX ENGINE"]):
+        if any(stop in joined for stop in ["NOTE 1", "AUX. ENGINE", "AUX ENGINE", "TURBOCHARGER"]):
             end = r
             break
 
+    component_order = 0
     r = 1
     while r < end - 1:
-        current = grid[r]
-        nxt = grid[r + 1] if r + 1 < end else []
-        name = clean_name(current[0] if len(current) > 0 else "")
-        period_raw = current[period_col] if len(current) > period_col else ""
-        period = periodicity_value(period_raw)
-        marker = normalize_whitespace(current[marker_col] if len(current) > marker_col else "")
+        row1 = grid[r]
+        row2 = grid[r + 1] if r + 1 < end else []
+        name = clean_name(row1[0] if len(row1) > 0 else "")
+        period_raw = row1[period_col] if len(row1) > period_col else ""
+        marker = normalize_whitespace(row1[marker_col] if len(row1) > marker_col else "")
 
         if is_component_name(name) and marker == "1":
-            pair_marker = normalize_whitespace(nxt[marker_col] if len(nxt) > marker_col else "")
-            pair_issue_list = []
+            component_order += 1
+
+            pair_marker = normalize_whitespace(row2[marker_col] if len(row2) > marker_col else "")
+            block_issues = []
             if pair_marker != "2":
-                pair_issue_list.append(make_issue(
+                block_issues.append(make_issue(
                     "warning", "ME_PAIR_MARKER_MISSING",
-                    f"Expected paired marker '2' below component '{name}', found '{pair_marker or '(blank)'}'.",
+                    f"Expected marker 2 under '{name}', found '{pair_marker or '(blank)'}'.",
                     table_idx, r
                 ))
 
+            period_norm = periodicity_value(period_raw)
+            period_hours = period_norm["value"]
+
             for cyl in range(1, actual_cyls + 1):
                 ci = first_cyl_col + cyl - 1
-                date_txt = current[ci] if ci < len(current) else ""
-                hrs_txt = nxt[ci] if ci < len(nxt) else ""
-                date_val = parse_date_value(date_txt)
-                hrs_val = parse_number(hrs_txt)
+                date_raw = row1[ci] if ci < len(row1) else ""
+                hrs_raw = row2[ci] if ci < len(row2) else ""
 
-                local_issues = list(pair_issue_list)
-                if date_txt and not date_val:
-                    local_issues.append(make_issue("warning", "ME_BAD_DATE", f"Suspicious ME date '{date_txt}' for {name} Cyl {cyl}.", table_idx, r))
-                if hrs_txt and hrs_val <= 0:
-                    local_issues.append(make_issue("warning", "ME_BAD_HOURS", f"Suspicious ME hours '{hrs_txt}' for {name} Cyl {cyl}.", table_idx, r + 1))
-                if period_raw and period <= 0:
-                    local_issues.append(make_issue("info", "ME_NON_NUMERIC_PERIOD", f"Non-numeric or observational periodicity '{period_raw}' for {name}.", table_idx, r))
+                date_norm = normalize_date_string(date_raw)
+                hrs_norm = normalize_number_string(hrs_raw)
 
-                if date_val or hrs_val > 0:
+                local_issues = list(block_issues)
+                if date_raw and not date_norm["value"]:
+                    local_issues.append(make_issue("warning", "ME_BAD_DATE", f"Unclear date '{first_line(date_raw)}' for {name} Cyl {cyl}.", table_idx, r))
+                if hrs_raw and hrs_norm["value"] <= 0:
+                    local_issues.append(make_issue("warning", "ME_BAD_HOURS", f"Unclear hours '{first_line(hrs_raw)}' for {name} Cyl {cyl}.", table_idx, r + 1))
+                if period_raw and period_hours <= 0:
+                    local_issues.append(make_issue("info", "ME_PERIOD_NON_NUMERIC", f"Non-numeric periodicity '{first_line(period_raw)}' for {name}.", table_idx, r))
+
+                if date_norm["value"] or hrs_norm["value"] > 0:
+                    repair_notes = period_norm["notes"] + date_norm["notes"] + hrs_norm["notes"]
+                    was_repaired = int(period_norm["repaired"] or date_norm["repaired"] or hrs_norm["repaired"])
                     rec = normalize_row_record({
                         "category": "MAIN_ENGINE",
                         "engine_label": "ME",
                         "unit": f"Cyl {cyl}",
                         "description": name,
                         "periodicity_raw": first_line(period_raw),
-                        "periodicity_hours": period,
-                        "last_oh_date": date_val,
-                        "hrs_since": hrs_val,
-                        "pct_used": compute_pct(hrs_val, period),
-                        "status": compute_status(hrs_val, period),
+                        "periodicity_hours": period_hours,
+                        "last_oh_date": date_norm["value"],
+                        "hrs_since": hrs_norm["value"],
+                        "pct_used": compute_pct(hrs_norm["value"], period_hours),
+                        "status": compute_status(hrs_norm["value"], period_hours),
                         "source_table_index": table_idx,
+                        "section_order": section_base,
+                        "component_order": component_order,
+                        "engine_order": 0,
+                        "unit_order": cyl,
                         "source_row_start": r,
                         "source_row_end": r + 1,
                         "source_col_date": ci,
                         "source_col_hours": ci,
-                        "raw_date_text": first_line(date_txt),
-                        "raw_hours_text": first_line(hrs_txt),
-                        "confidence": confidence_score(date_txt, hrs_txt, period_raw, local_issues),
-                        "issue_count": len(local_issues),
+                        "raw_date_text": date_norm["raw"],
+                        "raw_hours_text": hrs_norm["raw"],
+                        "normalized_date_text": date_norm["value"],
+                        "normalized_hours_text": hrs_norm["normalized_text"],
+                        "was_repaired": was_repaired,
+                        "repair_notes": " | ".join(dict.fromkeys(repair_notes)),
                     })
-                    records.append(rec)
+                    rec["confidence"] = build_confidence(
+                        issue_count=len(local_issues),
+                        repaired=bool(was_repaired),
+                        date_ok=bool(date_norm["value"]),
+                        hrs_ok=(hrs_norm["value"] > 0),
+                        period_ok=(period_hours > 0)
+                    )
+                    rec["issue_count"] = len(local_issues)
                     rk = row_key(rec)
                     for it in local_issues:
                         it["row_key"] = rk
                         issues.append(it)
+                    records.append(rec)
             r += 2
         else:
             r += 1
 
     return records, issues
 
-def parse_aux_table(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def parse_aux_table(grid: List[List[str]], table_idx: int, section_base: int = 2000) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     records = []
     issues = []
 
-    joined = " ".join(" ".join(r) for r in grid[:10]).upper()
+    joined = " ".join(" ".join(r) for r in grid[:14]).upper()
     if "AUX. ENGINE" not in joined and "AUX ENGINE" not in joined:
         return records, issues
 
@@ -715,247 +1013,266 @@ def parse_aux_table(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[st
         if any("DESCRIPTION" == normalize_whitespace(c).upper() for c in row):
             desc_row = ri
             break
+
     if desc_row is None:
-        issues.append(make_issue("warning", "AUX_DESC_ROW_NOT_FOUND", "AUX description row not found.", table_idx))
+        issues.append(make_issue("warning", "AUX_DESC_ROW_NOT_FOUND", "Auxiliary engine description row not found.", table_idx))
         return records, issues
 
-    header_band = [" ".join(grid[i]).upper() for i in range(max(0, desc_row - 6), desc_row + 1)]
-    header_join = " ".join(header_band)
-    present_engines = []
+    engines_found = []
+    header_scan = " ".join(" ".join(grid[max(0, desc_row-8):desc_row+1][i]) for i in range(min(len(grid[max(0, desc_row-8):desc_row+1]), 9)))
+    header_upper = header_scan.upper()
     for n in [1, 2, 3]:
-        if f"AUX. ENGINE NO.{n}" in header_join or f"AUX ENGINE NO.{n}" in header_join or f"NO.{n}" in header_join:
-            present_engines.append(f"AUX-{n}")
-    if not present_engines:
-        present_engines = ["AUX-1", "AUX-2", "AUX-3"]
+        if f"AUX. ENGINE NO.{n}" in header_upper or f"AUX ENGINE NO.{n}" in header_upper or f"NO.{n}" in header_upper:
+            engines_found.append(f"AUX-{n}")
+    if not engines_found:
+        engines_found = ["AUX-1", "AUX-2", "AUX-3"]
 
-    col_nums = []
+    start_col = 3
+    cyl_count = 6
+    seen_numeric_headers = []
     for ci in range(2, len(grid[desc_row])):
-        token = normalize_whitespace(grid[desc_row][ci])
-        if re.fullmatch(r'\d+', token):
-            col_nums.append((ci, int(token)))
+        t = normalize_whitespace(grid[desc_row][ci])
+        if re.fullmatch(r'\d+', t):
+            seen_numeric_headers.append((ci, int(t)))
 
-    if not col_nums:
-        issues.append(make_issue("warning", "AUX_CYL_HEADERS_MISSING", "No AUX cylinder headers found; using fallback grouping.", table_idx, desc_row))
-        cyl_count = 6
-        start_col = 3
-    else:
-        max_seen = max(n for _, n in col_nums)
-        cyl_count = max(1, min(7, max_seen))
-        start_col = min(ci for ci, _ in col_nums)
+    if seen_numeric_headers:
+        start_col = min(ci for ci, _ in seen_numeric_headers)
+        cyl_count = max(1, min(7, max(n for _, n in seen_numeric_headers)))
 
-    group_count = len(present_engines)
-    if group_count < 1:
-        group_count = 1
-
+    group_count = len(engines_found)
+    component_order = 0
     r = desc_row + 1
-    while r < len(grid) - 1:
-        current = grid[r]
-        nxt = grid[r + 1] if r + 1 < len(grid) else []
 
-        name = clean_name(current[0] if len(current) > 0 else "")
-        period_raw = current[1] if len(current) > 1 else ""
-        period = periodicity_value(period_raw)
-        marker = normalize_whitespace(current[2] if len(current) > 2 else "")
+    while r < len(grid) - 1:
+        row1 = grid[r]
+        row2 = grid[r + 1] if r + 1 < len(grid) else []
+
+        name = clean_name(row1[0] if len(row1) > 0 else "")
+        period_raw = row1[1] if len(row1) > 1 else ""
+        marker = normalize_whitespace(row1[2] if len(row1) > 2 else "")
 
         if is_component_name(name) and marker == "1":
-            pair_marker = normalize_whitespace(nxt[2] if len(nxt) > 2 else "")
-            pair_issue_list = []
+            component_order += 1
+            pair_marker = normalize_whitespace(row2[2] if len(row2) > 2 else "")
+            block_issues = []
             if pair_marker != "2":
-                pair_issue_list.append(make_issue(
+                block_issues.append(make_issue(
                     "warning", "AUX_PAIR_MARKER_MISSING",
-                    f"Expected paired marker '2' below AUX component '{name}', found '{pair_marker or '(blank)'}'.",
+                    f"Expected marker 2 under AUX component '{name}', found '{pair_marker or '(blank)'}'.",
                     table_idx, r
                 ))
 
-            for engine_idx in range(group_count):
-                eng_label = present_engines[engine_idx] if engine_idx < len(present_engines) else f"AUX-{engine_idx+1}"
-                group_start = start_col + (engine_idx * cyl_count)
+            period_norm = periodicity_value(period_raw)
+            period_hours = period_norm["value"]
+
+            for eng_idx in range(group_count):
+                eng_label = engines_found[eng_idx] if eng_idx < len(engines_found) else f"AUX-{eng_idx+1}"
+                grp_start = start_col + eng_idx * cyl_count
                 for cyl in range(1, cyl_count + 1):
-                    ci = group_start + cyl - 1
-                    date_txt = current[ci] if ci < len(current) else ""
-                    hrs_txt = nxt[ci] if ci < len(nxt) else ""
-                    date_val = parse_date_value(date_txt)
-                    hrs_val = parse_number(hrs_txt)
+                    ci = grp_start + cyl - 1
+                    date_raw = row1[ci] if ci < len(row1) else ""
+                    hrs_raw = row2[ci] if ci < len(row2) else ""
 
-                    local_issues = list(pair_issue_list)
-                    if date_txt and not date_val:
-                        local_issues.append(make_issue("warning", "AUX_BAD_DATE", f"Suspicious AUX date '{date_txt}' for {name} {eng_label} Cyl {cyl}.", table_idx, r))
-                    if hrs_txt and hrs_val <= 0:
-                        local_issues.append(make_issue("warning", "AUX_BAD_HOURS", f"Suspicious AUX hours '{hrs_txt}' for {name} {eng_label} Cyl {cyl}.", table_idx, r + 1))
-                    if period_raw and period <= 0:
-                        local_issues.append(make_issue("info", "AUX_NON_NUMERIC_PERIOD", f"Non-numeric or observational periodicity '{period_raw}' for {name}.", table_idx, r))
+                    date_norm = normalize_date_string(date_raw)
+                    hrs_norm = normalize_number_string(hrs_raw)
 
-                    if date_val or hrs_val > 0:
+                    local_issues = list(block_issues)
+                    if date_raw and not date_norm["value"]:
+                        local_issues.append(make_issue("warning", "AUX_BAD_DATE", f"Unclear date '{first_line(date_raw)}' for {name} {eng_label} Cyl {cyl}.", table_idx, r))
+                    if hrs_raw and hrs_norm["value"] <= 0:
+                        local_issues.append(make_issue("warning", "AUX_BAD_HOURS", f"Unclear hours '{first_line(hrs_raw)}' for {name} {eng_label} Cyl {cyl}.", table_idx, r + 1))
+                    if period_raw and period_hours <= 0:
+                        local_issues.append(make_issue("info", "AUX_PERIOD_NON_NUMERIC", f"Non-numeric periodicity '{first_line(period_raw)}' for {name}.", table_idx, r))
+
+                    if date_norm["value"] or hrs_norm["value"] > 0:
+                        repair_notes = period_norm["notes"] + date_norm["notes"] + hrs_norm["notes"]
+                        was_repaired = int(period_norm["repaired"] or date_norm["repaired"] or hrs_norm["repaired"])
                         rec = normalize_row_record({
                             "category": "AUX_ENGINE",
                             "engine_label": eng_label,
                             "unit": f"Cyl {cyl}",
                             "description": name,
                             "periodicity_raw": first_line(period_raw),
-                            "periodicity_hours": period,
-                            "last_oh_date": date_val,
-                            "hrs_since": hrs_val,
-                            "pct_used": compute_pct(hrs_val, period),
-                            "status": compute_status(hrs_val, period),
+                            "periodicity_hours": period_hours,
+                            "last_oh_date": date_norm["value"],
+                            "hrs_since": hrs_norm["value"],
+                            "pct_used": compute_pct(hrs_norm["value"], period_hours),
+                            "status": compute_status(hrs_norm["value"], period_hours),
                             "source_table_index": table_idx,
+                            "section_order": section_base,
+                            "component_order": component_order,
+                            "engine_order": eng_idx + 1,
+                            "unit_order": cyl,
                             "source_row_start": r,
                             "source_row_end": r + 1,
                             "source_col_date": ci,
                             "source_col_hours": ci,
-                            "raw_date_text": first_line(date_txt),
-                            "raw_hours_text": first_line(hrs_txt),
-                            "confidence": confidence_score(date_txt, hrs_txt, period_raw, local_issues),
-                            "issue_count": len(local_issues),
+                            "raw_date_text": date_norm["raw"],
+                            "raw_hours_text": hrs_norm["raw"],
+                            "normalized_date_text": date_norm["value"],
+                            "normalized_hours_text": hrs_norm["normalized_text"],
+                            "was_repaired": was_repaired,
+                            "repair_notes": " | ".join(dict.fromkeys(repair_notes)),
                         })
-                        records.append(rec)
+                        rec["confidence"] = build_confidence(
+                            issue_count=len(local_issues),
+                            repaired=bool(was_repaired),
+                            date_ok=bool(date_norm["value"]),
+                            hrs_ok=(hrs_norm["value"] > 0),
+                            period_ok=(period_hours > 0)
+                        )
+                        rec["issue_count"] = len(local_issues)
                         rk = row_key(rec)
                         for it in local_issues:
                             it["row_key"] = rk
                             issues.append(it)
+                        records.append(rec)
             r += 2
         else:
             r += 1
 
     return records, issues
 
-def parse_other_equipment(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def parse_other_equipment(grid: List[List[str]], table_idx: int, section_base: int = 3000) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     records = []
     issues = []
 
-    joined = " ".join(" ".join(r) for r in grid[:8]).upper()
-    if not any(x in joined for x in ["TURBOCHARGER", "COOLERS", "A/C", "AUXILIARY BOILER", "D/G NO1", "D/G NO.1", "DG NO1"]):
+    joined = " ".join(" ".join(r) for r in grid[:10]).upper()
+    if not any(k in joined for k in ["TURBOCHARGER", "COOLERS", "A/C", "AUXILIARY BOILER", "MAIN AIR COMPRESSORS", "DG NO"]):
         return records, issues
 
     skip = {
         "", "TURBOCHARGER", "COOLERS", "A/C & REFR. COMPRESSORS",
         "AUXILIARY BOILER", "EXH GAS BOILER", "MAIN AIR COMPRESSORS",
-        "DESCRIPTION", "PERIODICTLY", "DATE OF LAST O/H", "RUN HRS"
+        "PERIODICTLY", "DATE OF LAST O/H", "RUN HRS", "DESCRIPTION"
     }
 
+    item_order = 0
     for r, row in enumerate(grid):
-        for sec, dc, dtc, hrc in [
-            ("Turbocharger / Aux Boiler", 0, 2, 3),
-            ("Coolers / Exh Gas Boiler", 5, 6, 7),
-            ("A/C & Compressors", 10, 11, 12),
+        for sec_name, desc_col, date_col, hrs_col, sec_ord in [
+            ("Turbocharger / Aux Boiler", 0, 1, 2, section_base + 10),
+            ("Coolers / Exh Gas Boiler", 5, 6, 7, section_base + 20),
+            ("A/C & Compressors", 10, 11, 12, section_base + 30),
         ]:
-            desc = clean_name(row[dc] if dc < len(row) else "")
+            desc = clean_name(row[desc_col] if desc_col < len(row) else "")
             if desc.upper() in skip or not is_component_name(desc):
                 continue
-            dt = first_line(row[dtc] if dtc < len(row) else "")
-            hr = first_line(row[hrc] if hrc < len(row) else "")
-            if dt or hr:
+            item_order += 1
+            d = normalize_date_string(row[date_col] if date_col < len(row) else "")
+            h = normalize_number_string(row[hrs_col] if hrs_col < len(row) else "")
+            if d["value"] or h["value"] > 0 or d["raw"] or h["raw"]:
                 records.append({
-                    "section": sec,
+                    "section": sec_name,
                     "description": desc,
-                    "last_date": dt,
-                    "run_hrs": hr,
+                    "last_date": d["value"] or d["raw"],
+                    "run_hrs": safe_int(h["value"]) if h["value"] > 0 else (h["raw"] or ""),
                     "source_table_index": table_idx,
                     "source_row": r,
+                    "section_order": sec_ord,
+                    "item_order": item_order,
                 })
 
     return records, issues
 
 def dedupe_rows(records: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    out = []
     issues = []
+    out = []
     seen = set()
 
     for rec in normalize_rows_payload(records):
-        k = (
+        key = (
             rec.get("category"),
             rec.get("engine_label"),
             rec.get("unit"),
             rec.get("description"),
-            rec.get("last_oh_date"),
-            float(rec.get("hrs_since") or 0),
             rec.get("source_table_index"),
-            rec.get("source_row_start"),
-            rec.get("source_col_date"),
+            rec.get("component_order"),
+            rec.get("engine_order"),
+            rec.get("unit_order"),
         )
-        if k in seen:
+        if key in seen:
             issues.append(make_issue(
                 "warning", "DUPLICATE_ROW",
-                f"Duplicate parsed row dropped: {rec.get('description')} / {rec.get('engine_label')} / {rec.get('unit')}.",
+                f"Dropped duplicate row {rec.get('description')} / {rec.get('engine_label')} / {rec.get('unit')}.",
                 rec.get("source_table_index"),
                 rec.get("source_row_start"),
                 row_key(rec)
             ))
             continue
-        seen.add(k)
+        seen.add(key)
         out.append(rec)
-
     return out, issues
 
-def parse_docx_bytes(docx_bytes: bytes) -> Dict[str, Any]:
+def parse_docx_bytes(docx_bytes: bytes, filename: str = "") -> Dict[str, Any]:
     from docx import Document
 
-    issues = []
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tf:
         tf.write(docx_bytes)
-        temp_path = tf.name
+        path = tf.name
     try:
-        doc = Document(temp_path)
+        doc = Document(path)
     except Exception as e:
         raise ValueError(f"Cannot open DOCX: {e}")
     finally:
         try:
-            os.unlink(temp_path)
+            os.unlink(path)
         except Exception:
             pass
 
     if not doc.tables:
-        raise ValueError("No tables found. This does not look like a valid TEC-004 report.")
+        raise ValueError("No tables found. File does not appear to be a valid TEC-004 report.")
 
-    vessel_name, report_date, meta_issues = detect_vessel_and_date(doc)
-    issues.extend(meta_issues)
+    vessel_name, report_date, issues = detect_vessel_and_date(doc)
 
     me_total_hrs = 0
     me_this_month = 0
-    all_me = []
-    all_aux = []
-    all_oe = []
+    me_rows, aux_rows, oe_rows = [], [], []
 
-    for idx, table in enumerate(doc.tables):
+    for ti, table in enumerate(doc.tables):
         grid = rect_grid(table)
         if not grid:
             continue
 
-        if idx == 0:
+        if ti == 0:
             me_total_hrs, me_this_month = detect_me_totals(grid)
 
-        me_rows, me_issues = parse_me_table(grid, idx)
-        aux_rows, aux_issues = parse_aux_table(grid, idx)
-        oe_rows, oe_issues = parse_other_equipment(grid, idx)
+        a, ia = parse_me_table(grid, ti, 1000)
+        b, ib = parse_aux_table(grid, ti, 2000)
+        c, ic = parse_other_equipment(grid, ti, 3000)
 
-        all_me.extend(me_rows)
-        all_aux.extend(aux_rows)
-        all_oe.extend(oe_rows)
-        issues.extend(me_issues)
-        issues.extend(aux_issues)
-        issues.extend(oe_issues)
+        me_rows.extend(a)
+        aux_rows.extend(b)
+        oe_rows.extend(c)
+        issues.extend(ia)
+        issues.extend(ib)
+        issues.extend(ic)
 
-    combined = all_me + all_aux
-    combined, dedupe_issues = dedupe_rows(combined)
-    issues.extend(dedupe_issues)
+    all_rows = me_rows + aux_rows
+    all_rows, dd_issues = dedupe_rows(all_rows)
+    issues.extend(dd_issues)
 
-    if not combined:
-        issues.append(make_issue("error", "NO_COMPONENTS", "No Main Engine or Auxiliary Engine component rows were extracted."))
+    if not all_rows:
+        issues.append(make_issue("error", "NO_COMPONENTS", "No ME or AUX components extracted."))
+
+    me_rows = [r for r in all_rows if r.get("category") == "MAIN_ENGINE"]
+    aux_rows = [r for r in all_rows if r.get("category") == "AUX_ENGINE"]
 
     return normalize_parsed_payload({
         "vessel_name": vessel_name,
         "report_date": report_date,
         "me_total_hrs": me_total_hrs,
         "me_this_month": me_this_month,
-        "me_comps": [x for x in combined if x.get("category") == "MAIN_ENGINE"],
-        "aux_comps": [x for x in combined if x.get("category") == "AUX_ENGINE"],
-        "components": combined,
-        "other_equipment": all_oe,
+        "me_comps": me_rows,
+        "aux_comps": aux_rows,
+        "components": all_rows,
+        "other_equipment": oe_rows,
         "issues": issues,
+        "filename": filename,
         "uploaded_at": now_iso(),
     })
 
 # ============================================================
-# DB PERSISTENCE
+# PERSISTENCE
 # ============================================================
 def ensure_vessel(conn, vessel_name: str) -> int:
     cur = conn.cursor()
@@ -963,10 +1280,7 @@ def ensure_vessel(conn, vessel_name: str) -> int:
     row = cur.fetchone()
     if row:
         return row["id"]
-    cur.execute(
-        "INSERT INTO vessels (name, created_at) VALUES (?, ?)",
-        (vessel_name, now_iso())
-    )
+    cur.execute("INSERT INTO vessels (name, created_at) VALUES (?, ?)", (vessel_name, now_iso()))
     conn.commit()
     return cur.lastrowid
 
@@ -978,13 +1292,13 @@ def report_exists(conn, vessel_name: str, report_date: str, file_hash: str) -> b
     )
     return cur.fetchone() is not None
 
-def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
+def save_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
     parsed = normalize_parsed_payload(parsed)
     conn = get_conn()
     try:
         vessel_id = ensure_vessel(conn, parsed["vessel_name"])
-        if report_exists(conn, parsed["vessel_name"], parsed["report_date"], parsed.get("file_hash", "")):
-            return False, "This exact report already exists in the database."
+        if report_exists(conn, parsed["vessel_name"], parsed["report_date"], parsed["file_hash"]):
+            return False, "This report already exists in the database."
 
         cur = conn.cursor()
         cur.execute("""
@@ -993,50 +1307,31 @@ def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
                 parser_version, me_total_hrs, me_this_month, raw_json, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            vessel_id,
-            parsed.get("vessel_name", "UNKNOWN"),
-            parsed.get("report_date", ""),
-            parsed.get("filename", ""),
-            parsed.get("file_hash", ""),
-            PARSER_VERSION,
-            parsed.get("me_total_hrs", 0),
-            parsed.get("me_this_month", 0),
-            json.dumps(parsed, ensure_ascii=False, default=str),
-            now_iso()
+            vessel_id, parsed["vessel_name"], parsed["report_date"], parsed["filename"],
+            parsed["file_hash"], PARSER_VERSION, parsed["me_total_hrs"], parsed["me_this_month"],
+            json.dumps(parsed, ensure_ascii=False, default=str), now_iso()
         ))
         report_id = cur.lastrowid
 
-        for rec in normalize_rows_payload(parsed.get("components", [])):
+        for rec in normalize_rows_payload(parsed["components"]):
             cur.execute("""
                 INSERT INTO parsed_rows (
                     report_id, category, engine_label, unit, description,
-                    periodicity_raw, periodicity_hours, last_oh_date, hrs_since,
-                    pct_used, status, source_table_index, source_row_start, source_row_end,
-                    source_col_date, source_col_hours, raw_date_text, raw_hours_text,
-                    confidence, issue_count, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    periodicity_raw, periodicity_hours, last_oh_date, hrs_since, pct_used, status,
+                    source_table_index, section_order, component_order, engine_order, unit_order,
+                    source_row_start, source_row_end, source_col_date, source_col_hours,
+                    raw_date_text, raw_hours_text, normalized_date_text, normalized_hours_text,
+                    confidence, issue_count, was_repaired, repair_notes, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 report_id,
-                rec.get("category"),
-                rec.get("engine_label"),
-                rec.get("unit"),
-                rec.get("description"),
-                rec.get("periodicity_raw"),
-                rec.get("periodicity_hours"),
-                rec.get("last_oh_date"),
-                rec.get("hrs_since"),
-                rec.get("pct_used"),
-                rec.get("status"),
-                rec.get("source_table_index"),
-                rec.get("source_row_start"),
-                rec.get("source_row_end"),
-                rec.get("source_col_date"),
-                rec.get("source_col_hours"),
-                rec.get("raw_date_text"),
-                rec.get("raw_hours_text"),
-                rec.get("confidence"),
-                rec.get("issue_count", 0),
-                now_iso()
+                rec["category"], rec["engine_label"], rec["unit"], rec["description"],
+                rec["periodicity_raw"], rec["periodicity_hours"], rec["last_oh_date"], rec["hrs_since"],
+                rec["pct_used"], rec["status"], rec["source_table_index"], rec["section_order"],
+                rec["component_order"], rec["engine_order"], rec["unit_order"],
+                rec["source_row_start"], rec["source_row_end"], rec["source_col_date"], rec["source_col_hours"],
+                rec["raw_date_text"], rec["raw_hours_text"], rec["normalized_date_text"], rec["normalized_hours_text"],
+                rec["confidence"], rec["issue_count"], rec["was_repaired"], rec["repair_notes"], now_iso()
             ))
 
         for issue in parsed.get("issues", []):
@@ -1050,9 +1345,9 @@ def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
             """, (
                 report_id,
                 issue.get("row_key", ""),
-                issue.get("severity"),
-                issue.get("issue_code"),
-                issue.get("message"),
+                issue.get("severity", ""),
+                issue.get("issue_code", ""),
+                issue.get("message", ""),
                 issue.get("table_index"),
                 issue.get("row_index"),
                 now_iso()
@@ -1062,11 +1357,11 @@ def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
         return True, f"Saved successfully. Report ID: {report_id}"
     except Exception as e:
         conn.rollback()
-        return False, f"Database save failed: {e}"
+        return False, f"Save failed: {e}"
     finally:
         conn.close()
 
-def load_recent_reports(limit: int = 20) -> pd.DataFrame:
+def load_recent_reports(limit: int = 30) -> pd.DataFrame:
     conn = get_conn()
     try:
         df = pd.read_sql_query(f"""
@@ -1079,7 +1374,7 @@ def load_recent_reports(limit: int = 20) -> pd.DataFrame:
                 r.me_total_hrs,
                 r.me_this_month,
                 r.created_at,
-                COUNT(pr.id) AS parsed_rows,
+                COUNT(DISTINCT pr.id) AS parsed_rows,
                 COALESCE(SUM(CASE WHEN pi.severity = 'error' THEN 1 ELSE 0 END), 0) AS errors,
                 COALESCE(SUM(CASE WHEN pi.severity = 'warning' THEN 1 ELSE 0 END), 0) AS warnings
             FROM reports r
@@ -1094,27 +1389,15 @@ def load_recent_reports(limit: int = 20) -> pd.DataFrame:
         conn.close()
 
 # ============================================================
-# TABLE RENDERING
+# PREVIEW / TABLES
 # ============================================================
-def safe_float(x):
-    try:
-        v = float(x)
-        return 0.0 if pd.isna(v) else v
-    except Exception:
-        return 0.0
-
-def cyl_num(unit: str) -> int:
-    m = re.search(r'(\d+)', str(unit))
-    return int(m.group(1)) if m else 999
-
-def build_preview_df(records: List[Dict[str, Any]], include_trace: bool = False, mode: str = "matrix") -> pd.DataFrame:
+def build_preview_df(records: List[Dict[str, Any]], include_trace: bool = False, mode: str = "source") -> pd.DataFrame:
     base_cols = [
-        "Status", "Component", "Engine", "Unit",
-        "Periodicity", "Last O/H", "Hrs Since", "Used %",
-        "Confidence", "Issues"
+        "Status", "Component", "Engine", "Unit", "Periodicity", "Last O/H",
+        "Hrs Since", "Used %", "Confidence", "Issues", "Repaired"
     ]
     if include_trace:
-        base_cols += ["Table", "Rows", "Raw Date", "Raw Hrs"]
+        base_cols += ["Table", "Rows", "Raw Date", "Raw Hrs", "Repair Notes"]
 
     if not records:
         return pd.DataFrame(columns=base_cols)
@@ -1122,15 +1405,9 @@ def build_preview_df(records: List[Dict[str, Any]], include_trace: bool = False,
     if isinstance(records, pd.DataFrame):
         df = records.copy()
     else:
-        safe_records = []
-        for r in records:
-            if isinstance(r, dict):
-                safe_records.append(normalize_row_record(r))
-            else:
-                safe_records.append(normalize_row_record({}))
-        df = pd.DataFrame(safe_records)
+        df = pd.DataFrame([normalize_row_record(r) if isinstance(r, dict) else normalize_row_record({}) for r in records])
 
-    required_defaults = {
+    defaults = {
         "status": "NO DATA",
         "description": "",
         "engine_label": "",
@@ -1142,26 +1419,33 @@ def build_preview_df(records: List[Dict[str, Any]], include_trace: bool = False,
         "pct_used": 0.0,
         "confidence": 0.0,
         "issue_count": 0,
+        "was_repaired": 0,
+        "repair_notes": "",
         "source_table_index": "",
+        "section_order": 0,
+        "component_order": 0,
+        "engine_order": 0,
+        "unit_order": 0,
         "source_row_start": "",
         "source_row_end": "",
         "raw_date_text": "",
         "raw_hours_text": "",
     }
-
-    for col, default in required_defaults.items():
+    for col, val in defaults.items():
         if col not in df.columns:
-            df[col] = default
-
-    df["_status_order"] = df["status"].map(lambda x: STATUS_ORDER.get(str(x), 9))
-    df["_pct"] = df["pct_used"].map(safe_float)
-    df["_desc"] = df["description"].astype(str).str.upper()
-    df["_cyl"] = df["unit"].astype(str).map(cyl_num)
+            df[col] = val
 
     if mode == "priority":
-        df = df.sort_values(["_status_order", "_pct"], ascending=[True, False])
+        df["_s"] = df["status"].map(status_rank)
+        df["_pct"] = df["pct_used"].map(safe_float)
+        df = df.sort_values(["_s", "_pct"], ascending=[True, False])
+    elif mode == "component":
+        df["_d"] = df["description"].astype(str).str.upper()
+        df["_e"] = df["engine_label"].astype(str).map(engine_rank)
+        df["_u"] = df["unit"].astype(str).map(cyl_num)
+        df = df.sort_values(["_d", "_e", "_u"])
     else:
-        df = df.sort_values(["engine_label", "_desc", "_cyl"])
+        df = df.sort_values(["section_order", "component_order", "engine_order", "unit_order", "source_row_start"])
 
     out = pd.DataFrame()
     out["Status"] = df["status"].map(lambda s: {
@@ -1170,84 +1454,49 @@ def build_preview_df(records: List[Dict[str, Any]], include_trace: bool = False,
         "OK": "🟢 OK",
         "NO DATA": "🔵 NO DATA",
     }.get(str(s), "🔵 NO DATA"))
-
     out["Component"] = df["description"].astype(str)
     out["Engine"] = df["engine_label"].astype(str)
     out["Unit"] = df["unit"].astype(str)
-
     out["Periodicity"] = [
-        f"{int(float(x))}" if safe_float(x) > 0 else (str(raw).strip() if str(raw).strip() else "—")
+        f"{safe_int(x)}" if safe_float(x) > 0 else (str(raw).strip() if str(raw).strip() else "—")
         for x, raw in zip(df["periodicity_hours"], df["periodicity_raw"])
     ]
-
     out["Last O/H"] = [
         str(x).strip() if str(x).strip() and str(x).strip().lower() not in {"nan", "none"} else "—"
         for x in df["last_oh_date"]
     ]
-
     out["Hrs Since"] = [
-        f"{int(float(x))}" if safe_float(x) > 0 else "—"
+        f"{safe_int(x)}" if safe_float(x) > 0 else "—"
         for x in df["hrs_since"]
     ]
-
     out["Used %"] = [
         round(safe_float(x) * 100, 1) if safe_float(x) > 0 else 0.0
         for x in df["pct_used"]
     ]
-
-    out["Confidence"] = [
-        round(safe_float(x) * 100, 0)
-        for x in df["confidence"]
-    ]
-
-    out["Issues"] = [
-        int(safe_float(x))
-        for x in df["issue_count"]
-    ]
+    out["Confidence"] = [round(safe_float(x) * 100, 0) for x in df["confidence"]]
+    out["Issues"] = [safe_int(x) for x in df["issue_count"]]
+    out["Repaired"] = ["Yes" if safe_int(x) == 1 else "—" for x in df["was_repaired"]]
 
     if include_trace:
         out["Table"] = df["source_table_index"].astype(str)
-        out["Rows"] = [
-            f"{a}-{b}" if str(a).strip() or str(b).strip() else "—"
-            for a, b in zip(df["source_row_start"], df["source_row_end"])
-        ]
+        out["Rows"] = [f"{a}-{b}" if str(a).strip() or str(b).strip() else "—" for a, b in zip(df["source_row_start"], df["source_row_end"])]
         out["Raw Date"] = df["raw_date_text"].astype(str)
         out["Raw Hrs"] = df["raw_hours_text"].astype(str)
+        out["Repair Notes"] = df["repair_notes"].astype(str)
 
     return out
-
-PREVIEW_CONFIG = {
-    "Status": st.column_config.TextColumn("Status", width=150),
-    "Component": st.column_config.TextColumn("Component", width=250),
-    "Engine": st.column_config.TextColumn("Engine", width=85),
-    "Unit": st.column_config.TextColumn("Unit", width=75),
-    "Periodicity": st.column_config.TextColumn("Periodicity", width=120),
-    "Last O/H": st.column_config.TextColumn("Last O/H", width=115),
-    "Hrs Since": st.column_config.TextColumn("Hrs Since", width=100),
-    "Used %": st.column_config.ProgressColumn("Used %", min_value=0, max_value=150, format="%.1f%%", width=130),
-    "Confidence": st.column_config.ProgressColumn("Confidence", min_value=0, max_value=100, format="%d%%", width=110),
-    "Issues": st.column_config.NumberColumn("Issues", width=75),
-    "Table": st.column_config.TextColumn("Table", width=70),
-    "Rows": st.column_config.TextColumn("Rows", width=80),
-    "Raw Date": st.column_config.TextColumn("Raw Date", width=120),
-    "Raw Hrs": st.column_config.TextColumn("Raw Hrs", width=100),
-}
-
-def show_df(df: pd.DataFrame, height: int = None):
-    height = height or min(860, 38 * len(df) + 44)
-    cfg = {k: v for k, v in PREVIEW_CONFIG.items() if k in df.columns}
-    st.dataframe(df, use_container_width=True, hide_index=True, height=height, column_config=cfg)
 
 def issues_df(issues: List[Dict[str, Any]]) -> pd.DataFrame:
     if not issues:
         return pd.DataFrame(columns=["Severity", "Code", "Message", "Table", "Row", "Row Key"])
-    safe_issues = [x for x in issues if isinstance(x, dict)]
-    if not safe_issues:
+    df = pd.DataFrame([x for x in issues if isinstance(x, dict)])
+    if df.empty:
         return pd.DataFrame(columns=["Severity", "Code", "Message", "Table", "Row", "Row Key"])
-    df = pd.DataFrame(safe_issues)
-    for col in ["severity", "issue_code", "message", "table_index", "row_index", "row_key"]:
-        if col not in df.columns:
-            df[col] = ""
+    for c in ["severity", "issue_code", "message", "table_index", "row_index", "row_key"]:
+        if c not in df.columns:
+            df[c] = ""
+    df["_sev"] = df["severity"].map(lambda x: SEVERITY_ORDER.get(str(x), 9))
+    df = df.sort_values(["_sev", "table_index", "row_index"])
     out = pd.DataFrame()
     out["Severity"] = df["severity"]
     out["Code"] = df["issue_code"]
@@ -1257,293 +1506,385 @@ def issues_df(issues: List[Dict[str, Any]]) -> pd.DataFrame:
     out["Row Key"] = df["row_key"]
     return out
 
-# ============================================================
-# SESSION
-# ============================================================
-if "parsed" not in st.session_state:
-    st.session_state.parsed = None
+TABLE_CONFIG = {
+    "Status": st.column_config.TextColumn("Status", width=145),
+    "Component": st.column_config.TextColumn("Component", width=270),
+    "Engine": st.column_config.TextColumn("Engine", width=82),
+    "Unit": st.column_config.TextColumn("Unit", width=72),
+    "Periodicity": st.column_config.TextColumn("Periodicity", width=110),
+    "Last O/H": st.column_config.TextColumn("Last O/H", width=118),
+    "Hrs Since": st.column_config.TextColumn("Hrs Since", width=96),
+    "Used %": st.column_config.ProgressColumn("Used %", min_value=0, max_value=150, format="%.1f%%", width=130),
+    "Confidence": st.column_config.ProgressColumn("Confidence", min_value=0, max_value=100, format="%d%%", width=120),
+    "Issues": st.column_config.NumberColumn("Issues", width=70),
+    "Repaired": st.column_config.TextColumn("Repaired", width=80),
+    "Table": st.column_config.TextColumn("Table", width=62),
+    "Rows": st.column_config.TextColumn("Rows", width=75),
+    "Raw Date": st.column_config.TextColumn("Raw Date", width=120),
+    "Raw Hrs": st.column_config.TextColumn("Raw Hrs", width=110),
+    "Repair Notes": st.column_config.TextColumn("Repair Notes", width=340),
+}
 
-if "save_result" not in st.session_state:
-    st.session_state.save_result = None
+def show_df(df: pd.DataFrame, height: int = None):
+    h = height or min(880, 38 * len(df) + 44)
+    cfg = {k: v for k, v in TABLE_CONFIG.items() if k in df.columns}
+    st.dataframe(df, use_container_width=True, hide_index=True, height=h, column_config=cfg)
 
 # ============================================================
-# UI
+# APP STATE
 # ============================================================
-st.markdown('<div class="hr-title">TEC-004 Running Hours</div>', unsafe_allow_html=True)
-st.title("Upload → Inspect → Save")
-st.markdown('<div class="section-rule"></div>', unsafe_allow_html=True)
+if "parsed_reports" not in st.session_state:
+    st.session_state.parsed_reports = []
 
-st.markdown(
-    '<div class="small-note">This app is built to make parser mistakes visible before persistence. '
-    'Main Engine and Auxiliary Engine results are shown as preview matrices with row-level provenance, '
-    'confidence, and warnings so misaligned cylinder parsing is easier to catch.</div>',
-    unsafe_allow_html=True
-)
+if "active_report_hash" not in st.session_state:
+    st.session_state.active_report_hash = None
 
-with st.expander("Upload TEC-004 .doc report", expanded=(st.session_state.parsed is None)):
-    c1, c2 = st.columns([2.2, 1.3], gap="large")
-    with c1:
-        uploaded = st.file_uploader("Upload TEC-004 .doc", type=["doc"], label_visibility="collapsed")
-        if uploaded:
-            st.caption(f"{uploaded.name} · {uploaded.size/1024:.1f} kB")
-    with c2:
+if "save_feedback" not in st.session_state:
+    st.session_state.save_feedback = {}
+
+# ============================================================
+# HEADER
+# ============================================================
+st.markdown("""
+<div class="hero">
+  <div>
+    <div class="hero-kicker">Fleet Running Hours Command</div>
+    <div class="hero-title">TEC‑004 Parser & Review Console</div>
+    <div class="hero-sub">
+      Multi-report ingestion, exact source-order matrices, tolerant crew-input normalization,
+      traceable repairs, and SQLite-backed persistence in a premium review-first workspace.
+    </div>
+  </div>
+</div>
+<div class="hero-rule"></div>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# MULTI-UPLOAD
+# ============================================================
+with st.container():
+    st.markdown('<div class="upload-panel">', unsafe_allow_html=True)
+    up1, up2 = st.columns([2.2, 1.1], gap="large")
+    with up1:
+        files = st.file_uploader(
+            "Upload one or more TEC-004 .doc reports",
+            type=["doc"],
+            accept_multiple_files=True,
+            label_visibility="collapsed"
+        )
+        st.markdown('<div class="muted">Upload multiple legacy <b>.doc</b> monthly reports. All files are parsed into staged review cards before save.</div>', unsafe_allow_html=True)
+    with up2:
         st.markdown(
-            '<div class="small-note">'
-            '<b>Accepted:</b> legacy .doc TEC-004 monthly report<br>'
-            '<b>Extracted:</b> vessel, report date, M/E totals, ME rows, AUX rows<br>'
-            '<b>Protection:</b> preview before save, duplicate guard, row-level issue log'
+            '<div class="muted">'
+            '<b>Pipeline</b><br>'
+            'Convert → Parse → Repair → Validate → Preview → Save<br><br>'
+            '<b>Default order</b><br>'
+            'Exact Word-file order, not alphabetical<br><br>'
+            '<b>Defensive parsing</b><br>'
+            'Repairs noisy inputs like brackets and suspicious trailing numeric fragments'
             '</div>',
             unsafe_allow_html=True
         )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if uploaded:
-        raw = uploaded.read()
-        fhash = md5_bytes(raw)
-
-        current_parsed = normalize_parsed_payload(st.session_state.parsed or {})
-        current_hash = current_parsed.get("file_hash")
-
-        if current_hash != fhash:
-            with st.spinner("Converting .doc → .docx..."):
+if files:
+    existing_hashes = {r.get("file_hash") for r in st.session_state.parsed_reports}
+    new_items = [f for f in files if md5_bytes(f.getvalue()) not in existing_hashes]
+    if new_items:
+        prog = st.progress(0)
+        for i, uploaded in enumerate(new_items, start=1):
+            raw = uploaded.getvalue()
+            fh = md5_bytes(raw)
+            with st.spinner(f"Parsing {uploaded.name}..."):
                 try:
                     docx_bytes = convert_doc_to_docx(raw)
-                except Exception as e:
-                    st.error(f"Conversion failed: {e}")
-                    st.stop()
-
-            with st.spinner("Parsing TEC-004 tables..."):
-                try:
-                    parsed = parse_docx_bytes(docx_bytes)
+                    parsed = parse_docx_bytes(docx_bytes, filename=uploaded.name)
+                    parsed["file_hash"] = fh
                     parsed["filename"] = uploaded.name
-                    parsed["file_hash"] = fhash
                     parsed = normalize_parsed_payload(parsed)
+                    st.session_state.parsed_reports.append(parsed)
+                    if st.session_state.active_report_hash is None:
+                        st.session_state.active_report_hash = fh
                 except Exception as e:
-                    st.error(f"Parse failed: {e}")
-                    st.stop()
+                    fail = normalize_parsed_payload({
+                        "vessel_name": "UNKNOWN",
+                        "report_date": "",
+                        "filename": uploaded.name,
+                        "file_hash": fh,
+                        "components": [],
+                        "me_comps": [],
+                        "aux_comps": [],
+                        "other_equipment": [],
+                        "issues": [make_issue("error", "PARSE_FAILURE", f"{uploaded.name}: {e}")]
+                    })
+                    st.session_state.parsed_reports.append(fail)
+                    if st.session_state.active_report_hash is None:
+                        st.session_state.active_report_hash = fh
+            prog.progress(i / len(new_items))
+        prog.empty()
 
-            st.session_state.parsed = parsed
-            st.session_state.save_result = None
+reports = [normalize_parsed_payload(r) for r in st.session_state.parsed_reports]
 
-if st.session_state.parsed is None:
-    st.info("Upload a TEC-004 .doc report to begin.")
+# ============================================================
+# REPORT QUEUE
+# ============================================================
+st.markdown("## Report Queue")
+
+if not reports:
+    st.info("Upload one or more TEC-004 .doc reports to begin.")
     st.stop()
 
-p = normalize_parsed_payload(st.session_state.parsed or {})
+queue_rows = []
+for r in reports:
+    errs = sum(1 for x in r["issues"] if isinstance(x, dict) and x.get("severity") == "error")
+    warns = sum(1 for x in r["issues"] if isinstance(x, dict) and x.get("severity") == "warning")
+    repaired = sum(1 for x in r["components"] if safe_int(x.get("was_repaired")) == 1)
+    queue_rows.append({
+        "Select": "●" if r["file_hash"] == st.session_state.active_report_hash else "",
+        "Filename": r["filename"],
+        "Vessel": r["vessel_name"],
+        "Report Date": r["report_date"] or "—",
+        "Rows": len(r["components"]),
+        "Warnings": warns,
+        "Errors": errs,
+        "Repaired Rows": repaired,
+        "Hash": r["file_hash"],
+    })
 
-all_rows = normalize_rows_payload(p.get("components") or [])
-me_rows = normalize_rows_payload(p.get("me_comps") or [])
-aux_rows = normalize_rows_payload(p.get("aux_comps") or [])
-oe_rows = p.get("other_equipment") or []
-all_issues = p.get("issues") or []
+queue_df = pd.DataFrame(queue_rows)
+st.dataframe(
+    queue_df,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Select": st.column_config.TextColumn("Active", width=60),
+        "Filename": st.column_config.TextColumn("Filename", width=260),
+        "Vessel": st.column_config.TextColumn("Vessel", width=150),
+        "Report Date": st.column_config.TextColumn("Report Date", width=120),
+        "Rows": st.column_config.NumberColumn("Rows", width=70),
+        "Warnings": st.column_config.NumberColumn("Warnings", width=90),
+        "Errors": st.column_config.NumberColumn("Errors", width=70),
+        "Repaired Rows": st.column_config.NumberColumn("Repaired", width=85),
+        "Hash": st.column_config.TextColumn("Hash", width=240),
+    },
+    height=min(360, 38 * len(queue_df) + 44),
+)
 
-err_count = sum(1 for i in all_issues if isinstance(i, dict) and i.get("severity") == "error")
-warn_count = sum(1 for i in all_issues if isinstance(i, dict) and i.get("severity") == "warning")
-od_count = sum(1 for r in all_rows if r.get("status") == "OVERDUE")
-hp_count = sum(1 for r in all_rows if r.get("status") == "HIGH PRIORITY")
+sel_options = {f"{r['filename']}  |  {r['vessel_name']}  |  {r['report_date'] or '—'}": r["file_hash"] for r in reports}
+selected_label = st.selectbox("Active report", list(sel_options.keys()), index=list(sel_options.values()).index(st.session_state.active_report_hash) if st.session_state.active_report_hash in sel_options.values() else 0)
+st.session_state.active_report_hash = sel_options[selected_label]
 
-me_total_display = int(p.get("me_total_hrs", 0) or 0)
-me_month_display = int(p.get("me_this_month", 0) or 0)
+active = next((r for r in reports if r["file_hash"] == st.session_state.active_report_hash), reports[0])
+active = normalize_parsed_payload(active)
+
+# ============================================================
+# ACTIVE REPORT SUMMARY
+# ============================================================
+all_rows = normalize_rows_payload(active["components"])
+me_rows = normalize_rows_payload(active["me_comps"])
+aux_rows = normalize_rows_payload(active["aux_comps"])
+oe_rows = normalize_other_equipment(active["other_equipment"])
+all_issues = active["issues"]
+
+n_err = sum(1 for x in all_issues if isinstance(x, dict) and x.get("severity") == "error")
+n_warn = sum(1 for x in all_issues if isinstance(x, dict) and x.get("severity") == "warning")
+n_rep = sum(1 for x in all_rows if safe_int(x.get("was_repaired")) == 1)
+n_od = sum(1 for x in all_rows if x.get("status") == "OVERDUE")
+n_hp = sum(1 for x in all_rows if x.get("status") == "HIGH PRIORITY")
 
 st.markdown(f"""
-<div class="kpi-wrap">
-  <div class="kpi"><div class="kpi-v">{p.get('vessel_name', 'UNKNOWN')}</div><div class="kpi-l">Vessel</div></div>
-  <div class="kpi"><div class="kpi-v">{p.get('report_date', '') or '—'}</div><div class="kpi-l">Report Date</div></div>
-  <div class="kpi"><div class="kpi-v">{me_total_display:,}</div><div class="kpi-l">ME Total Hrs</div></div>
-  <div class="kpi"><div class="kpi-v">{me_month_display:,}</div><div class="kpi-l">ME This Month</div></div>
-  <div class="kpi"><div class="kpi-v">{len(all_rows)}</div><div class="kpi-l">Parsed Rows</div></div>
-  <div class="kpi"><div class="kpi-v">{warn_count} / {err_count}</div><div class="kpi-l">Warnings / Errors</div></div>
+<div class="kpi-grid">
+  <div class="kpi b"><div class="kpi-v">{active["vessel_name"]}</div><div class="kpi-l">Vessel</div></div>
+  <div class="kpi"><div class="kpi-v">{active["report_date"] or "—"}</div><div class="kpi-l">Report Date</div></div>
+  <div class="kpi"><div class="kpi-v">{safe_int(active["me_total_hrs"]):,}</div><div class="kpi-l">ME Total Hours</div></div>
+  <div class="kpi"><div class="kpi-v">{safe_int(active["me_this_month"]):,}</div><div class="kpi-l">ME This Month</div></div>
+  <div class="kpi a"><div class="kpi-v">{len(all_rows)}</div><div class="kpi-l">Parsed Rows</div></div>
+  <div class="kpi r"><div class="kpi-v">{n_warn} / {n_err}</div><div class="kpi-l">Warnings / Errors</div></div>
 </div>
 """, unsafe_allow_html=True)
 
-status_col1, status_col2, status_col3, status_col4 = st.columns(4)
-with status_col1:
-    st.markdown(f'<span class="tag tag-red">Overdue: {od_count}</span>', unsafe_allow_html=True)
-with status_col2:
-    st.markdown(f'<span class="tag tag-amber">High Priority: {hp_count}</span>', unsafe_allow_html=True)
-with status_col3:
-    st.markdown(f'<span class="tag tag-blue">ME Rows: {len(me_rows)}</span>', unsafe_allow_html=True)
-with status_col4:
-    st.markdown(f'<span class="tag tag-green">AUX Rows: {len(aux_rows)}</span>', unsafe_allow_html=True)
+b1, b2, b3, b4 = st.columns(4)
+with b1:
+    st.markdown(f'<span class="badge red">Overdue: {n_od}</span>', unsafe_allow_html=True)
+with b2:
+    st.markdown(f'<span class="badge amber">High Priority: {n_hp}</span>', unsafe_allow_html=True)
+with b3:
+    st.markdown(f'<span class="badge blue">Repaired Rows: {n_rep}</span>', unsafe_allow_html=True)
+with b4:
+    st.markdown(f'<span class="badge cyan">Other Equipment: {len(oe_rows)}</span>', unsafe_allow_html=True)
 
-if err_count:
-    st.markdown(f'<div class="err-box"><b>{err_count}</b> error-level parse issues detected. Review preview before save.</div>', unsafe_allow_html=True)
-elif warn_count:
-    st.markdown(f'<div class="warn-box"><b>{warn_count}</b> warning-level parse issues detected. Review trace columns before save.</div>', unsafe_allow_html=True)
+if n_err:
+    st.markdown(f'<div class="banner err"><b>{n_err}</b> parser errors detected in this report. Review the issue log and trace columns before save.</div>', unsafe_allow_html=True)
+elif n_warn:
+    st.markdown(f'<div class="banner warn"><b>{n_warn}</b> warnings detected. The parser recovered most rows, but review repaired fields and suspicious inputs before save.</div>', unsafe_allow_html=True)
 else:
-    st.markdown('<div class="ok-box">No parse issues detected for this file.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="banner ok">No parser issues detected for the active report.</div>', unsafe_allow_html=True)
 
 # ============================================================
-# SAVE PANEL
+# COMMAND BAR
 # ============================================================
-save_c1, save_c2, save_c3 = st.columns([1.2, 1.2, 4])
+c1, c2, c3, c4 = st.columns([1.2, 1.4, 1.4, 2.8])
 
-with save_c1:
-    allow_save = st.checkbox("I reviewed the preview", value=False)
+with c1:
+    reviewed = st.checkbox("Review complete", value=False)
 
-with save_c2:
-    if st.button("Save to SQLite", disabled=not allow_save):
-        ok, msg = save_parsed_report(p)
-        st.session_state.save_result = (ok, msg)
+with c2:
+    if st.button("Save active report", disabled=not reviewed):
+        ok, msg = save_report(active)
+        st.session_state.save_feedback[active["file_hash"]] = (ok, msg)
 
-with save_c3:
-    export_df = build_preview_df(all_rows, include_trace=True, mode="matrix")
-    csv_bytes = export_df.to_csv(index=False).encode("utf-8")
-    st.download_button("Download preview CSV", data=csv_bytes, file_name="tec004_preview.csv", mime="text/csv")
+with c3:
+    preview_export = build_preview_df(all_rows, include_trace=True, mode="source")
+    st.download_button(
+        "Download active CSV",
+        data=preview_export.to_csv(index=False).encode("utf-8"),
+        file_name=f"{Path(active['filename']).stem or 'tec004'}_preview.csv",
+        mime="text/csv"
+    )
 
-if st.session_state.save_result:
-    ok, msg = st.session_state.save_result
+with c4:
+    st.markdown(f'<div class="micro">File: {active["filename"]} &nbsp;•&nbsp; Hash: {active["file_hash"][:18]}...</div>', unsafe_allow_html=True)
+
+fb = st.session_state.save_feedback.get(active["file_hash"])
+if fb:
+    ok, msg = fb
     if ok:
         st.success(msg)
     else:
         st.warning(msg)
 
 # ============================================================
-# MAIN ENGINE
+# REVIEW TABS
 # ============================================================
-st.markdown("## Main Engine")
+tab_me, tab_aux, tab_oe, tab_issues, tab_history = st.tabs([
+    "Main Engine", "Auxiliary Engines", "Other Equipment", "Parse Issues", "Saved Reports"
+])
 
-mef1, mef2, mef3, mef4 = st.columns([2, 2, 2.2, 2.4])
-with mef1:
-    me_comp_opt = ["All"] + sorted({r.get("description", "") for r in me_rows if r.get("description", "")})
-    me_comp = st.selectbox("Component", me_comp_opt, key="me_comp")
-with mef2:
-    me_status = st.selectbox("Status", ["All", "Overdue only", "High Priority +", "Issue rows only"], key="me_status")
-with mef3:
-    me_trace = st.checkbox("Show trace columns", value=True, key="me_trace")
-with mef4:
-    me_sort = st.radio("Sort", ["Component → Cylinder", "Priority → % Used"], horizontal=True, key="me_sort")
+with tab_me:
+    f1, f2, f3, f4 = st.columns([2.0, 2.0, 1.6, 2.4])
+    with f1:
+        comp_opt = ["All"] + [x for x in sorted({r["description"] for r in me_rows}) if x]
+        me_comp = st.selectbox("Component", comp_opt, key="me_comp_v2")
+    with f2:
+        me_status = st.selectbox("Status", ["All", "Overdue only", "High Priority +", "Issue rows only", "Repaired only"], key="me_status_v2")
+    with f3:
+        me_trace = st.checkbox("Show trace", value=True, key="me_trace_v2")
+    with f4:
+        me_sort = st.radio("Sort", ["Source order", "Priority", "Alphabetical"], horizontal=True, key="me_sort_v2")
 
-me_view = me_rows[:]
-if me_comp != "All":
-    me_view = [r for r in me_view if r.get("description") == me_comp]
-if me_status == "Overdue only":
-    me_view = [r for r in me_view if r.get("status") == "OVERDUE"]
-elif me_status == "High Priority +":
-    me_view = [r for r in me_view if r.get("status") in ("OVERDUE", "HIGH PRIORITY")]
-elif me_status == "Issue rows only":
-    me_view = [r for r in me_view if int(r.get("issue_count", 0)) > 0]
+    me_view = me_rows[:]
+    if me_comp != "All":
+        me_view = [r for r in me_view if r["description"] == me_comp]
+    if me_status == "Overdue only":
+        me_view = [r for r in me_view if r["status"] == "OVERDUE"]
+    elif me_status == "High Priority +":
+        me_view = [r for r in me_view if r["status"] in ("OVERDUE", "HIGH PRIORITY")]
+    elif me_status == "Issue rows only":
+        me_view = [r for r in me_view if safe_int(r["issue_count"]) > 0]
+    elif me_status == "Repaired only":
+        me_view = [r for r in me_view if safe_int(r["was_repaired"]) == 1]
 
-me_df = build_preview_df(
-    me_view,
-    include_trace=me_trace,
-    mode="priority" if "Priority" in me_sort else "matrix"
-)
-show_df(me_df)
+    me_mode = "source" if me_sort == "Source order" else ("priority" if me_sort == "Priority" else "component")
+    me_df = build_preview_df(me_view, include_trace=me_trace, mode=me_mode)
+    show_df(me_df)
 
-# ============================================================
-# AUX ENGINE
-# ============================================================
-st.markdown("## Auxiliary Engines")
+with tab_aux:
+    f1, f2, f3, f4, f5 = st.columns([1.4, 2.0, 2.0, 1.6, 2.4])
+    with f1:
+        eng_opt = ["All"] + [x for x in sorted({r["engine_label"] for r in aux_rows}) if x]
+        ax_eng = st.selectbox("Engine", eng_opt, key="ax_eng_v2")
+    with f2:
+        comp_opt = ["All"] + [x for x in sorted({r["description"] for r in aux_rows}) if x]
+        ax_comp = st.selectbox("Component", comp_opt, key="ax_comp_v2")
+    with f3:
+        ax_status = st.selectbox("Status", ["All", "Overdue only", "High Priority +", "Issue rows only", "Repaired only"], key="ax_status_v2")
+    with f4:
+        ax_trace = st.checkbox("Show trace", value=True, key="ax_trace_v2")
+    with f5:
+        ax_sort = st.radio("Sort", ["Source order", "Priority", "Alphabetical"], horizontal=True, key="ax_sort_v2")
 
-axf1, axf2, axf3, axf4, axf5 = st.columns([1.4, 2, 2, 2.2, 2.4])
-with axf1:
-    eng_opt = ["All"] + sorted({r.get("engine_label", "") for r in aux_rows if r.get("engine_label", "")})
-    ax_eng = st.selectbox("Engine", eng_opt, key="ax_eng")
-with axf2:
-    ax_comp_opt = ["All"] + sorted({r.get("description", "") for r in aux_rows if r.get("description", "")})
-    ax_comp = st.selectbox("Component", ax_comp_opt, key="ax_comp")
-with axf3:
-    ax_status = st.selectbox("Status", ["All", "Overdue only", "High Priority +", "Issue rows only"], key="ax_status")
-with axf4:
-    ax_trace = st.checkbox("Show trace columns", value=True, key="ax_trace")
-with axf5:
-    ax_sort = st.radio("Sort", ["Component → Cylinder", "Priority → % Used"], horizontal=True, key="ax_sort")
+    ax_view = aux_rows[:]
+    if ax_eng != "All":
+        ax_view = [r for r in ax_view if r["engine_label"] == ax_eng]
+    if ax_comp != "All":
+        ax_view = [r for r in ax_view if r["description"] == ax_comp]
+    if ax_status == "Overdue only":
+        ax_view = [r for r in ax_view if r["status"] == "OVERDUE"]
+    elif ax_status == "High Priority +":
+        ax_view = [r for r in ax_view if r["status"] in ("OVERDUE", "HIGH PRIORITY")]
+    elif ax_status == "Issue rows only":
+        ax_view = [r for r in ax_view if safe_int(r["issue_count"]) > 0]
+    elif ax_status == "Repaired only":
+        ax_view = [r for r in ax_view if safe_int(r["was_repaired"]) == 1]
 
-ax_view = aux_rows[:]
-if ax_eng != "All":
-    ax_view = [r for r in ax_view if r.get("engine_label") == ax_eng]
-if ax_comp != "All":
-    ax_view = [r for r in ax_view if r.get("description") == ax_comp]
-if ax_status == "Overdue only":
-    ax_view = [r for r in ax_view if r.get("status") == "OVERDUE"]
-elif ax_status == "High Priority +":
-    ax_view = [r for r in ax_view if r.get("status") in ("OVERDUE", "HIGH PRIORITY")]
-elif ax_status == "Issue rows only":
-    ax_view = [r for r in ax_view if int(r.get("issue_count", 0)) > 0]
+    ax_mode = "source" if ax_sort == "Source order" else ("priority" if ax_sort == "Priority" else "component")
+    ax_df = build_preview_df(ax_view, include_trace=ax_trace, mode=ax_mode)
+    show_df(ax_df)
 
-ax_df = build_preview_df(
-    ax_view,
-    include_trace=ax_trace,
-    mode="priority" if "Priority" in ax_sort else "matrix"
-)
-show_df(ax_df)
+with tab_oe:
+    if not oe_rows:
+        st.info("No other equipment rows found in the active report.")
+    else:
+        oe_df = pd.DataFrame(oe_rows)
+        oe_df = oe_df.sort_values(["section_order", "item_order"])
+        st.dataframe(
+            oe_df[["section", "description", "last_date", "run_hrs", "source_table_index", "source_row"]],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "section": st.column_config.TextColumn("Section", width=220),
+                "description": st.column_config.TextColumn("Description", width=300),
+                "last_date": st.column_config.TextColumn("Last Date", width=130),
+                "run_hrs": st.column_config.TextColumn("Run Hrs", width=120),
+                "source_table_index": st.column_config.TextColumn("Table", width=70),
+                "source_row": st.column_config.TextColumn("Row", width=70),
+            },
+            height=min(780, 38 * len(oe_df) + 44)
+        )
 
-# ============================================================
-# OTHER EQUIPMENT
-# ============================================================
-st.markdown("## Other Equipment")
+with tab_issues:
+    idf = issues_df(all_issues)
+    if idf.empty:
+        st.success("No parse issues logged for the active report.")
+    else:
+        sev = st.multiselect("Severity", ["error", "warning", "info"], default=["error", "warning", "info"])
+        idf2 = idf[idf["Severity"].isin(sev)] if sev else idf.copy()
+        st.dataframe(
+            idf2,
+            use_container_width=True,
+            hide_index=True,
+            height=min(650, 38 * len(idf2) + 44),
+            column_config={
+                "Severity": st.column_config.TextColumn("Severity", width=90),
+                "Code": st.column_config.TextColumn("Code", width=170),
+                "Message": st.column_config.TextColumn("Message", width=540),
+                "Table": st.column_config.TextColumn("Table", width=70),
+                "Row": st.column_config.TextColumn("Row", width=70),
+                "Row Key": st.column_config.TextColumn("Row Key", width=320),
+            }
+        )
 
-if not oe_rows:
-    st.info("No other equipment preview rows extracted.")
-else:
-    oe_df = pd.DataFrame(oe_rows)
-    for col in ["section", "description", "last_date", "run_hrs", "source_table_index", "source_row"]:
-        if col not in oe_df.columns:
-            oe_df[col] = ""
-    st.dataframe(
-        oe_df[["section", "description", "last_date", "run_hrs", "source_table_index", "source_row"]],
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "section": st.column_config.TextColumn("Section", width=220),
-            "description": st.column_config.TextColumn("Description", width=300),
-            "last_date": st.column_config.TextColumn("Last Date", width=140),
-            "run_hrs": st.column_config.TextColumn("Run Hrs", width=120),
-            "source_table_index": st.column_config.TextColumn("Table", width=80),
-            "source_row": st.column_config.TextColumn("Row", width=80),
-        }
-    )
-
-# ============================================================
-# ISSUES
-# ============================================================
-st.markdown("## Parse Issues")
-
-idf = issues_df(all_issues)
-if idf.empty:
-    st.success("No parse issues logged for this upload.")
-else:
-    sev_filter = st.multiselect("Severity filter", ["error", "warning", "info"], default=["error", "warning", "info"])
-    idf2 = idf[idf["Severity"].isin(sev_filter)] if sev_filter else idf.copy()
-    st.dataframe(
-        idf2,
-        use_container_width=True,
-        hide_index=True,
-        height=min(500, 38 * len(idf2) + 44),
-        column_config={
-            "Severity": st.column_config.TextColumn("Severity", width=90),
-            "Code": st.column_config.TextColumn("Code", width=160),
-            "Message": st.column_config.TextColumn("Message", width=500),
-            "Table": st.column_config.TextColumn("Table", width=70),
-            "Row": st.column_config.TextColumn("Row", width=70),
-            "Row Key": st.column_config.TextColumn("Row Key", width=320),
-        }
-    )
-
-# ============================================================
-# DATABASE HISTORY
-# ============================================================
-st.markdown("## Recent Saved Reports")
-
-hist = load_recent_reports(20)
-if hist.empty:
-    st.info("No saved reports yet.")
-else:
-    st.dataframe(
-        hist,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "id": st.column_config.NumberColumn("ID", width=65),
-            "vessel_name": st.column_config.TextColumn("Vessel", width=150),
-            "report_date": st.column_config.TextColumn("Report Date", width=120),
-            "filename": st.column_config.TextColumn("Filename", width=260),
-            "parser_version": st.column_config.TextColumn("Parser", width=180),
-            "me_total_hrs": st.column_config.NumberColumn("ME Total", width=100, format="%d"),
-            "me_this_month": st.column_config.NumberColumn("ME Month", width=100, format="%d"),
-            "created_at": st.column_config.TextColumn("Saved At", width=190),
-            "parsed_rows": st.column_config.NumberColumn("Rows", width=70),
-            "errors": st.column_config.NumberColumn("Errors", width=70),
-            "warnings": st.column_config.NumberColumn("Warnings", width=85),
-        }
-    )
+with tab_history:
+    hist = load_recent_reports(30)
+    if hist.empty:
+        st.info("No saved reports in SQLite yet.")
+    else:
+        st.dataframe(
+            hist,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "id": st.column_config.NumberColumn("ID", width=65),
+                "vessel_name": st.column_config.TextColumn("Vessel", width=150),
+                "report_date": st.column_config.TextColumn("Report Date", width=120),
+                "filename": st.column_config.TextColumn("Filename", width=260),
+                "parser_version": st.column_config.TextColumn("Parser", width=180),
+                "me_total_hrs": st.column_config.NumberColumn("ME Total", width=100, format="%d"),
+                "me_this_month": st.column_config.NumberColumn("ME Month", width=100, format="%d"),
+                "created_at": st.column_config.TextColumn("Saved At", width=180),
+                "parsed_rows": st.column_config.NumberColumn("Rows", width=70),
+                "errors": st.column_config.NumberColumn("Errors", width=70),
+                "warnings": st.column_config.NumberColumn("Warnings", width=85),
+            },
+            height=min(700, 38 * len(hist) + 44)
+        )
