@@ -1,7 +1,8 @@
 """
-Fleet Running Hours Monitor  v13
+Fleet Running Hours Monitor  v14 (Enterprise Master Build)
 Single page — upload → KPIs → 3 matrices (ME · AUX · Other Equipment)
-Parser: Universal Table Looping, Relaxed Marker Triggers, Cartesian Grid
+Parser: Cartesian Grid + Universal Table Looping
+Renderer: Strict Type-Safe Native Streamlit (Zero PyArrow Crashes)
 """
 import streamlit as st
 st.set_page_config(
@@ -153,6 +154,7 @@ def convert_doc_to_docx(raw: bytes) -> bytes:
 #  PARSER — CARTESIAN GRID ARCHITECTURE
 # ══════════════════════════════════════════════════════════════════
 def _rect_grid(table) -> list:
+    """Creates a perfect rectangular grid. Merged cells are padded to match max cols."""
     grid = []
     if not table.rows: return grid
     max_cols = max(len(row.cells) for row in table.rows)
@@ -258,7 +260,6 @@ def _parse_me(grid: list) -> list:
         period = _num(grid[r][per_col] if per_col < len(grid[r]) else '')
         marker = str(grid[r][MARKER_COL] if MARKER_COL < len(grid[r]) else '').strip()
         
-        # FIXED: Relaxed marker check matching VBA InStr(marker, "1")
         if _is_comp(name) and '1' in marker:
             nxt = grid[r + 1] if r + 1 < len(grid) else []
             for cyl in range(1, actual_cyls + 1):
@@ -317,7 +318,6 @@ def _parse_aux(grid: list) -> list:
     return result
 
 def _parse_oe_grid(grid: list) -> list:
-    """Universal OE Parser. Scans any grid for OE formatting, ignoring hardcoded indices."""
     oe = []
     SKIP = {'TURBOCHARGER','AUXILIARY BOILER','COOLERS','EXH GAS  BOILER',
             'A/C & REFR. COMPRESSORS','MAIN AIR COMPRESSORS',
@@ -389,10 +389,9 @@ def parse_doc_bytes(docx_bytes: bytes) -> dict:
     me_tot = me_mo = None
     g0 = _rect_grid(doc.tables[0]) if len(doc.tables) > 0 else []
     for cell_txt in (g0[0] if g0 else []):
-        if m := re.search(r'Total Running Hours[\s:ǀ|]+([\d,]+)', cell_txt, re.I): me_tot = int(_num(m.group(1)))
-        if m := re.search(r'This Month[\s:]+([\d,]+)', cell_txt, re.I): me_mo  = int(_num(m.group(1)))
+        if m := re.search(r'Total Running Hours[\s:ǀ|]+([\d,]+)', str(cell_txt), re.I): me_tot = int(_num(m.group(1)))
+        if m := re.search(r'This Month[\s:]+([\d,]+)', str(cell_txt), re.I): me_mo  = int(_num(m.group(1)))
 
-    # FIXED: Table Sweep. Do not guess table indices. Pass all to parsers.
     me_comps, aux_comps, oe = [], [], []
     for table in doc.tables:
         grid = _rect_grid(table)
@@ -427,50 +426,22 @@ if 'parsed' not in st.session_state:
 
 
 # ══════════════════════════════════════════════════════════════════
-#  TABLE ENGINE
+#  TABLE ENGINE (STRICT TYPE-SAFE NATIVE RENDERING)
 # ══════════════════════════════════════════════════════════════════
 _STATUS_ORD = {'OVERDUE': 0, 'HIGH PRIORITY': 1, 'OK': 2, 'NO DATA': 3}
 
-_TH = {
-    'OVERDUE': {
-        'bg':  'background-color:#1e0404', 'bgs': 'background-color:#2c0505',
-        'ts':  'color:#ff5252;font-weight:700', 'tm':  'color:#ff7878',
-        'tn':  'color:#ff1a1a;font-weight:700', 'td':  'color:#822222',
-    },
-    'HIGH PRIORITY': {
-        'bg':  'background-color:#1e0e02', 'bgs': 'background-color:#2a1403',
-        'ts':  'color:#ffaa33;font-weight:700', 'tm':  'color:#ffcc77',
-        'tn':  'color:#ffcc00;font-weight:700', 'td':  'color:#7a5010',
-    },
-    'OK': {
-        'bg':  'background-color:#011008', 'bgs': 'background-color:#01180a',
-        'ts':  'color:#22ee66;font-weight:700', 'tm':  'color:#44dd88',
-        'tn':  'color:#22ee66;font-weight:700', 'td':  'color:#0a4820',
-    },
-    'NO DATA': {
-        'bg':  'background-color:#060c18', 'bgs': 'background-color:#0a1122',
-        'ts':  'color:#4488bb;font-weight:600', 'tm':  'color:#336688',
-        'tn':  'color:#4488bb', 'td':  'color:#1a2e44',
-    },
+_STATUS_MAP = {
+    'OVERDUE':       '🔴 OVERDUE',
+    'HIGH PRIORITY': '🟡 HIGH PRIORITY',
+    'OK':            '🟢 OK',
+    'NO DATA':       '🔵 NO DATA'
 }
-
-_CS = {
-    'Status':      lambda t: f"{t['bgs']};{t['ts']}",
-    'Component':   lambda t: f"{t['bg']};{t['tm']};font-weight:600",
-    'Engine':      lambda t: f"{t['bg']};{t['td']}",
-    'Unit':        lambda t: f"{t['bg']};{t['td']}",
-    'Periodicity': lambda t: f"{t['bg']};{t['td']}",
-    'Last O/H':    lambda t: f"{t['bg']};{t['td']}",
-    'Hrs Since':   lambda t: f"{t['bg']};{t['tm']};font-weight:600",
-    'Used %':      lambda t: f"{t['bg']};{t['tn']}",
-}
-_CS_DEF = lambda t: f"{t['bg']};{t['td']}"
 
 def _sf(x):
     try:
         v = float(x)
-        return None if pd.isna(v) else v
-    except Exception: return None
+        return 0.0 if pd.isna(v) else v
+    except Exception: return 0.0
 
 def _cyl_n(u: str) -> int:
     m = re.search(r'\d+', str(u)); return int(m.group()) if m else 999
@@ -478,9 +449,10 @@ def _cyl_n(u: str) -> int:
 def _build(records: list, mode: str = 'matrix') -> pd.DataFrame:
     if not records:
         return pd.DataFrame(columns=['Status','Component','Engine','Unit', 'Periodicity','Last O/H','Hrs Since','Used %'])
+    
     df = pd.DataFrame(records)
     df['_s'] = df['status'].map(lambda x: _STATUS_ORD.get(str(x), 4))
-    df['_p'] = df['pct_used'].apply(lambda x: _sf(x) or 0.0)
+    df['_p'] = df['pct_used'].apply(lambda x: _sf(x))
 
     if mode == 'matrix':
         df['_k1'] = df['description'].str.upper()
@@ -490,41 +462,51 @@ def _build(records: list, mode: str = 'matrix') -> pd.DataFrame:
         df = df.sort_values(['_s','_p'], ascending=[True,False]).drop(columns=['_s','_p'])
 
     out = pd.DataFrame(index=range(len(df)))
-    out['Status']      = df['status'].values
+    
+    # Map status to crash-proof Unicode text
+    out['Status']      = df['status'].map(lambda x: _STATUS_MAP.get(str(x), '🔵 NO DATA'))
     out['Component']   = df['description'].values
     out['Engine']      = df['engine_label'].values
     out['Unit']        = df['unit'].values
-    out['Periodicity'] = [int(float(x)) if _sf(x) else None for x in df['periodicity'].values]
+    
+    # Safe numerical formatting (converts to string to avoid PyArrow %d crash on Nulls)
+    out['Periodicity'] = [f"{int(float(x))}" if _sf(x) > 0 else "—" for x in df['periodicity'].values]
     out['Last O/H']    = [str(x) if x and str(x) not in ('nan','None','') else '—' for x in df['last_oh_date'].values]
-    out['Hrs Since']   = [int(float(x)) if _sf(x) else None for x in df['hrs_since'].values]
-    out['Used %']      = [round(float(x)*100,1) if _sf(x) else 0.0 for x in df['pct_used'].values]
+    out['Hrs Since']   = [f"{int(float(x))}" if _sf(x) > 0 else "—" for x in df['hrs_since'].values]
+    
+    # Strict float for the Progress Column
+    out['Used %']      = [round(float(x)*100, 1) if _sf(x) > 0 else 0.0 for x in df['pct_used'].values]
+    
     return out
 
-def _style(df: pd.DataFrame):
-    cols = list(df.columns)
-    def _r(row):
-        t = _TH.get(str(row.get('Status','')), _TH['NO DATA'])
-        return [_CS.get(col, _CS_DEF)(t) for col in cols]
-    return df.style.apply(_r, axis=1)
-
+# Native Streamlit Configs (No Pandas Styler)
 _CC = {
-    'Status':      st.column_config.TextColumn('Status',      width=130),
-    'Component':   st.column_config.TextColumn('Component',    width=230),
+    'Status':      st.column_config.TextColumn('Status',       width=140),
+    'Component':   st.column_config.TextColumn('Component',    width=250),
     'Engine':      st.column_config.TextColumn('Engine',       width=82),
     'Unit':        st.column_config.TextColumn('Unit',         width=70),
-    'Periodicity': st.column_config.NumberColumn('Periodicity', format='%d hrs', width=112),
+    'Periodicity': st.column_config.TextColumn('Periodicity',  width=100),
     'Last O/H':    st.column_config.TextColumn('Last O/H',     width=108),
-    'Hrs Since':   st.column_config.NumberColumn('Hrs Since',  format='%d hrs', width=108),
-    'Used %':      st.column_config.ProgressColumn('Used %', min_value=0, max_value=160, format='%.1f%%', width=135),
+    'Hrs Since':   st.column_config.TextColumn('Hrs Since',    width=100),
+    'Used %':      st.column_config.ProgressColumn('Used %', min_value=0, max_value=150, format='%.1f%%', width=135),
 }
 
 def matrix(records: list, mode: str = 'matrix', height: int = None):
-    if not records: st.info('No data.'); return
+    if not records: 
+        st.info('No data.')
+        return
+        
     tbl = _build(records, mode=mode)
-    if tbl.empty: st.info('No data.'); return
+    if tbl.empty: 
+        st.info('No data.')
+        return
+        
     cfg = {k: v for k, v in _CC.items() if k in tbl.columns}
     h   = height or min(880, 38*len(tbl) + 44)
-    st.dataframe(_style(tbl), use_container_width=True, hide_index=True, height=h, column_config=cfg)
+    
+    # Pure native rendering, zero Pandas styling
+    st.dataframe(tbl, use_container_width=True, hide_index=True, height=h, column_config=cfg)
+
 
 # ══════════════════════════════════════════════════════════════════
 #  HTML HELPERS
@@ -547,6 +529,7 @@ def record_count(records: list, label: str = '') -> str:
     if ok: parts.append(f'<span class="ok">{ok} OK</span>')
     if nd: parts.append(f'<span class="nd">{nd} no data</span>')
     return f'<div class="rc">{" · ".join(parts)}</div>'
+
 
 # ══════════════════════════════════════════════════════════════════
 #  PAGE
@@ -571,7 +554,7 @@ with st.expander("Upload TEC-004 Report", expanded=(st.session_state.parsed is N
                 try: docx = convert_doc_to_docx(raw)
                 except Exception as e: st.error(f'Conversion failed: {e}'); st.stop()
 
-            with st.spinner('Parsing tables…'):
+            with st.spinner('Parsing tables natively…'):
                 try:
                     parsed = parse_doc_bytes(docx)
                     parsed['file_hash'] = fh
@@ -696,8 +679,10 @@ else:
         st.markdown(f'<div class="oe-section-label">{sec}</div>', unsafe_allow_html=True)
         sd = oe_df[oe_df['section']==sec][['description','last_date','run_hrs']].copy()
         sd.columns = ['Description', 'Last Date / O/H', 'Run Hrs']
+        
+        # Native Streamlit rendering for OE Table
         st.dataframe(sd, use_container_width=True, hide_index=True, column_config={
-            'Description':    st.column_config.TextColumn('Description',    width=300),
-            'Last Date / O/H':st.column_config.TextColumn('Last Date / O/H',width=160),
-            'Run Hrs':        st.column_config.TextColumn('Run Hrs',        width=120),
+            'Description':     st.column_config.TextColumn('Description',     width=300),
+            'Last Date / O/H': st.column_config.TextColumn('Last Date / O/H', width=160),
+            'Run Hrs':         st.column_config.TextColumn('Run Hrs',         width=120),
         })
