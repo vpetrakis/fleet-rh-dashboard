@@ -1,7 +1,7 @@
 """
-Fleet Running Hours Monitor  v12
+Fleet Running Hours Monitor  v13
 Single page — upload → KPIs → 3 matrices (ME · AUX · Other Equipment)
-Parser: Rigid Cartesian Grid, Validated VBA Port, Zero Ghost Cylinders
+Parser: Universal Table Looping, Relaxed Marker Triggers, Cartesian Grid
 """
 import streamlit as st
 st.set_page_config(
@@ -152,17 +152,10 @@ def convert_doc_to_docx(raw: bytes) -> bytes:
 # ══════════════════════════════════════════════════════════════════
 #  PARSER — CARTESIAN GRID ARCHITECTURE
 # ══════════════════════════════════════════════════════════════════
-
 def _rect_grid(table) -> list:
-    """
-    Builds a pure Cartesian Grid. Merged cells are duplicated across their bounds 
-    so row[i] length perfectly matches row[i+1]. This prevents out-of-index crashes 
-    and maintains perfect vertical alignment for paired Date/Hour rows.
-    """
     grid = []
     if not table.rows: return grid
     max_cols = max(len(row.cells) for row in table.rows)
-    
     for row in table.rows:
         cells = []
         for cell in row.cells:
@@ -170,10 +163,7 @@ def _rect_grid(table) -> list:
             lines = [ln.replace('\xa0', ' ').replace('\t', ' ').strip()
                      for ln in raw.split('\n') if ln.strip()]
             cells.append(lines[0] if lines else '')
-        
-        # Ensure perfect rectangularity padding
-        while len(cells) < max_cols:
-            cells.append("")
+        while len(cells) < max_cols: cells.append("")
         grid.append(cells)
     return grid
 
@@ -216,12 +206,9 @@ def _num(txt: str) -> float:
     if not m: return 0.0
     block = m.group()
     sep = max(block.rfind('.'), block.rfind(','))
-    if sep > 0 and len(block) - sep == 4:
-        block = re.sub(r'[,\.]', '', block)
-    elif sep > 0:
-        block = re.sub(r'[,\.]', '', block[:sep])
-    else:
-        block = re.sub(r'[,\.]', '', block)
+    if sep > 0 and len(block) - sep == 4: block = re.sub(r'[,\.]', '', block)
+    elif sep > 0: block = re.sub(r'[,\.]', '', block[:sep])
+    else: block = re.sub(r'[,\.]', '', block)
     try:    return float(block)
     except: return 0.0
 
@@ -244,79 +231,65 @@ def _make(cat, eng, unit, name, period, date, hrs) -> dict:
     }
 
 def _parse_me(grid: list) -> list:
-    """
-    Main Engine parser using Dynamic Cartesian Scanning.
-    Finds exact Periodicity and Remarks columns to bound the cylinder extraction zone.
-    """
     if len(grid) < 3: return []
     is_me = False
     for r in range(min(3, len(grid))):
-        for c in range(len(grid[r])):
-            if 'MAIN ENGINE' in grid[r][c].upper(): is_me = True
+        if any('MAIN ENGINE' in str(c).upper() for c in grid[r]): is_me = True
     if not is_me: return []
 
-    # Dynamic Bounding Box
     per_col, rem_col = 1, len(grid[0]) - 1
     for c in range(len(grid[0])):
-        h_txt = "".join(grid[r][c].upper() for r in range(min(3, len(grid))))
-        if 'PERIOD' in h_txt and per_col == 1: per_col = c
-        if 'REMARK' in h_txt and rem_col == len(grid[0]) - 1: rem_col = c
+        h_txt = "".join(str(grid[r][c]).upper() for r in range(min(3, len(grid))))
+        if 'REMARK' in h_txt: rem_col = c
 
-    actual_cyls = rem_col - per_col - 1
-    actual_cyls = max(1, min(7, actual_cyls))
-
+    actual_cyls = max(1, min(7, rem_col - per_col - 1))
     FIRST_CYL  = per_col + 2
     MARKER_COL = per_col + 1
 
     end = len(grid)
     for r, row in enumerate(grid):
-        if any(x in ' '.join(row).upper() for x in ('NOTE 1','TURBOCHARGER','AUX. ENGINE')):
+        f_row = ' '.join(str(x) for x in row).upper()
+        if any(x in f_row for x in ('NOTE 1','TURBOCHARGER','AUX. ENGINE')):
             end = r; break
 
     result, r = [], 1
     while r < end - 1:
         name   = _clean_name(grid[r][0] if grid[r] else '')
         period = _num(grid[r][per_col] if per_col < len(grid[r]) else '')
-        marker = (grid[r][MARKER_COL] if MARKER_COL < len(grid[r]) else '').strip()
+        marker = str(grid[r][MARKER_COL] if MARKER_COL < len(grid[r]) else '').strip()
         
-        # Strict "1" Marker Lock
-        if _is_comp(name) and '1' in marker.split():
+        # FIXED: Relaxed marker check matching VBA InStr(marker, "1")
+        if _is_comp(name) and '1' in marker:
             nxt = grid[r + 1] if r + 1 < len(grid) else []
             for cyl in range(1, actual_cyls + 1):
                 ci   = FIRST_CYL + cyl - 1
                 date = _date(grid[r][ci] if ci < len(grid[r]) else '')
                 hrs  = _num(nxt[ci]      if ci < len(nxt)      else '')
-                if not date and not hrs: continue
-                result.append(_make('MAIN_ENGINE','ME',f'Cyl {cyl}',name,period,date,hrs))
+                if date or hrs > 0: 
+                    result.append(_make('MAIN_ENGINE','ME',f'Cyl {cyl}',name,period,date,hrs))
             r += 2
         else:
             r += 1
     return result
 
 def _parse_aux(grid: list) -> list:
-    """
-    Auxiliary Engine parser operating on the Cartesian Grid.
-    """
     desc_row = None
     for ri, row in enumerate(grid):
-        if 'DESCRIPTION' in (row[0] if row else '').upper():
+        if 'DESCRIPTION' in str(row[0] if row else '').upper():
             desc_row = ri; break
     if desc_row is None: return []
 
-    # Calculate Actual Cylinders dynamically
     actual_cyls = 0
     seen_nums = set()
     for ci in range(3, len(grid[desc_row])):
-        txt = grid[desc_row][ci].strip()
+        txt = str(grid[desc_row][ci]).strip()
         if txt and re.match(r'^\d+$', txt):
             n = int(txt)
             if n not in seen_nums:
                 if n == actual_cyls + 1: 
-                    actual_cyls = n
-                    seen_nums.add(n)
+                    actual_cyls = n; seen_nums.add(n)
                 elif actual_cyls > 0: break
         elif actual_cyls > 0: break
-        
     actual_cyls = max(1, min(6, actual_cyls)) if actual_cyls else 6
 
     AUX1 = 3
@@ -327,67 +300,66 @@ def _parse_aux(grid: list) -> list:
     while r < len(grid) - 1:
         name   = _clean_name(grid[r][0] if grid[r] else '')
         period = _num(grid[r][1] if len(grid[r]) > 1 else '')
-        marker = (grid[r][2] if len(grid[r]) > 2 else '').strip()
+        marker = str(grid[r][2] if len(grid[r]) > 2 else '').strip()
         
-        if _is_comp(name) and '1' in marker.split():
+        if _is_comp(name) and '1' in marker:
             nxt = grid[r + 1] if r + 1 < len(grid) else []
             for cyl in range(1, actual_cyls + 1):
                 for eng, start in (('AUX-1', AUX1), ('AUX-2', AUX2), ('AUX-3', AUX3)):
                     ci   = start + cyl - 1
                     date = _date(grid[r][ci] if ci < len(grid[r]) else '')
                     hrs  = _num(nxt[ci]      if ci < len(nxt)      else '')
-                    if not date and not hrs: continue
-                    result.append(_make('AUX_ENGINE',eng,f'Cyl {cyl}',name,period,date,hrs))
+                    if date or hrs > 0: 
+                        result.append(_make('AUX_ENGINE',eng,f'Cyl {cyl}',name,period,date,hrs))
             r += 2
         else:
             r += 1
     return result
 
-def _parse_oe(tables) -> list:
+def _parse_oe_grid(grid: list) -> list:
+    """Universal OE Parser. Scans any grid for OE formatting, ignoring hardcoded indices."""
     oe = []
-    if len(tables) > 1:
-        grid = _rect_grid(tables[1])
-        SKIP = {'TURBOCHARGER','AUXILIARY BOILER','COOLERS','EXH GAS  BOILER',
-                'A/C & REFR. COMPRESSORS','MAIN AIR COMPRESSORS',
-                'PERIODICTLY','DATE OF LAST INSPECTION','RUN HRS',
-                'DATE OF LAST CLEANING','DATE','PERIODICITY',''}
-        for row in grid:
-            def gc(ci): return row[ci] if ci < len(row) else ''
-            for sec, dc, dtc, hrc in [
-                ('Turbocharger / Aux Boiler', 0, 1, 3), # Adjusted to VBA standard offsets
-                ('Coolers / Exh Gas Boiler',  5, 6, 8),
-                ('A/C & Compressors',         10,11,12),
-            ]:
-                desc = gc(dc)
-                if not desc or desc.upper() in SKIP: continue
-                dv = gc(dtc); hv = gc(hrc)
-                if dv or hv:
-                    oe.append({'section':sec,'description':desc,
-                               'last_date':dv,'run_hrs':hv})
-                    
-    if len(tables) > 3:
-        grid = _rect_grid(tables[3])
-        DG = ['D/G 1','D/G 2','D/G 3']
-        for ri, row in enumerate(grid):
-            if ri == 0: continue
-            def gc2(ci): return row[ci] if ci < len(row) else ''
-            for dc, tc, ds in [(0,2,3),(9,11,12)]:
-                desc = gc2(dc); rt = gc2(tc)
-                if not desc or rt not in ('1','2'): continue
-                for gi, gl in enumerate(DG):
-                    val = gc2(ds+gi)
-                    if not val: continue
-                    key = f"{desc} — {gl}"
-                    if rt == '1':
-                        oe.append({'section':'D/G Equipment','description':key,
-                                   'last_date':val,'run_hrs':''})
+    SKIP = {'TURBOCHARGER','AUXILIARY BOILER','COOLERS','EXH GAS  BOILER',
+            'A/C & REFR. COMPRESSORS','MAIN AIR COMPRESSORS',
+            'PERIODICTLY','DATE OF LAST INSPECTION','RUN HRS',
+            'DATE OF LAST CLEANING','DATE','PERIODICITY',''}
+    
+    for r, row in enumerate(grid):
+        def gc(ci): return str(row[ci]) if ci < len(row) else ''
+        for sec, dc, dtc, hrc in [
+            ('Turbocharger / Aux Boiler', 0, 1, 3), 
+            ('Coolers / Exh Gas Boiler',  5, 6, 8),
+            ('A/C & Compressors',         10,11,12),
+        ]:
+            desc = gc(dc).strip()
+            if not desc or desc.upper() in SKIP: continue
+            desc_clean = _clean_name(desc)
+            if not _is_comp(desc_clean): continue
+            
+            dv = gc(dtc); hv = gc(hrc)
+            if dv or hv: oe.append({'section':sec,'description':desc_clean, 'last_date':dv,'run_hrs':hv})
+
+    DG = ['D/G 1','D/G 2','D/G 3']
+    for ri, row in enumerate(grid):
+        if ri == 0: continue
+        def gc2(ci): return str(row[ci]) if ci < len(row) else ''
+        for dc, tc, ds in [(0,2,3),(9,11,12)]:
+            desc = _clean_name(gc2(dc))
+            rt = gc2(tc).strip()
+            if not desc or rt not in ('1','2') or not _is_comp(desc): continue
+            
+            for gi, gl in enumerate(DG):
+                val = gc2(ds+gi)
+                if not val: continue
+                key = f"{desc} — {gl}"
+                
+                if rt == '1': oe.append({'section':'D/G Equipment','description':key, 'last_date':val,'run_hrs':''})
+                else:
+                    for e in reversed(oe):
+                        if e['description'] == key and e['run_hrs'] == '':
+                            e['run_hrs'] = val; break
                     else:
-                        for e in reversed(oe):
-                            if e['description'] == key and e['run_hrs'] == '':
-                                e['run_hrs'] = val; break
-                        else:
-                            oe.append({'section':'D/G Equipment','description':key,
-                                       'last_date':'','run_hrs':val})
+                        oe.append({'section':'D/G Equipment','description':key, 'last_date':'','run_hrs':val})
     return oe
 
 def parse_doc_bytes(docx_bytes: bytes) -> dict:
@@ -401,8 +373,7 @@ def parse_doc_bytes(docx_bytes: bytes) -> dict:
         try: os.unlink(tp)
         except Exception: pass
 
-    if not doc.tables:
-        raise ValueError("No tables found — is this a TEC-004 report?")
+    if not doc.tables: raise ValueError("No tables found — is this a TEC-004 report?")
 
     vn = 'UNKNOWN'; rd = None
     for para in doc.paragraphs:
@@ -416,31 +387,35 @@ def parse_doc_bytes(docx_bytes: bytes) -> dict:
     if vn == 'UNKNOWN': warns.append("Could not extract vessel name.")
 
     me_tot = me_mo = None
-    g0 = _rect_grid(doc.tables[0])
+    g0 = _rect_grid(doc.tables[0]) if len(doc.tables) > 0 else []
     for cell_txt in (g0[0] if g0 else []):
-        if m := re.search(r'Total Running Hours[\s:ǀ|]+([\d,]+)', cell_txt, re.I):
-            me_tot = int(_num(m.group(1)))
-        if m := re.search(r'This Month[\s:]+([\d,]+)', cell_txt, re.I):
-            me_mo  = int(_num(m.group(1)))
+        if m := re.search(r'Total Running Hours[\s:ǀ|]+([\d,]+)', cell_txt, re.I): me_tot = int(_num(m.group(1)))
+        if m := re.search(r'This Month[\s:]+([\d,]+)', cell_txt, re.I): me_mo  = int(_num(m.group(1)))
 
-    me_comps  = _parse_me(g0)
-    aux_comps = _parse_aux(_rect_grid(doc.tables[2])) if len(doc.tables) > 2 else []
-    oe        = _parse_oe(doc.tables)
-    comps     = me_comps + aux_comps
+    # FIXED: Table Sweep. Do not guess table indices. Pass all to parsers.
+    me_comps, aux_comps, oe = [], [], []
+    for table in doc.tables:
+        grid = _rect_grid(table)
+        if not grid: continue
+        
+        mc = _parse_me(grid)
+        if mc: me_comps.extend(mc)
+        
+        ac = _parse_aux(grid)
+        if ac: aux_comps.extend(ac)
+        
+        oc = _parse_oe_grid(grid)
+        if oc: oe.extend(oc)
 
+    comps = me_comps + aux_comps
     if not comps: warns.append("No components extracted.")
 
     return {
-        'vessel_name':     vn,
-        'report_date':     rd,
-        'me_total_hrs':    me_tot,
-        'me_this_month':   me_mo,
-        'components':      comps,
-        'me_comps':        me_comps,
-        'aux_comps':       aux_comps,
-        'other_equipment': oe,
-        'warnings':        warns,
-        'uploaded_at':     datetime.utcnow().isoformat(),
+        'vessel_name':     vn, 'report_date':     rd,
+        'me_total_hrs':    me_tot, 'me_this_month':   me_mo,
+        'components':      comps, 'me_comps':        me_comps,
+        'aux_comps':       aux_comps, 'other_equipment': oe,
+        'warnings':        warns, 'uploaded_at':     datetime.utcnow().isoformat(),
     }
 
 
@@ -551,7 +526,6 @@ def matrix(records: list, mode: str = 'matrix', height: int = None):
     h   = height or min(880, 38*len(tbl) + 44)
     st.dataframe(_style(tbl), use_container_width=True, hide_index=True, height=h, column_config=cfg)
 
-
 # ══════════════════════════════════════════════════════════════════
 #  HTML HELPERS
 # ══════════════════════════════════════════════════════════════════
@@ -573,7 +547,6 @@ def record_count(records: list, label: str = '') -> str:
     if ok: parts.append(f'<span class="ok">{ok} OK</span>')
     if nd: parts.append(f'<span class="nd">{nd} no data</span>')
     return f'<div class="rc">{" · ".join(parts)}</div>'
-
 
 # ══════════════════════════════════════════════════════════════════
 #  PAGE
@@ -598,7 +571,7 @@ with st.expander("Upload TEC-004 Report", expanded=(st.session_state.parsed is N
                 try: docx = convert_doc_to_docx(raw)
                 except Exception as e: st.error(f'Conversion failed: {e}'); st.stop()
 
-            with st.spinner('Parsing Cartesian Matrices…'):
+            with st.spinner('Parsing tables…'):
                 try:
                     parsed = parse_doc_bytes(docx)
                     parsed['file_hash'] = fh
