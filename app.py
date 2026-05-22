@@ -303,7 +303,7 @@ init_db()
 # ============================================================
 # HELPERS
 # ============================================================
-PARSER_VERSION = "tec004_v1.0_preview_save"
+PARSER_VERSION = "tec004_v1.1_keyerror_safe"
 
 STATUS_ORDER = {
     "OVERDUE": 0,
@@ -444,6 +444,20 @@ def make_issue(severity: str, code: str, message: str, table_idx: int = None, ro
         "row_key": rkey,
     }
 
+def normalize_parsed_payload(parsed: dict) -> dict:
+    parsed = parsed or {}
+    parsed.setdefault("vessel_name", "UNKNOWN")
+    parsed.setdefault("report_date", "")
+    parsed.setdefault("me_total_hrs", 0)
+    parsed.setdefault("me_this_month", 0)
+    parsed.setdefault("me_comps", [])
+    parsed.setdefault("aux_comps", [])
+    parsed.setdefault("components", [])
+    parsed.setdefault("other_equipment", [])
+    parsed.setdefault("issues", [])
+    parsed.setdefault("uploaded_at", now_iso())
+    return parsed
+
 def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
     if not os.path.isfile(soffice):
@@ -543,8 +557,8 @@ def detect_vessel_and_date(doc) -> Tuple[str, str, List[Dict[str, Any]]]:
     return vessel, report_date, issues
 
 def detect_me_totals(grid: List[List[str]]) -> Tuple[Optional[float], Optional[float]]:
-    me_total = None
-    me_month = None
+    me_total = 0
+    me_month = 0
     flat = " | ".join([" | ".join(row) for row in grid[:3]])
     m1 = re.search(r"Total Running Hours[\s:ǀ|]+([\d,]+)", flat, re.I)
     m2 = re.search(r"This Month[\s:]+([\d,]+)", flat, re.I)
@@ -671,25 +685,23 @@ def parse_aux_table(grid: List[List[str]], table_idx: int) -> Tuple[List[Dict[st
         issues.append(make_issue("warning", "AUX_DESC_ROW_NOT_FOUND", "AUX description row not found.", table_idx))
         return records, issues
 
-    # Discover engine groups from rows above DESCRIPTION
     header_band = [" ".join(grid[i]).upper() for i in range(max(0, desc_row - 6), desc_row + 1)]
     header_join = " ".join(header_band)
     present_engines = []
     for n in [1, 2, 3]:
-        if f"AUX. ENGINE NO.{n}" in header_join or f"AUX ENGINE NO.{n}" in header_join or f"AUX.{n}" in header_join or f"NO.{n}" in header_join:
+        if f"AUX. ENGINE NO.{n}" in header_join or f"AUX ENGINE NO.{n}" in header_join or f"NO.{n}" in header_join:
             present_engines.append(f"AUX-{n}")
     if not present_engines:
         present_engines = ["AUX-1", "AUX-2", "AUX-3"]
 
-    # Count visible cylinder numbers on description row
     col_nums = []
     for ci in range(2, len(grid[desc_row])):
         token = normalize_whitespace(grid[desc_row][ci])
         if re.fullmatch(r'\d+', token):
             col_nums.append((ci, int(token)))
-    # Try to infer repeating groups
+
     if not col_nums:
-        issues.append(make_issue("warning", "AUX_CYL_HEADERS_MISSING", "No AUX cylinder number headers found; using fallback grouping.", table_idx, desc_row))
+        issues.append(make_issue("warning", "AUX_CYL_HEADERS_MISSING", "No AUX cylinder headers found; using fallback grouping.", table_idx, desc_row))
         cyl_count = 6
         start_col = 3
     else:
@@ -780,7 +792,6 @@ def parse_other_equipment(grid: List[List[str]], table_idx: int) -> Tuple[List[D
     if not any(x in joined for x in ["TURBOCHARGER", "COOLERS", "A/C", "AUXILIARY BOILER", "D/G NO1", "D/G NO.1", "DG NO1"]):
         return records, issues
 
-    # Lightweight extraction only for preview visibility, not persistence focus
     skip = {
         "", "TURBOCHARGER", "COOLERS", "A/C & REFR. COMPRESSORS",
         "AUXILIARY BOILER", "EXH GAS BOILER", "MAIN AIR COMPRESSORS",
@@ -864,8 +875,8 @@ def parse_docx_bytes(docx_bytes: bytes) -> Dict[str, Any]:
     vessel_name, report_date, meta_issues = detect_vessel_and_date(doc)
     issues.extend(meta_issues)
 
-    me_total_hrs = None
-    me_this_month = None
+    me_total_hrs = 0
+    me_this_month = 0
 
     all_me = []
     all_aux = []
@@ -897,7 +908,7 @@ def parse_docx_bytes(docx_bytes: bytes) -> Dict[str, Any]:
     if not combined:
         issues.append(make_issue("error", "NO_COMPONENTS", "No Main Engine or Auxiliary Engine component rows were extracted."))
 
-    return {
+    return normalize_parsed_payload({
         "vessel_name": vessel_name,
         "report_date": report_date,
         "me_total_hrs": me_total_hrs,
@@ -908,7 +919,7 @@ def parse_docx_bytes(docx_bytes: bytes) -> Dict[str, Any]:
         "other_equipment": all_oe,
         "issues": issues,
         "uploaded_at": now_iso(),
-    }
+    })
 
 # ============================================================
 # DB PERSISTENCE
@@ -935,6 +946,7 @@ def report_exists(conn, vessel_name: str, report_date: str, file_hash: str) -> b
     return cur.fetchone() is not None
 
 def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
+    parsed = normalize_parsed_payload(parsed)
     conn = get_conn()
     try:
         vessel_id = ensure_vessel(conn, parsed["vessel_name"])
@@ -949,19 +961,19 @@ def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             vessel_id,
-            parsed["vessel_name"],
-            parsed["report_date"],
-            parsed["filename"],
-            parsed["file_hash"],
+            parsed.get("vessel_name", "UNKNOWN"),
+            parsed.get("report_date", ""),
+            parsed.get("filename", ""),
+            parsed.get("file_hash", ""),
             PARSER_VERSION,
-            parsed.get("me_total_hrs"),
-            parsed.get("me_this_month"),
+            parsed.get("me_total_hrs", 0),
+            parsed.get("me_this_month", 0),
             json.dumps(parsed, ensure_ascii=False, default=str),
             now_iso()
         ))
         report_id = cur.lastrowid
 
-        for rec in parsed["components"]:
+        for rec in parsed.get("components", []):
             cur.execute("""
                 INSERT INTO parsed_rows (
                     report_id, category, engine_label, unit, description,
@@ -994,7 +1006,7 @@ def save_parsed_report(parsed: Dict[str, Any]) -> Tuple[bool, str]:
                 now_iso()
             ))
 
-        for issue in parsed["issues"]:
+        for issue in parsed.get("issues", []):
             cur.execute("""
                 INSERT INTO parse_issues (
                     report_id, row_key, severity, issue_code, message,
@@ -1188,7 +1200,10 @@ with st.expander("Upload TEC-004 .doc report", expanded=(st.session_state.parsed
         raw = uploaded.read()
         fhash = md5_bytes(raw)
 
-        if st.session_state.parsed is None or st.session_state.parsed.get("file_hash") != fhash:
+        current_parsed = st.session_state.parsed or {}
+        current_hash = current_parsed.get("file_hash")
+
+        if current_hash != fhash:
             with st.spinner("Converting .doc → .docx..."):
                 try:
                     docx_bytes = convert_doc_to_docx(raw)
@@ -1201,6 +1216,7 @@ with st.expander("Upload TEC-004 .doc report", expanded=(st.session_state.parsed
                     parsed = parse_docx_bytes(docx_bytes)
                     parsed["filename"] = uploaded.name
                     parsed["file_hash"] = fhash
+                    parsed = normalize_parsed_payload(parsed)
                 except Exception as e:
                     st.error(f"Parse failed: {e}")
                     st.stop()
@@ -1212,24 +1228,28 @@ if st.session_state.parsed is None:
     st.info("Upload a TEC-004 .doc report to begin.")
     st.stop()
 
-p = st.session_state.parsed
-all_rows = p["components"]
-me_rows = p["me_comps"]
-aux_rows = p["aux_comps"]
-oe_rows = p["other_equipment"]
-all_issues = p["issues"]
+p = normalize_parsed_payload(st.session_state.parsed or {})
 
-err_count = sum(1 for i in all_issues if i["severity"] == "error")
-warn_count = sum(1 for i in all_issues if i["severity"] == "warning")
-od_count = sum(1 for r in all_rows if r["status"] == "OVERDUE")
-hp_count = sum(1 for r in all_rows if r["status"] == "HIGH PRIORITY")
+all_rows = p.get("components", [])
+me_rows = p.get("me_comps", [])
+aux_rows = p.get("aux_comps", [])
+oe_rows = p.get("other_equipment", [])
+all_issues = p.get("issues", [])
+
+err_count = sum(1 for i in all_issues if i.get("severity") == "error")
+warn_count = sum(1 for i in all_issues if i.get("severity") == "warning")
+od_count = sum(1 for r in all_rows if r.get("status") == "OVERDUE")
+hp_count = sum(1 for r in all_rows if r.get("status") == "HIGH PRIORITY")
+
+me_total_display = int(p.get("me_total_hrs", 0) or 0)
+me_month_display = int(p.get("me_this_month", 0) or 0)
 
 st.markdown(f"""
 <div class="kpi-wrap">
-  <div class="kpi"><div class="kpi-v">{p['vessel_name']}</div><div class="kpi-l">Vessel</div></div>
-  <div class="kpi"><div class="kpi-v">{p['report_date'] or '—'}</div><div class="kpi-l">Report Date</div></div>
-  <div class="kpi"><div class="kpi-v">{int(p['me_total_hrs']):,}</div><div class="kpi-l">ME Total Hrs</div></div>
-  <div class="kpi"><div class="kpi-v">{int(p['me_this_month']):,}</div><div class="kpi-l">ME This Month</div></div>
+  <div class="kpi"><div class="kpi-v">{p.get('vessel_name', 'UNKNOWN')}</div><div class="kpi-l">Vessel</div></div>
+  <div class="kpi"><div class="kpi-v">{p.get('report_date', '') or '—'}</div><div class="kpi-l">Report Date</div></div>
+  <div class="kpi"><div class="kpi-v">{me_total_display:,}</div><div class="kpi-l">ME Total Hrs</div></div>
+  <div class="kpi"><div class="kpi-v">{me_month_display:,}</div><div class="kpi-l">ME This Month</div></div>
   <div class="kpi"><div class="kpi-v">{len(all_rows)}</div><div class="kpi-l">Parsed Rows</div></div>
   <div class="kpi"><div class="kpi-v">{warn_count} / {err_count}</div><div class="kpi-l">Warnings / Errors</div></div>
 </div>
@@ -1284,7 +1304,7 @@ st.markdown("## Main Engine")
 
 mef1, mef2, mef3, mef4 = st.columns([2, 2, 2.2, 2.4])
 with mef1:
-    me_comp_opt = ["All"] + sorted({r["description"] for r in me_rows})
+    me_comp_opt = ["All"] + sorted({r.get("description", "") for r in me_rows if r.get("description", "")})
     me_comp = st.selectbox("Component", me_comp_opt, key="me_comp")
 with mef2:
     me_status = st.selectbox("Status", ["All", "Overdue only", "High Priority +", "Issue rows only"], key="me_status")
@@ -1295,11 +1315,11 @@ with mef4:
 
 me_view = me_rows[:]
 if me_comp != "All":
-    me_view = [r for r in me_view if r["description"] == me_comp]
+    me_view = [r for r in me_view if r.get("description") == me_comp]
 if me_status == "Overdue only":
-    me_view = [r for r in me_view if r["status"] == "OVERDUE"]
+    me_view = [r for r in me_view if r.get("status") == "OVERDUE"]
 elif me_status == "High Priority +":
-    me_view = [r for r in me_view if r["status"] in ("OVERDUE", "HIGH PRIORITY")]
+    me_view = [r for r in me_view if r.get("status") in ("OVERDUE", "HIGH PRIORITY")]
 elif me_status == "Issue rows only":
     me_view = [r for r in me_view if int(r.get("issue_count", 0)) > 0]
 
@@ -1317,10 +1337,10 @@ st.markdown("## Auxiliary Engines")
 
 axf1, axf2, axf3, axf4, axf5 = st.columns([1.4, 2, 2, 2.2, 2.4])
 with axf1:
-    eng_opt = ["All"] + sorted({r["engine_label"] for r in aux_rows})
+    eng_opt = ["All"] + sorted({r.get("engine_label", "") for r in aux_rows if r.get("engine_label", "")})
     ax_eng = st.selectbox("Engine", eng_opt, key="ax_eng")
 with axf2:
-    ax_comp_opt = ["All"] + sorted({r["description"] for r in aux_rows})
+    ax_comp_opt = ["All"] + sorted({r.get("description", "") for r in aux_rows if r.get("description", "")})
     ax_comp = st.selectbox("Component", ax_comp_opt, key="ax_comp")
 with axf3:
     ax_status = st.selectbox("Status", ["All", "Overdue only", "High Priority +", "Issue rows only"], key="ax_status")
@@ -1331,13 +1351,13 @@ with axf5:
 
 ax_view = aux_rows[:]
 if ax_eng != "All":
-    ax_view = [r for r in ax_view if r["engine_label"] == ax_eng]
+    ax_view = [r for r in ax_view if r.get("engine_label") == ax_eng]
 if ax_comp != "All":
-    ax_view = [r for r in ax_view if r["description"] == ax_comp]
+    ax_view = [r for r in ax_view if r.get("description") == ax_comp]
 if ax_status == "Overdue only":
-    ax_view = [r for r in ax_view if r["status"] == "OVERDUE"]
+    ax_view = [r for r in ax_view if r.get("status") == "OVERDUE"]
 elif ax_status == "High Priority +":
-    ax_view = [r for r in ax_view if r["status"] in ("OVERDUE", "HIGH PRIORITY")]
+    ax_view = [r for r in ax_view if r.get("status") in ("OVERDUE", "HIGH PRIORITY")]
 elif ax_status == "Issue rows only":
     ax_view = [r for r in ax_view if int(r.get("issue_count", 0)) > 0]
 
