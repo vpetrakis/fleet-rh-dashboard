@@ -1,3 +1,9 @@
+"""
+Fleet Running Hours Monitor  v15
+Single page — upload → KPIs → 3 matrices (ME · AUX · Other Equipment)
+Parser: Text-First Architecture
+Renderer: Strict Type-Safe Native Streamlit (Zero PyArrow Crashes)
+"""
 import streamlit as st
 st.set_page_config(
     page_title="Fleet Running Hours Monitor",
@@ -47,10 +53,6 @@ html,body,[class*="css"]{background:var(--bg)!important;color:var(--t1)!importan
 .hero-h{font-family:var(--ff);font-size:1.9rem;font-weight:700;color:var(--t0);letter-spacing:-.04em;line-height:1.06;margin-top:.2rem}
 .hero-s{color:var(--t1);font-size:.92rem;line-height:1.65;margin-top:.45rem;max-width:1100px}
 .hero-rule{height:1px;margin:.8rem 0 1rem;background:linear-gradient(90deg,var(--gold2),var(--line),transparent)}
-.panel{
- background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.01));
- border:1px solid var(--line);border-radius:var(--r);padding:1rem;box-shadow:0 18px 50px rgba(0,0,0,.28)
-}
 .metric-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:.75rem;margin:1rem 0}
 .metric{
  background:linear-gradient(180deg,var(--bg3),var(--bg2));
@@ -104,15 +106,7 @@ div[data-baseweb="select"] > div,.stTextInput>div>div>input{
 #  CONSTANTS
 # ══════════════════════════════════════════════════════════════════
 DB_PATH = "tec004_reports.db"
-PARSER_VERSION = "11.0_text_first"
-
-STATUS_ORDER = {'OVERDUE': 0, 'HIGH PRIORITY': 1, 'OK': 2, 'NO DATA': 3}
-STATUS_MAP = {
-    'OVERDUE': '🔴 OVERDUE',
-    'HIGH PRIORITY': '🟠 HIGH PRIORITY',
-    'OK': '🟢 OK',
-    'NO DATA': '🔵 NO DATA'
-}
+PARSER_VERSION = "15.0_hardened"
 
 # ══════════════════════════════════════════════════════════════════
 #  DB
@@ -270,13 +264,6 @@ def make_row(cat, eng, unit, name, period, date, hrs, parser_source='text', sour
         'source_ref': source_ref,
     }
 
-def safe_int_fmt(x):
-    try:
-        v = float(x)
-        return f"{int(v)}" if v > 0 else "—"
-    except Exception:
-        return "—"
-
 # ══════════════════════════════════════════════════════════════════
 #  DOC CONVERSION
 # ══════════════════════════════════════════════════════════════════
@@ -390,7 +377,6 @@ def parse_me_text(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
         issues.append("Main Engine section not found.")
         return out, issues
 
-    # Remove obvious header noise but preserve the stream
     stream = [fl(x) for x in sec if fl(x)]
     stream = [x for x in stream if x.upper() not in ('CYL. NO.1', 'CYL. NO.2', 'CYL. NO.3', 'CYL. NO.4', 'CYL. NO.5', 'CYL. NO.6', 'CYL. NO.7')]
 
@@ -401,7 +387,6 @@ def parse_me_text(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
             period = parse_number(stream[i + 1]) if i + 1 < len(stream) else 0.0
             marker1 = fl(stream[i + 2]) if i + 2 < len(stream) else ''
             if marker1 == '1':
-                # collect up to 7 date values until marker 2
                 dates = []
                 j = i + 3
                 while j < len(stream) and fl(stream[j]) != '2' and len(dates) < 7:
@@ -445,7 +430,6 @@ def parse_aux_text(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
         ['DESCRIPTION', 'D/G NO1', 'D/G NO.1']
     )
 
-    # If the above cut is too short, use a broader region starting at AUX header
     if not sec:
         sec = section_between(
             lines,
@@ -459,7 +443,6 @@ def parse_aux_text(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
 
     stream = [fl(x) for x in sec if fl(x)]
 
-    # Find actual data header: DESCRIPTION | PERIODICTLY | 1 | 2
     start_idx = -1
     for i in range(len(stream) - 3):
         if stream[i].upper() == 'DESCRIPTION' and 'PERIODICTLY' in stream[i + 1].upper() and stream[i + 2] == '1' and stream[i + 3] == '2':
@@ -467,7 +450,6 @@ def parse_aux_text(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
             break
 
     if start_idx == -1:
-        # Sometimes flattened as DESCRIPTION, PERIODICTLY, 1, then next row 2
         for i in range(len(stream)):
             if stream[i].upper() == 'DESCRIPTION':
                 start_idx = i + 1
@@ -504,6 +486,7 @@ def parse_aux_text(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
     return out, issues
 
 def parse_other_equipment_text(lines: List[str]) -> List[Dict[str, Any]]:
+    # REVISED OE PARSER: Looks for dates/hours dynamically within proximity
     out = []
     sec = section_between(
         lines,
@@ -511,20 +494,43 @@ def parse_other_equipment_text(lines: List[str]) -> List[Dict[str, Any]]:
         ['AUX. ENGINE MAKER / TYPE']
     )
     stream = [fl(x) for x in sec if fl(x)]
-    # lightweight capture only, not the critical focus
-    for i in range(len(stream) - 2):
+    
+    i = 0
+    while i < len(stream) - 1:
         name = normalize_component_token(stream[i])
         if is_component_name(name):
-            dt = parse_date(stream[i + 1])
-            hrs = parse_number(stream[i + 2])
+            dt = ''
+            hrs = 0.0
+            offset = 1
+            # Scan next 4 tokens for valid date or hour values
+            for offset in range(1, min(5, len(stream) - i)):
+                tok = stream[i + offset]
+                if not dt and ('/' in tok or '-' in tok or re.search(r'[A-Za-z]{3}\s+\d{2,4}', tok)):
+                    dt = parse_date(tok)
+                if hrs == 0.0 and re.match(r'^\d[\d,\.]*$', tok) and tok not in ('1', '2'):
+                    hrs = parse_number(tok)
+            
             if dt or hrs > 0:
                 out.append({
                     'section': 'Other Equipment',
                     'description': name,
-                    'last_date': dt,
-                    'run_hrs': int(hrs) if hrs > 0 else '',
+                    'last_date': dt if dt else '—',
+                    'run_hrs': int(hrs) if hrs > 0 else 0,
                 })
-    return out
+                i += offset
+                continue
+        i += 1
+        
+    # Deduplicate OE
+    seen = set()
+    unique_out = []
+    for item in out:
+        key = (item['section'], item['description'])
+        if key not in seen:
+            seen.add(key)
+            unique_out.append(item)
+            
+    return unique_out
 
 def parse_doc_bytes(docx_bytes: bytes, filename: str = '') -> Dict[str, Any]:
     from docx import Document
@@ -663,31 +669,49 @@ def load_recent_reports(limit=30) -> pd.DataFrame:
         conn.close()
 
 # ══════════════════════════════════════════════════════════════════
-#  DATAFRAME BUILDERS
+#  DATAFRAME BUILDERS (STRICT SCHEMA TO PREVENT UI CRASH)
 # ══════════════════════════════════════════════════════════════════
 def build_component_df(records: List[Dict[str, Any]], mode='matrix') -> pd.DataFrame:
     if not records:
-        return pd.DataFrame(columns=['Status','Component','Engine','Unit','Periodicity','Last O/H','Hrs Since','Used %','Parser','Source'])
+        return pd.DataFrame(columns=['Status','Component','Engine','Unit','Periodicity','Last O/H','Hrs Since','Used %'])
+    
     df = pd.DataFrame(records)
-    df['_s'] = df['status'].map(lambda x: STATUS_ORDER.get(str(x), 9))
-    df['_p'] = pd.to_numeric(df['pct_used'], errors='coerce').fillna(0.0)
-    if mode == 'matrix':
-        df['_k1'] = df['description'].astype(str).str.upper()
-        df['_k2'] = df['engine_label'].astype(str)
-        df = df.sort_values(['_k1','_k2','unit']).drop(columns=['_s','_p','_k1','_k2'])
-    else:
-        df = df.sort_values(['_s','_p'], ascending=[True, False]).drop(columns=['_s','_p'])
+    
+    # 1. Fill missing core columns immediately to prevent KeyErrors
+    for col in ['status', 'description', 'engine_label', 'unit', 'periodicity', 'last_oh_date', 'hrs_since', 'pct_used']:
+        if col not in df.columns:
+            df[col] = None
+
+    # 2. Build the output DataFrame with STRICT type casting (No None/NaN allowed)
     out = pd.DataFrame()
-    out['Status'] = df['status'].map(lambda x: STATUS_MAP.get(str(x), '🔵 NO DATA'))
-    out['Component'] = df['description']
-    out['Engine'] = df['engine_label']
-    out['Unit'] = df['unit']
-    out['Periodicity'] = [safe_int_fmt(x) for x in df['periodicity']]
-    out['Last O/H'] = [x if x else '—' for x in df['last_oh_date']]
-    out['Hrs Since'] = [safe_int_fmt(x) for x in df['hrs_since']]
-    out['Used %'] = [round(float(x)*100, 1) if float(x) > 0 else 0.0 for x in df['pct_used']]
-    out['Parser'] = df['parser_source']
-    out['Source'] = df['source_ref']
+    
+    status_emojis = {
+        'OVERDUE': '🔴 OVERDUE',
+        'HIGH PRIORITY': '🟠 HIGH PRIORITY',
+        'OK': '🟢 OK',
+        'NO DATA': '🔵 NO DATA'
+    }
+    out['Status'] = df['status'].map(lambda x: status_emojis.get(str(x), '🔵 NO DATA')).astype(str)
+    out['Component'] = df['description'].fillna('—').astype(str)
+    out['Engine'] = df['engine_label'].fillna('—').astype(str)
+    out['Unit'] = df['unit'].fillna('—').astype(str)
+    
+    # Strict integer casting for numeric columns
+    out['Periodicity'] = pd.to_numeric(df['periodicity'], errors='coerce').fillna(0).astype(int)
+    out['Last O/H'] = df['last_oh_date'].fillna('—').replace('', '—').astype(str)
+    out['Hrs Since'] = pd.to_numeric(df['hrs_since'], errors='coerce').fillna(0).astype(int)
+    
+    # Strict float casting for progress bar
+    out['Used %'] = (pd.to_numeric(df['pct_used'], errors='coerce').fillna(0.0) * 100.0).astype(float)
+    
+    # 3. Apply sorting safely AFTER building the clean DataFrame
+    if mode == 'matrix':
+        out = out.sort_values(by=['Component', 'Engine', 'Unit']).reset_index(drop=True)
+    else:
+        sort_map = {'🔴 OVERDUE': 0, '🟠 HIGH PRIORITY': 1, '🟢 OK': 2, '🔵 NO DATA': 3}
+        out['_sort'] = out['Status'].map(sort_map)
+        out = out.sort_values(by=['_sort', 'Used %'], ascending=[True, False]).drop(columns=['_sort']).reset_index(drop=True)
+        
     return out
 
 def build_issue_df(issues: List[Dict[str, Any]]) -> pd.DataFrame:
@@ -712,8 +736,7 @@ st.markdown("""
 <div class="hero-k">Running Hours Management System</div>
 <div class="hero-h">TEC‑004 Text-First Parser Build</div>
 <div class="hero-s">
-This version treats the flattened document stream as the primary source of truth for Main Engine and Auxiliary Engine extraction,
-then exposes raw lines and raw table samples for debugging before save.
+This version enforces strict PyArrow serialization schemas to guarantee interactive rendering, and utilizes dynamic token scanning for robust Other Equipment extraction.
 </div>
 <div class="hero-rule"></div>
 """, unsafe_allow_html=True)
@@ -828,7 +851,10 @@ with tab1:
             me_df, use_container_width=True, hide_index=True,
             height=min(820, 38 * len(me_df) + 44),
             column_config={
-                'Used %': st.column_config.ProgressColumn('Used %', min_value=0, max_value=150, format='%.1f%%', width=130),
+                "Status": st.column_config.TextColumn("Status", width="medium"),
+                "Periodicity": st.column_config.NumberColumn("Periodicity", format="%d"),
+                "Hrs Since": st.column_config.NumberColumn("Hrs Since", format="%d"),
+                "Used %": st.column_config.ProgressColumn('Used %', min_value=0, max_value=150, format='%.1f%%', width=130),
             }
         )
 
@@ -858,7 +884,10 @@ with tab2:
             ax_df, use_container_width=True, hide_index=True,
             height=min(820, 38 * len(ax_df) + 44),
             column_config={
-                'Used %': st.column_config.ProgressColumn('Used %', min_value=0, max_value=150, format='%.1f%%', width=130),
+                "Status": st.column_config.TextColumn("Status", width="medium"),
+                "Periodicity": st.column_config.NumberColumn("Periodicity", format="%d"),
+                "Hrs Since": st.column_config.NumberColumn("Hrs Since", format="%d"),
+                "Used %": st.column_config.ProgressColumn('Used %', min_value=0, max_value=150, format='%.1f%%', width=130),
             }
         )
 
@@ -869,7 +898,18 @@ with tab3:
     else:
         oe_df = pd.DataFrame(oe)
         oe_df.columns = ['Section', 'Description', 'Last Date / O/H', 'Run Hrs']
-        st.dataframe(oe_df, use_container_width=True, hide_index=True)
+        
+        # Explicit type conversion to avoid PyArrow NumberColumn crashes
+        oe_df['Run Hrs'] = pd.to_numeric(oe_df['Run Hrs'], errors='coerce').fillna(0).astype(int)
+        
+        st.dataframe(
+            oe_df, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "Run Hrs": st.column_config.NumberColumn("Run Hrs", format="%d")
+            }
+        )
 
 with tab4:
     issue_df = build_issue_df(issues)
