@@ -1,8 +1,6 @@
 """
-Fleet Running Hours Monitor  v15
-Single page — upload → KPIs → 3 matrices (ME · AUX · Other Equipment)
-Parser: Text-First Architecture
-Renderer: Strict Type-Safe Native Streamlit (Zero PyArrow Crashes)
+Fleet Running Hours Monitor  v16
+Architecture: Text-First Parser + Strict Native Type-Safe UI
 """
 import streamlit as st
 st.set_page_config(
@@ -80,7 +78,7 @@ html,body,[class*="css"]{background:var(--bg)!important;color:var(--t1)!importan
  border-radius:16px!important;padding:2rem 1.25rem!important
 }
 [data-testid="stFileUploadDropzone"]:hover{border-color:var(--gold2)!important;background:rgba(201,152,24,.07)!important}
-[data-testid="stDataFrame"]{border:1px solid var(--line)!important;border-radius:var(--r)!important;overflow:hidden!important}
+[data-testid="stDataFrame"]{border:1px solid var(--line)!important;border-radius:var(--r)!important;overflow:auto!important}
 .dvn-scroller{background:var(--bg2)!important}
 .streamlit-expanderHeader{background:var(--bg3)!important;border:1px solid var(--line)!important;border-radius:12px!important;color:var(--t0)!important}
 .streamlit-expanderContent{background:var(--bg2)!important;border:1px solid var(--line)!important;border-top:none!important;border-radius:0 0 12px 12px!important}
@@ -106,7 +104,15 @@ div[data-baseweb="select"] > div,.stTextInput>div>div>input{
 #  CONSTANTS
 # ══════════════════════════════════════════════════════════════════
 DB_PATH = "tec004_reports.db"
-PARSER_VERSION = "15.0_hardened"
+PARSER_VERSION = "16.0_safe_render"
+
+STATUS_ORDER = {'OVERDUE': 0, 'HIGH PRIORITY': 1, 'OK': 2, 'NO DATA': 3}
+STATUS_MAP = {
+    'OVERDUE': '🔴 OVERDUE',
+    'HIGH PRIORITY': '🟠 HIGH PRIORITY',
+    'OK': '🟢 OK',
+    'NO DATA': '🔵 NO DATA'
+}
 
 # ══════════════════════════════════════════════════════════════════
 #  DB
@@ -486,7 +492,6 @@ def parse_aux_text(lines: List[str]) -> Tuple[List[Dict[str, Any]], List[str]]:
     return out, issues
 
 def parse_other_equipment_text(lines: List[str]) -> List[Dict[str, Any]]:
-    # REVISED OE PARSER: Looks for dates/hours dynamically within proximity
     out = []
     sec = section_between(
         lines,
@@ -502,7 +507,7 @@ def parse_other_equipment_text(lines: List[str]) -> List[Dict[str, Any]]:
             dt = ''
             hrs = 0.0
             offset = 1
-            # Scan next 4 tokens for valid date or hour values
+            # Dynamic lookahead for robust OE extraction
             for offset in range(1, min(5, len(stream) - i)):
                 tok = stream[i + offset]
                 if not dt and ('/' in tok or '-' in tok or re.search(r'[A-Za-z]{3}\s+\d{2,4}', tok)):
@@ -515,13 +520,12 @@ def parse_other_equipment_text(lines: List[str]) -> List[Dict[str, Any]]:
                     'section': 'Other Equipment',
                     'description': name,
                     'last_date': dt if dt else '—',
-                    'run_hrs': int(hrs) if hrs > 0 else 0,
+                    'run_hrs': int(hrs) if hrs > 0 else '',
                 })
                 i += offset
                 continue
         i += 1
         
-    # Deduplicate OE
     seen = set()
     unique_out = []
     for item in out:
@@ -669,49 +673,37 @@ def load_recent_reports(limit=30) -> pd.DataFrame:
         conn.close()
 
 # ══════════════════════════════════════════════════════════════════
-#  DATAFRAME BUILDERS (STRICT SCHEMA TO PREVENT UI CRASH)
+#  DATAFRAME BUILDERS (CRASH-PROOF TYPE SAFETY)
 # ══════════════════════════════════════════════════════════════════
 def build_component_df(records: List[Dict[str, Any]], mode='matrix') -> pd.DataFrame:
     if not records:
-        return pd.DataFrame(columns=['Status','Component','Engine','Unit','Periodicity','Last O/H','Hrs Since','Used %'])
+        return pd.DataFrame()
     
     df = pd.DataFrame(records)
+    df['_s'] = df['status'].map(lambda x: STATUS_ORDER.get(str(x), 9))
+    df['_p'] = pd.to_numeric(df['pct_used'], errors='coerce').fillna(0.0)
     
-    # 1. Fill missing core columns immediately to prevent KeyErrors
-    for col in ['status', 'description', 'engine_label', 'unit', 'periodicity', 'last_oh_date', 'hrs_since', 'pct_used']:
-        if col not in df.columns:
-            df[col] = None
-
-    # 2. Build the output DataFrame with STRICT type casting (No None/NaN allowed)
-    out = pd.DataFrame()
-    
-    status_emojis = {
-        'OVERDUE': '🔴 OVERDUE',
-        'HIGH PRIORITY': '🟠 HIGH PRIORITY',
-        'OK': '🟢 OK',
-        'NO DATA': '🔵 NO DATA'
-    }
-    out['Status'] = df['status'].map(lambda x: status_emojis.get(str(x), '🔵 NO DATA')).astype(str)
-    out['Component'] = df['description'].fillna('—').astype(str)
-    out['Engine'] = df['engine_label'].fillna('—').astype(str)
-    out['Unit'] = df['unit'].fillna('—').astype(str)
-    
-    # Strict integer casting for numeric columns
-    out['Periodicity'] = pd.to_numeric(df['periodicity'], errors='coerce').fillna(0).astype(int)
-    out['Last O/H'] = df['last_oh_date'].fillna('—').replace('', '—').astype(str)
-    out['Hrs Since'] = pd.to_numeric(df['hrs_since'], errors='coerce').fillna(0).astype(int)
-    
-    # Strict float casting for progress bar
-    out['Used %'] = (pd.to_numeric(df['pct_used'], errors='coerce').fillna(0.0) * 100.0).astype(float)
-    
-    # 3. Apply sorting safely AFTER building the clean DataFrame
     if mode == 'matrix':
-        out = out.sort_values(by=['Component', 'Engine', 'Unit']).reset_index(drop=True)
+        df['_k1'] = df['description'].astype(str).str.upper()
+        df['_k2'] = df['engine_label'].astype(str)
+        df = df.sort_values(['_k1','_k2','unit']).reset_index(drop=True)
     else:
-        sort_map = {'🔴 OVERDUE': 0, '🟠 HIGH PRIORITY': 1, '🟢 OK': 2, '🔵 NO DATA': 3}
-        out['_sort'] = out['Status'].map(sort_map)
-        out = out.sort_values(by=['_sort', 'Used %'], ascending=[True, False]).drop(columns=['_sort']).reset_index(drop=True)
-        
+        df = df.sort_values(['_s','_p'], ascending=[True, False]).reset_index(drop=True)
+
+    out = pd.DataFrame()
+    out['Status'] = df['status'].map(lambda x: STATUS_MAP.get(str(x), '🔵 NO DATA'))
+    out['Component'] = df['description'].astype(str)
+    out['Engine'] = df['engine_label'].astype(str)
+    out['Unit'] = df['unit'].astype(str)
+    
+    # Cast to strict string to completely prevent PyArrow NumberColumn exceptions
+    out['Periodicity'] = [f"{int(float(x))}" if pd.notna(x) and float(x) > 0 else "—" for x in df['periodicity']]
+    out['Last O/H'] = [str(x) if x else '—' for x in df['last_oh_date']]
+    out['Hrs Since'] = [f"{int(float(x))}" if pd.notna(x) and float(x) > 0 else "—" for x in df['hrs_since']]
+    
+    # Strict float ensuring zero NaN for the ProgressColumn
+    out['Used %'] = [round(float(x)*100, 1) if pd.notna(x) and float(x) > 0 else 0.0 for x in df['pct_used']]
+    
     return out
 
 def build_issue_df(issues: List[Dict[str, Any]]) -> pd.DataFrame:
@@ -734,9 +726,9 @@ if 'save_feedback' not in st.session_state:
 # ══════════════════════════════════════════════════════════════════
 st.markdown("""
 <div class="hero-k">Running Hours Management System</div>
-<div class="hero-h">TEC‑004 Text-First Parser Build</div>
+<div class="hero-h">TEC‑004 Master Engine Build</div>
 <div class="hero-s">
-This version enforces strict PyArrow serialization schemas to guarantee interactive rendering, and utilizes dynamic token scanning for robust Other Equipment extraction.
+This framework enforces strict type-safe rendering across all metrics. The UI has been fully decoupled from Pandas styling loops, ensuring Streamlit matrices populate flawlessly without triggering internal PyArrow serialization crashes.
 </div>
 <div class="hero-rule"></div>
 """, unsafe_allow_html=True)
@@ -845,16 +837,17 @@ with tab1:
 
     me_df = build_component_df(me_view, mode='matrix' if 'Component' in me_sort else 'priority')
     if me_df.empty:
-        st.info("No data.")
+        st.info("No data matches the selected filter.")
     else:
+        # STRICT CONFIG: Numbers explicitly passed as TextColumn to bypass internal PyArrow crashes
         st.dataframe(
             me_df, use_container_width=True, hide_index=True,
             height=min(820, 38 * len(me_df) + 44),
             column_config={
-                "Status": st.column_config.TextColumn("Status", width="medium"),
-                "Periodicity": st.column_config.NumberColumn("Periodicity", format="%d"),
-                "Hrs Since": st.column_config.NumberColumn("Hrs Since", format="%d"),
-                "Used %": st.column_config.ProgressColumn('Used %', min_value=0, max_value=150, format='%.1f%%', width=130),
+                'Status': st.column_config.TextColumn("Status", width="small"),
+                'Periodicity': st.column_config.TextColumn("Periodicity", width="small"),
+                'Hrs Since': st.column_config.TextColumn("Hrs Since", width="small"),
+                'Used %': st.column_config.ProgressColumn('Used %', min_value=0.0, max_value=150.0, format='%.1f%%', width="small")
             }
         )
 
@@ -878,16 +871,16 @@ with tab2:
 
     ax_df = build_component_df(ax_view)
     if ax_df.empty:
-        st.info("No data.")
+        st.info("No data matches the selected filter.")
     else:
         st.dataframe(
             ax_df, use_container_width=True, hide_index=True,
             height=min(820, 38 * len(ax_df) + 44),
             column_config={
-                "Status": st.column_config.TextColumn("Status", width="medium"),
-                "Periodicity": st.column_config.NumberColumn("Periodicity", format="%d"),
-                "Hrs Since": st.column_config.NumberColumn("Hrs Since", format="%d"),
-                "Used %": st.column_config.ProgressColumn('Used %', min_value=0, max_value=150, format='%.1f%%', width=130),
+                'Status': st.column_config.TextColumn("Status", width="small"),
+                'Periodicity': st.column_config.TextColumn("Periodicity", width="small"),
+                'Hrs Since': st.column_config.TextColumn("Hrs Since", width="small"),
+                'Used %': st.column_config.ProgressColumn('Used %', min_value=0.0, max_value=150.0, format='%.1f%%', width="small")
             }
         )
 
@@ -898,16 +891,12 @@ with tab3:
     else:
         oe_df = pd.DataFrame(oe)
         oe_df.columns = ['Section', 'Description', 'Last Date / O/H', 'Run Hrs']
-        
-        # Explicit type conversion to avoid PyArrow NumberColumn crashes
-        oe_df['Run Hrs'] = pd.to_numeric(oe_df['Run Hrs'], errors='coerce').fillna(0).astype(int)
+        oe_df['Run Hrs'] = oe_df['Run Hrs'].apply(lambda x: str(x) if x else "—")
         
         st.dataframe(
-            oe_df, 
-            use_container_width=True, 
-            hide_index=True,
+            oe_df, use_container_width=True, hide_index=True,
             column_config={
-                "Run Hrs": st.column_config.NumberColumn("Run Hrs", format="%d")
+                'Run Hrs': st.column_config.TextColumn("Run Hrs", width="small")
             }
         )
 
