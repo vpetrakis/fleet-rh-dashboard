@@ -1,6 +1,6 @@
 """
-Fleet Command Telemetry - V18 (The 10/10 Master Build)
-Architecture: Anchor & Fixed-Reach Token Scanning + Strict String Casting
+Fleet Command Telemetry - V19 (The Zero-Trust Enterprise Master Build)
+Architecture: Strict Marine Allowlist + Bounded Lookahead + Crash-Proof UI
 """
 import streamlit as st
 st.set_page_config(page_title="Fleet Running Hours", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 # ══════════════════════════════════════════════════════════════════
-#  NATIVE UI THEME (NO DATAFRAME OVERRIDES)
+#  NATIVE UI THEME
 # ══════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
@@ -35,22 +35,55 @@ html, body, [class*="css"] { background: var(--bg)!important; color: var(--t1)!i
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════
+#  THE MARINE ALLOWLIST (ZERO-TRUST FIREWALL)
+# ══════════════════════════════════════════════════════════════════
+ME_COMPONENTS = {
+    "CYLINDER COVER", "PISTON ASSEMBLY", "STUFFING BOX", "PISTON CROWN", 
+    "CYLINDER LINER", "EXHAUST VALVE", "STARTING VALVE", "SAFETY VALVE", 
+    "FUEL VALVES", "FUEL PUMP", "PLUNGER AND BARREL(RENEWAL)", 
+    "PLUNGER AND BARREL", "FUEL PUMP SUCTION VALVE", 
+    "FUEL PUMP PUNCTURE VALVE", "CROSSHEAD BEARINGS", 
+    "BOTTOM END BEARINGS", "MAIN BEARINGS"
+}
+
+AUX_COMPONENTS = {
+    "CYLINDER HEAD", "PISTON", "CONNECTING ROD", "CYLINDER LINERS", 
+    "FUEL VALVES (1)", "FUEL PUMPS", "CRANK PIN BEARING", "MAIN BEARING", 
+    "ADJUST VALVE HEAD CLEARANCE"
+}
+
+OE_COMPONENTS = {
+    "TURBOCHARGER (2)", "TURBOCHARGER (3)", "AIR COOLER", "L.O. COOLER CLEAN", 
+    "F.W. COOLER CLEAN", "COOL WATER THERMOSTAT VALVE", "L.O. RENEWAL", 
+    "L.O. THERMOSTAT VALVE", "ALTERNATOR CLEANING", "THRUST BEARING", 
+    "TURBOCHARGER", "COOLERS", "A/C & REFR. COMPRESSORS", "GENERAL O/H", 
+    "M/E L.O.", "AIR COND. COMPRESSOR NO.1", "BALANCING OF ROTOR SHAFT", 
+    "JACKET FW NO.1", "AIR COND. COMPRESSOR NO.2", "AIR COOLER CLEANING", 
+    "PISTON L.O.", "AIR. COND. COOLER CLEANING", "ATMOSPHERIC CONDENSER", 
+    "REFRIGERATION COMPRESSOR NO.1", "REFRIGERATION COMPRESSOR NO.2", 
+    "AUXILIARY BOILER", "EXH GAS BOILER", "MAIN AIR COMPRESSORS", 
+    "FURNACE INSPECTION", "WASHING THE TUBES", "STARTING MAIN AIR COMPRESSOR NO.1", 
+    "BURNER ATOMIZER", "O/H CIRC. PUMP NO.1", "STARTING MAIN AIR COMPRESSOR NO.2", 
+    "FORCED DRAFT FAN", "O/H CIRC. PUMP NO.2", "SERVICE AIR COMPRESSOR", 
+    "FEED PUMPS NO.1", "EMERGENCY AIR COMPRESSOR NO.", "FEED PUMPS NO.2"
+}
+
+# ══════════════════════════════════════════════════════════════════
 #  TEXT SANITIZATION HELPERS
 # ══════════════════════════════════════════════════════════════════
 def fl(txt) -> str:
-    """Removes hex characters but preserves the string length for blank cells."""
     if txt is None: return ""
     raw = str(txt).replace('\x07', '').replace('\xa0', ' ').replace('\t', ' ')
     lines = [line.strip() for line in raw.split('\n') if line.strip()]
     return lines[0] if lines else ""
 
-def clean_comp(txt) -> str:
-    """Removes junk prefixes from component names."""
-    return re.sub(r'(?i)Page\s*\d+\s*of\s*\d+', '', fl(txt)).strip(" :-#")
+def normalize_comp(txt) -> str:
+    """Removes weird spacing and extra characters for strict dictionary matching."""
+    return re.sub(r'\s+', ' ', fl(txt).upper()).strip(" :-#")
 
 def parse_num(txt) -> float:
     s = fl(txt).upper().replace('[', '').replace(']', '')
-    if not s or any(w in s for w in ('N/A', 'MONTH', 'YEAR', 'DAY', 'OBS', 'CENTRAL')): return 0.0
+    if not s or any(w in s for w in ('N/A', 'MONTH', 'YEAR', 'DAY', 'OBS', 'CENTRAL', 'COOLER')): return 0.0
     m = re.search(r'\d[\d,\.]*', s)
     if not m: return 0.0
     val = re.sub(r'[,\.]', '', m.group())
@@ -61,11 +94,6 @@ def parse_date(txt) -> str:
     s = fl(txt).strip().replace('[', '').replace(']', '')
     if not s or s in ('-', '1', '2', 'N/A') or re.fullmatch(r'\d+', s): return ''
     return s
-
-def is_comp(name: str) -> bool:
-    u = fl(name).upper()
-    if len(u) < 3 or any(b in u for b in ('DESCRIPTION','PERIOD','MAIN ENGINE','AUX. ENGINE','TOTAL HOURS','REMARKS','TURBOCHARGER','COMPRESSOR','COOLER', 'DATE OF', 'RUNNING')): return False
-    return not bool(re.fullmatch(r'[\d./ ,:\-\(\)\[\]]+', u))
 
 def get_status(hrs: float, period: float) -> str:
     if hrs <= 0 or period <= 0: return '🔵 NO DATA'
@@ -94,7 +122,7 @@ def convert_doc_to_docx(raw: bytes) -> bytes:
         shutil.rmtree(outdir, ignore_errors=True)
 
 # ══════════════════════════════════════════════════════════════════
-#  THE "ANCHOR & FIXED-REACH" PARSER
+#  THE "ANCHOR & BOUNDED-REACH" PARSER
 # ══════════════════════════════════════════════════════════════════
 def extract_telemetry(docx_bytes: bytes):
     from docx import Document
@@ -103,7 +131,7 @@ def extract_telemetry(docx_bytes: bytes):
     doc = Document(tp)
     os.unlink(tp)
 
-    # 1. Flatten the document into a strict cell array (Preserving Blanks)
+    # 1. Unroll Document into 1D Cell Array (Preserving all blanks)
     cells = []
     for p in doc.paragraphs:
         if fl(p.text): cells.append(fl(p.text))
@@ -122,94 +150,120 @@ def extract_telemetry(docx_bytes: bytes):
     for i, c in enumerate(cells):
         if 'VESSEL' in c.upper() and 'DATE' in c.upper():
             if m := re.search(r"Name\s*:\s*(?:MV\s+)?(.+?)\s+Date\s*:\s*(.+)$", c, re.I):
-                vessel, report_date = clean_comp(m.group(1)), parse_date(m.group(2))
+                vessel, report_date = re.sub(r'(?i)^MV\s+', '', fl(m.group(1))), parse_date(m.group(2))
 
-    section = "NONE"
-    processed_comps = set()
+    section = "GLOBAL"
+    processed_me, processed_aux = set(), set()
 
     # 2. Main Scan Loop
     i = 0
     while i < len(cells):
         val = cells[i].upper()
+        norm_val = normalize_comp(cells[i])
         
-        # Section Triggers
+        # Determine Active Section
         if 'MAIN ENGINE' in val: section = "ME"
         elif 'AUX. ENGINE NO' in val or 'D/G NO' in val: section = "AUX"
         elif 'TURBOCHARGER' in val or 'A/C & REFR' in val: section = "OE"
 
-        if is_comp(cells[i]):
-            name = clean_comp(cells[i])
-            uid = f"{section}_{name}"
+        # ---- MAIN ENGINE (Strict Dictionary Match) ----
+        if section == "ME" and norm_val in ME_COMPONENTS and norm_val not in processed_me:
+            processed_me.add(norm_val)
+            idx1, idx2, period = -1, -1, 0.0
             
-            if uid not in processed_comps:
-                processed_comps.add(uid)
-                
-                # Lookahead for Periodicity and Markers
-                idx1, idx2, period = -1, -1, 0.0
-                
-                # Scan up to 15 cells ahead for '1'
-                for offset in range(1, 15):
-                    if i + offset >= len(cells): break
-                    if cells[i + offset] == '1':
-                        idx1 = i + offset
-                        # The number right before '1' is almost always periodicity
-                        period = parse_num(cells[idx1 - 1])
+            # Bounded Lookahead: 15 cells max to find '1'
+            for offset in range(1, 15):
+                if i + offset >= len(cells): break
+                if cells[i + offset] == '1':
+                    idx1 = i + offset
+                    period = parse_num(cells[idx1 - 1])
+                    break
+                    
+            if idx1 != -1:
+                # Bounded Lookahead: 20 cells max after '1' to find '2'
+                for offset in range(1, 20):
+                    if idx1 + offset >= len(cells): break
+                    if cells[idx1 + offset] == '2':
+                        idx2 = idx1 + offset
                         break
-                        
-                if idx1 != -1:
-                    # Scan up to 30 cells after '1' for '2'
-                    for offset in range(1, 30):
-                        if idx1 + offset >= len(cells): break
-                        if cells[idx1 + offset] == '2':
-                            idx2 = idx1 + offset
-                            break
 
-                # ---- ME EXTRACTION (Fixed 7 Reach) ----
-                if section == "ME" and idx1 != -1 and idx2 != -1:
-                    dates = [parse_date(cells[idx1 + k]) for k in range(1, 8) if idx1 + k < len(cells)]
-                    hours = [parse_num(cells[idx2 + k]) for k in range(1, 8) if idx2 + k < len(cells)]
-                    
-                    for c_idx in range(7):
-                        d = dates[c_idx] if c_idx < len(dates) else ''
-                        h = hours[c_idx] if c_idx < len(hours) else 0.0
-                        if d or h > 0:
-                            me_rows.append({'Status': get_status(h, period), 'Component': name, 'Engine': 'ME', 'Unit': f'Cyl {c_idx+1}', 'Periodicity': int(period), 'Last O/H': d if d else '—', 'Hrs Since': int(h), 'Used %': f"{round((h/period)*100, 1)}%" if period else "0.0%"})
-                    i = idx2 + 7
-
-                # ---- AUX EXTRACTION (Fixed 18 Reach) ----
-                elif section == "AUX" and idx1 != -1 and idx2 != -1:
-                    dates = [parse_date(cells[idx1 + k]) for k in range(1, 19) if idx1 + k < len(cells)]
-                    hours = [parse_num(cells[idx2 + k]) for k in range(1, 19) if idx2 + k < len(cells)]
-                    
-                    for c_idx in range(18):
-                        d = dates[c_idx] if c_idx < len(dates) else ''
-                        h = hours[c_idx] if c_idx < len(hours) else 0.0
-                        if d or h > 0:
-                            eng_num = (c_idx // 6) + 1
-                            cyl_num = (c_idx % 6) + 1
-                            aux_rows.append({'Status': get_status(h, period), 'Component': name, 'Engine': f'AUX-{eng_num}', 'Unit': f'Cyl {cyl_num}', 'Periodicity': int(period), 'Last O/H': d if d else '—', 'Hrs Since': int(h), 'Used %': f"{round((h/period)*100, 1)}%" if period else "0.0%"})
-                    i = idx2 + 18
+            if idx1 != -1 and idx2 != -1:
+                dates = [parse_date(cells[idx1 + k]) for k in range(1, 8) if idx1 + k < len(cells)]
+                hours = [parse_num(cells[idx2 + k]) for k in range(1, 8) if idx2 + k < len(cells)]
                 
-                # ---- OE EXTRACTION (Dynamic 5 Reach) ----
-                elif section == "OE":
-                    d, h = '', 0.0
-                    for offset in range(1, 6):
-                        if i + offset >= len(cells): break
-                        tok = cells[i + offset]
-                        if not d and ('/' in tok or '-' in tok or re.search(r'[A-Za-z]{3}\s+\d{2,4}', tok)): d = parse_date(tok)
-                        if h == 0.0 and re.match(r'^\d[\d,\.]*$', tok) and tok not in ('1', '2'): h = parse_num(tok)
-                    
+                for c_idx in range(7):
+                    d = dates[c_idx] if c_idx < len(dates) else ''
+                    h = hours[c_idx] if c_idx < len(hours) else 0.0
                     if d or h > 0:
-                        oe_rows.append({'Section': 'Other Equipment', 'Description': name, 'Last Date': d if d else '—', 'Run Hrs': int(h)})
-                        i += 5
+                        me_rows.append({
+                            'Status': get_status(h, period), 'Component': norm_val, 'Engine': 'ME', 
+                            'Unit': f'Cyl {c_idx+1}', 'Periodicity': int(period), 'Last O/H': d if d else '—', 
+                            'Hrs Since': int(h), 'Used %': f"{round((h/period)*100, 1)}%" if period else "0.0%"
+                        })
+                i = idx2 + 7
+                continue
+
+        # ---- AUXILIARY ENGINE (Strict Dictionary Match) ----
+        elif section == "AUX" and norm_val in AUX_COMPONENTS and norm_val not in processed_aux:
+            processed_aux.add(norm_val)
+            idx1, idx2, period = -1, -1, 0.0
+            
+            for offset in range(1, 15):
+                if i + offset >= len(cells): break
+                if cells[i + offset] == '1':
+                    idx1 = i + offset
+                    period = parse_num(cells[idx1 - 1])
+                    break
+                    
+            if idx1 != -1:
+                for offset in range(1, 30):
+                    if idx1 + offset >= len(cells): break
+                    if cells[idx1 + offset] == '2':
+                        idx2 = idx1 + offset
+                        break
+
+            if idx1 != -1 and idx2 != -1:
+                dates = [parse_date(cells[idx1 + k]) for k in range(1, 19) if idx1 + k < len(cells)]
+                hours = [parse_num(cells[idx2 + k]) for k in range(1, 19) if idx2 + k < len(cells)]
+                
+                for c_idx in range(18):
+                    d = dates[c_idx] if c_idx < len(dates) else ''
+                    h = hours[c_idx] if c_idx < len(hours) else 0.0
+                    if d or h > 0:
+                        eng_num = (c_idx // 6) + 1
+                        cyl_num = (c_idx % 6) + 1
+                        aux_rows.append({
+                            'Status': get_status(h, period), 'Component': norm_val, 'Engine': f'AUX-{eng_num}', 
+                            'Unit': f'Cyl {cyl_num}', 'Periodicity': int(period), 'Last O/H': d if d else '—', 
+                            'Hrs Since': int(h), 'Used %': f"{round((h/period)*100, 1)}%" if period else "0.0%"
+                        })
+                i = idx2 + 18
+                continue
+
+        # ---- OTHER EQUIPMENT (Strict Dictionary Match) ----
+        elif norm_val in OE_COMPONENTS:
+            d, h = '', 0.0
+            # Lookahead up to 6 cells to find valid Dates/Hours in side-by-side matrices
+            for offset in range(1, 7):
+                if i + offset >= len(cells): break
+                tok = cells[i + offset]
+                if not d and ('/' in tok or '-' in tok or re.search(r'[A-Za-z]{3}\s+\d{2,4}', tok)): d = parse_date(tok)
+                if h == 0.0 and re.match(r'^\d[\d,\.]*$', tok) and tok not in ('1', '2'): h = parse_num(tok)
+            
+            if d or h > 0:
+                oe_rows.append({
+                    'Section': 'Other Equipment', 'Description': norm_val, 
+                    'Last Date': d if d else '—', 'Run Hrs': int(h) if h > 0 else 0
+                })
+                i += 2  # Small jump to avoid double-processing adjacent data
+                continue
+                
         i += 1
 
     # Final Deduplication
-    me_clean = [dict(t) for t in {tuple(d.items()) for d in me_rows}]
-    aux_clean = [dict(t) for t in {tuple(d.items()) for d in aux_rows}]
     oe_clean = [dict(t) for t in {tuple(d.items()) for d in oe_rows}]
 
-    return vessel, report_date, me_total, me_month, me_clean, aux_clean, oe_clean
+    return vessel, report_date, me_total, me_month, me_rows, aux_rows, oe_clean
 
 # ══════════════════════════════════════════════════════════════════
 #  CRASH-PROOF UI BUILDER
@@ -223,7 +277,7 @@ st.markdown("""
 uploaded = st.file_uploader("Upload TEC-004 Report (.doc)", type=['doc'])
 
 if uploaded:
-    with st.spinner("Executing Anchor & Reach Table Mapping..."):
+    with st.spinner("Executing Zero-Trust Allowlist Extraction..."):
         try:
             docx_data = convert_doc_to_docx(uploaded.read())
             vessel, report_date, me_total, me_month, me_data, aux_data, oe_data = extract_telemetry(docx_data)
@@ -245,7 +299,6 @@ if uploaded:
             with tab1:
                 if not me_data: st.info("No Main Engine records found.")
                 else:
-                    # STRICT STRING CASTING: Bypasses all PyArrow crashes.
                     df_me = pd.DataFrame(me_data).astype(str)
                     st.dataframe(df_me, use_container_width=True, hide_index=True)
 
