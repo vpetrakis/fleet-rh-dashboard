@@ -196,14 +196,12 @@ ALIASES = {
     "COOL WATER THERMOSTAT VALVE": "COOL WATER THERMOSTAT VALVE",
 }
 
-
 @dataclass
 class WarningItem:
     section: str
     severity: str
     message: str
     source: str = ""
-
 
 def fl(txt: Any) -> str:
     if txt is None:
@@ -212,11 +210,9 @@ def fl(txt: Any) -> str:
     lines = [line.strip() for line in raw.split("\n") if line.strip()]
     return " ".join(lines) if lines else ""
 
-
 def normalize_token(txt: Any) -> str:
     s = re.sub(r"\s+", " ", fl(txt).upper()).strip(" :-#*[]")
     return ALIASES.get(s, s)
-
 
 def parse_num(txt: Any) -> Optional[int]:
     s = fl(txt).upper().replace("[", "").replace("]", "").strip()
@@ -237,7 +233,6 @@ def parse_num(txt: Any) -> Optional[int]:
     except Exception:
         return None
 
-
 def parse_date(txt: Any) -> Tuple[Optional[str], Optional[str]]:
     s = fl(txt).replace("[", "").replace("]", "").strip()
     if not s or s in {"-", "N/A", "1", "2"} or re.fullmatch(r"\d+", s):
@@ -248,7 +243,6 @@ def parse_date(txt: Any) -> Tuple[Optional[str], Optional[str]]:
     except Exception:
         return None, s
 
-
 def get_status(hrs: Optional[int], period: Optional[int]) -> str:
     if not hrs or not period or period <= 0:
         return "🔵 NO DATA"
@@ -258,7 +252,6 @@ def get_status(hrs: Optional[int], period: Optional[int]) -> str:
     if ratio >= 0.8:
         return "🟠 HIGH PRIORITY"
     return "🟢 OK"
-
 
 def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
@@ -306,7 +299,6 @@ def convert_doc_to_docx(raw: bytes) -> bytes:
                 pass
         shutil.rmtree(outdir, ignore_errors=True)
 
-
 def doc_to_grid(docx_bytes: bytes) -> Dict[str, Any]:
     from docx import Document
 
@@ -335,7 +327,6 @@ def doc_to_grid(docx_bytes: bytes) -> Dict[str, Any]:
         except Exception:
             pass
 
-
 def classify_table(rows: List[List[str]]) -> str:
     blob = " ".join(" ".join(r) for r in rows).upper()
 
@@ -346,7 +337,6 @@ def classify_table(rows: List[List[str]]) -> str:
     if "D/G NO1" in blob or "TURBOCHARGER" in blob or "MAIN AIR COMPRESSORS" in blob:
         return "OE"
     return "OTHER"
-
 
 def extract_header(model: Dict[str, Any], warnings: List[WarningItem]) -> Dict[str, Any]:
     text = " ".join(
@@ -388,7 +378,6 @@ def extract_header(model: Dict[str, Any], warnings: List[WarningItem]) -> Dict[s
         warnings.append(WarningItem("Header", "warning", "Main engine this-month hours not found"))
 
     return out
-
 
 def extract_me(table_rows: List[List[str]], warnings: List[WarningItem]) -> List[Dict[str, Any]]:
     records = []
@@ -451,7 +440,6 @@ def extract_me(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
         warnings.append(WarningItem("Main Engine", "error", "No main engine records extracted"))
 
     return records
-
 
 def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     records = []
@@ -520,7 +508,6 @@ def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tup
 
     return records, meta
 
-
 def extract_oe(table_rows: List[List[str]], warnings: List[WarningItem]) -> List[Dict[str, Any]]:
     records = []
 
@@ -558,7 +545,6 @@ def extract_oe(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
         warnings.append(WarningItem("Other Equipment", "warning", "No other-equipment records extracted"))
 
     return dedup
-
 
 def build_payload(docx_bytes: bytes) -> Dict[str, Any]:
     warnings: List[WarningItem] = []
@@ -598,14 +584,12 @@ def build_payload(docx_bytes: bytes) -> Dict[str, Any]:
         "quality_score": score,
     }
 
-
 def badge_html(score: int) -> str:
     if score >= 90:
         return '<span class="badge-ok">Validated</span>'
     if score >= 70:
         return '<span class="badge-warn">Review advised</span>'
     return '<span class="badge-bad">Manual review required</span>'
-
 
 st.markdown("""
 <div class="hero-k">Running Hours Management System</div>
@@ -663,7 +647,7 @@ if uploaded:
                     st.success("No extraction issues detected.")
                 else:
                     df_warn = pd.DataFrame(warnings)
-                    st.dataframe(df_warn, use_container_width=True, hide_index=True)
+                    st.data_editor(df_warn, use_container_width=True, hide_index=True)
                     st.caption("Every warning is meant to stop silent bad data from reaching the engineer.")
 
             with tab1:
@@ -673,21 +657,24 @@ if uploaded:
                     df_me = pd.DataFrame(me_data)
                     df_me["_cyl"] = df_me["Unit"].str.extract(r"(\d+)").astype(float)
                     df_me = df_me.sort_values(by=["Component", "_cyl"]).drop(columns=["_cyl"])
-                    st.dataframe(df_me.astype(str), use_container_width=True, hide_index=True)
+                    # Safely upgraded to st.data_editor
+                    st.data_editor(df_me.astype(str), use_container_width=True, hide_index=True)
 
             with tab2:
                 if not aux_data:
                     st.info("No Auxiliary Engine records found.")
                 else:
                     df_aux = pd.DataFrame(aux_data)
-                    st.dataframe(df_aux.astype(str), use_container_width=True, hide_index=True)
+                    # Safely upgraded to st.data_editor
+                    st.data_editor(df_aux.astype(str), use_container_width=True, hide_index=True)
 
             with tab3:
                 if not oe_data:
                     st.info("No Other Equipment records found.")
                 else:
                     df_oe = pd.DataFrame(oe_data)
-                    st.dataframe(df_oe.astype(str), use_container_width=True, hide_index=True)
+                    # Safely upgraded to st.data_editor
+                    st.data_editor(df_oe.astype(str), use_container_width=True, hide_index=True)
 
             with rawtab:
                 st.json(payload)
