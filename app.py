@@ -1,4 +1,3 @@
-
 """
 Fleet Command Telemetry - V18 (The 10/10 Master Build)
 Architecture: Anchor & Fixed-Reach Token Scanning + Strict String Casting
