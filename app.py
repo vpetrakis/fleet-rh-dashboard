@@ -1,6 +1,6 @@
 """
-Fleet Command Telemetry - V19 (The Zero-Trust Enterprise Master Build)
-Architecture: Strict Marine Allowlist + Bounded Lookahead + Crash-Proof UI
+Fleet Command Telemetry - V20 (The Line-Break Resilient Build)
+Architecture: Space-Merged Cell Sanitization + Extended Lookahead Boundaries
 """
 import streamlit as st
 st.set_page_config(page_title="Fleet Running Hours", page_icon="⚓", layout="wide", initial_sidebar_state="collapsed")
@@ -35,7 +35,7 @@ html, body, [class*="css"] { background: var(--bg)!important; color: var(--t1)!i
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════
-#  THE MARINE ALLOWLIST (ZERO-TRUST FIREWALL)
+#  THE MARINE ALLOWLIST
 # ══════════════════════════════════════════════════════════════════
 ME_COMPONENTS = {
     "CYLINDER COVER", "PISTON ASSEMBLY", "STUFFING BOX", "PISTON CROWN", 
@@ -65,20 +65,21 @@ OE_COMPONENTS = {
     "FURNACE INSPECTION", "WASHING THE TUBES", "STARTING MAIN AIR COMPRESSOR NO.1", 
     "BURNER ATOMIZER", "O/H CIRC. PUMP NO.1", "STARTING MAIN AIR COMPRESSOR NO.2", 
     "FORCED DRAFT FAN", "O/H CIRC. PUMP NO.2", "SERVICE AIR COMPRESSOR", 
-    "FEED PUMPS NO.1", "EMERGENCY AIR COMPRESSOR NO.", "FEED PUMPS NO.2"
+    "FEED PUMPS NO.1", "EMERGENCY AIR COMPRESSOR NO.", "FEED PUMPS NO.2",
+    "COOLING WATER PUMP" # Added dynamically
 }
 
 # ══════════════════════════════════════════════════════════════════
 #  TEXT SANITIZATION HELPERS
 # ══════════════════════════════════════════════════════════════════
 def fl(txt) -> str:
+    """CRITICAL FIX: Joins multi-line cell text (like CYLINDER\nHEAD) with a space."""
     if txt is None: return ""
     raw = str(txt).replace('\x07', '').replace('\xa0', ' ').replace('\t', ' ')
     lines = [line.strip() for line in raw.split('\n') if line.strip()]
-    return lines[0] if lines else ""
+    return " ".join(lines) if lines else ""
 
 def normalize_comp(txt) -> str:
-    """Removes weird spacing and extra characters for strict dictionary matching."""
     return re.sub(r'\s+', ' ', fl(txt).upper()).strip(" :-#")
 
 def parse_num(txt) -> float:
@@ -131,7 +132,6 @@ def extract_telemetry(docx_bytes: bytes):
     doc = Document(tp)
     os.unlink(tp)
 
-    # 1. Unroll Document into 1D Cell Array (Preserving all blanks)
     cells = []
     for p in doc.paragraphs:
         if fl(p.text): cells.append(fl(p.text))
@@ -143,7 +143,6 @@ def extract_telemetry(docx_bytes: bytes):
     me_rows, aux_rows, oe_rows = [], [], []
     vessel, report_date, me_total, me_month = "UNKNOWN", "—", 0.0, 0.0
     
-    # Extract Globals
     doc_text = " ".join([c for c in cells if c]).upper()
     if m := re.search(r'TOTAL RUNNING HOURS[\s:ǀ|]*([\d,]+)', doc_text): me_total = parse_num(m.group(1))
     if m := re.search(r'THIS MONTH[\s:]*([\d,]+)', doc_text): me_month = parse_num(m.group(1))
@@ -155,7 +154,6 @@ def extract_telemetry(docx_bytes: bytes):
     section = "GLOBAL"
     processed_me, processed_aux = set(), set()
 
-    # 2. Main Scan Loop
     i = 0
     while i < len(cells):
         val = cells[i].upper()
@@ -166,13 +164,12 @@ def extract_telemetry(docx_bytes: bytes):
         elif 'AUX. ENGINE NO' in val or 'D/G NO' in val: section = "AUX"
         elif 'TURBOCHARGER' in val or 'A/C & REFR' in val: section = "OE"
 
-        # ---- MAIN ENGINE (Strict Dictionary Match) ----
+        # ---- MAIN ENGINE ----
         if section == "ME" and norm_val in ME_COMPONENTS and norm_val not in processed_me:
             processed_me.add(norm_val)
             idx1, idx2, period = -1, -1, 0.0
             
-            # Bounded Lookahead: 15 cells max to find '1'
-            for offset in range(1, 15):
+            for offset in range(1, 20):
                 if i + offset >= len(cells): break
                 if cells[i + offset] == '1':
                     idx1 = i + offset
@@ -180,8 +177,7 @@ def extract_telemetry(docx_bytes: bytes):
                     break
                     
             if idx1 != -1:
-                # Bounded Lookahead: 20 cells max after '1' to find '2'
-                for offset in range(1, 20):
+                for offset in range(1, 30):
                     if idx1 + offset >= len(cells): break
                     if cells[idx1 + offset] == '2':
                         idx2 = idx1 + offset
@@ -203,12 +199,13 @@ def extract_telemetry(docx_bytes: bytes):
                 i = idx2 + 7
                 continue
 
-        # ---- AUXILIARY ENGINE (Strict Dictionary Match) ----
+        # ---- AUXILIARY ENGINE ----
         elif section == "AUX" and norm_val in AUX_COMPONENTS and norm_val not in processed_aux:
             processed_aux.add(norm_val)
             idx1, idx2, period = -1, -1, 0.0
             
-            for offset in range(1, 15):
+            # Expanded Lookahead to account for 18 columns
+            for offset in range(1, 25):
                 if i + offset >= len(cells): break
                 if cells[i + offset] == '1':
                     idx1 = i + offset
@@ -216,7 +213,8 @@ def extract_telemetry(docx_bytes: bytes):
                     break
                     
             if idx1 != -1:
-                for offset in range(1, 30):
+                # Dramatically expanded lookahead to guarantee marker '2' is found past the 18 date columns
+                for offset in range(1, 60):
                     if idx1 + offset >= len(cells): break
                     if cells[idx1 + offset] == '2':
                         idx2 = idx1 + offset
@@ -240,11 +238,10 @@ def extract_telemetry(docx_bytes: bytes):
                 i = idx2 + 18
                 continue
 
-        # ---- OTHER EQUIPMENT (Strict Dictionary Match) ----
+        # ---- OTHER EQUIPMENT ----
         elif norm_val in OE_COMPONENTS:
             d, h = '', 0.0
-            # Lookahead up to 6 cells to find valid Dates/Hours in side-by-side matrices
-            for offset in range(1, 7):
+            for offset in range(1, 10):
                 if i + offset >= len(cells): break
                 tok = cells[i + offset]
                 if not d and ('/' in tok or '-' in tok or re.search(r'[A-Za-z]{3}\s+\d{2,4}', tok)): d = parse_date(tok)
@@ -255,14 +252,12 @@ def extract_telemetry(docx_bytes: bytes):
                     'Section': 'Other Equipment', 'Description': norm_val, 
                     'Last Date': d if d else '—', 'Run Hrs': int(h) if h > 0 else 0
                 })
-                i += 2  # Small jump to avoid double-processing adjacent data
+                i += 1 
                 continue
                 
         i += 1
 
-    # Final Deduplication
     oe_clean = [dict(t) for t in {tuple(d.items()) for d in oe_rows}]
-
     return vessel, report_date, me_total, me_month, me_rows, aux_rows, oe_clean
 
 # ══════════════════════════════════════════════════════════════════
@@ -277,7 +272,7 @@ st.markdown("""
 uploaded = st.file_uploader("Upload TEC-004 Report (.doc)", type=['doc'])
 
 if uploaded:
-    with st.spinner("Executing Zero-Trust Allowlist Extraction..."):
+    with st.spinner("Executing Zero-Trust Extraction..."):
         try:
             docx_data = convert_doc_to_docx(uploaded.read())
             vessel, report_date, me_total, me_month, me_data, aux_data, oe_data = extract_telemetry(docx_data)
@@ -299,13 +294,18 @@ if uploaded:
             with tab1:
                 if not me_data: st.info("No Main Engine records found.")
                 else:
-                    df_me = pd.DataFrame(me_data).astype(str)
+                    df_me = pd.DataFrame(me_data)
+                    df_me['_cyl'] = df_me['Unit'].str.extract(r'(\d+)').astype(float)
+                    df_me = df_me.sort_values(by=['Component', '_cyl']).drop(columns=['_cyl']).astype(str)
                     st.dataframe(df_me, use_container_width=True, hide_index=True)
 
             with tab2:
                 if not aux_data: st.info("No Auxiliary Engine records found.")
                 else:
-                    df_aux = pd.DataFrame(aux_data).astype(str)
+                    df_aux = pd.DataFrame(aux_data)
+                    df_aux['_eng'] = df_aux['Engine'].str.extract(r'(\d+)').astype(float)
+                    df_aux['_cyl'] = df_aux['Unit'].str.extract(r'(\d+)').astype(float)
+                    df_aux = df_aux.sort_values(by=['Component', '_eng', '_cyl']).drop(columns=['_eng', '_cyl']).astype(str)
                     st.dataframe(df_aux, use_container_width=True, hide_index=True)
 
             with tab3:
