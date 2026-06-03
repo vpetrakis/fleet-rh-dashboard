@@ -6,163 +6,75 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-import os, re, shutil, tempfile, subprocess, hashlib
+import os
+import re
+import shutil
+import tempfile
+import subprocess
+import hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  CORPORATE DESIGN SYSTEM
+#  EXECUTIVE CORPORATE UI
 # ══════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root{
-  --bg:#0b1118;
-  --bg2:#101720;
-  --bg3:#131c27;
-  --bg4:#17212d;
+  --bg:#0b1117;
+  --bg2:#101721;
+  --bg3:#131d28;
+  --bg4:#182330;
   --panel:#111a23;
-  --panel2:#16212c;
-  --line:#233243;
-  --line2:#2d4054;
-  --line3:#3b5166;
-
-  --ink:#e7edf4;
-  --muted:#9cb0c3;
-  --soft:#71859a;
-  --faint:#516274;
-
-  --gold:#b8955f;
-  --gold2:#d2b27a;
-  --navy:#2f5b87;
-  --blue:#3f6e9a;
-  --green:#4c7a5a;
-  --amber:#9b7441;
-  --red:#8a4b4b;
-
-  --ok-bg:#132219;
-  --ok-fg:#7db08b;
-  --hp-bg:#2a2115;
-  --hp-fg:#d0a56b;
-  --od-bg:#2b1717;
-  --od-fg:#d08a8a;
-  --nd-bg:#16202a;
-  --nd-fg:#7b93ab;
-
-  --shadow:0 10px 30px rgba(0,0,0,.22);
-  --radius:12px;
-  --radius-sm:8px;
-
-  --ff:'IBM Plex Sans', sans-serif;
-  --fi:'Inter', sans-serif;
-  --fm:'JetBrains Mono', monospace;
+  --panel2:#16202b;
+  --line:#223244;
+  --line2:#30465d;
+  --ink:#e8edf3;
+  --muted:#9caec0;
+  --soft:#72859a;
+  --gold:#b99764;
+  --gold2:#d4b486;
+  --blue:#4e6f93;
+  --green:#5f836b;
+  --amber:#a78255;
+  --red:#976060;
+  --ok-bg:#132119;
+  --ok-fg:#80ae8f;
+  --hp-bg:#2a2116;
+  --hp-fg:#d1a870;
+  --od-bg:#291818;
+  --od-fg:#d39797;
+  --nd-bg:#18212b;
+  --nd-fg:#88a0b7;
+  --shadow:0 12px 30px rgba(0,0,0,.18);
 }
-
 *{box-sizing:border-box}
-html,body,[class*="css"]{
-  background:var(--bg)!important;
-  color:var(--muted)!important;
-  font-family:var(--fi)!important;
-  -webkit-font-smoothing:antialiased;
-}
+html,body,[class*="css"]{background:var(--bg)!important;color:var(--muted)!important;font-family:'Inter',sans-serif!important;-webkit-font-smoothing:antialiased}
 .main,.main>div{background:var(--bg)!important}
-.block-container{max-width:100%!important;padding:0 2.2rem 4rem!important}
+.block-container{max-width:100%!important;padding:0 2rem 4rem!important}
 [data-testid="stSidebar"],[data-testid="collapsedControl"]{display:none!important}
-
-.main::before{
-  content:"";
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  z-index:0;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.01), transparent 30%),
-    radial-gradient(circle at top left, rgba(184,149,95,.05), transparent 26%);
-}
+.main::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(circle at top left, rgba(185,151,100,.05), transparent 24%),linear-gradient(180deg, rgba(255,255,255,.01), transparent 32%)}
 .block-container>*{position:relative;z-index:1}
-
-[data-testid="stFileUploadDropzone"]{
-  background:linear-gradient(180deg, rgba(255,255,255,.015), rgba(255,255,255,.01))!important;
-  border:1px dashed var(--line3)!important;
-  border-radius:14px!important;
-  padding:2rem 1.6rem!important;
-}
-[data-testid="stFileUploadDropzone"]:hover{
-  border-color:var(--gold)!important;
-  background:linear-gradient(180deg, rgba(184,149,95,.04), rgba(255,255,255,.01))!important;
-}
-[data-testid="stFileUploadDropzone"] p,
-[data-testid="stFileUploadDropzone"] span{
-  color:var(--ink)!important;
-  font-family:var(--ff)!important;
-  font-size:.88rem!important;
-}
+[data-testid="stFileUploadDropzone"]{background:linear-gradient(180deg, rgba(255,255,255,.015), rgba(255,255,255,.01))!important;border:1px dashed var(--line2)!important;border-radius:14px!important;padding:2rem 1.5rem!important}
+[data-testid="stFileUploadDropzone"]:hover{border-color:var(--gold)!important;background:linear-gradient(180deg, rgba(185,151,100,.04), rgba(255,255,255,.01))!important}
+[data-testid="stFileUploadDropzone"] p,[data-testid="stFileUploadDropzone"] span{color:var(--ink)!important;font-family:'IBM Plex Sans',sans-serif!important;font-size:.88rem!important}
 [data-testid="stFileUploadDropzone"] small{color:var(--soft)!important}
-
-div[data-baseweb="select"] > div{
-  background:var(--bg3)!important;
-  border:1px solid var(--line)!important;
-  border-radius:10px!important;
-  color:var(--ink)!important;
-  min-height:42px!important;
-}
-.stSelectbox label,.stRadio label{
-  color:var(--soft)!important;
-  font-size:.62rem!important;
-  text-transform:uppercase!important;
-  letter-spacing:.14em!important;
-}
-
-.stButton > button{
-  background:linear-gradient(180deg, var(--gold2), var(--gold))!important;
-  color:#111!important;
-  border:none!important;
-  border-radius:10px!important;
-  padding:.62rem 1.35rem!important;
-  font-family:var(--ff)!important;
-  font-weight:700!important;
-  letter-spacing:.06em!important;
-  text-transform:uppercase!important;
-  font-size:.74rem!important;
-  box-shadow:none!important;
-}
-.stButton > button:hover{
-  filter:brightness(1.04)!important;
-}
-
-.streamlit-expanderHeader{
-  background:var(--bg3)!important;
-  border:1px solid var(--line)!important;
-  border-radius:12px!important;
-  color:var(--ink)!important;
-  font-family:var(--ff)!important;
-  font-size:.82rem!important;
-  font-weight:600!important;
-}
-.streamlit-expanderContent{
-  background:transparent!important;
-  border:none!important;
-  padding-top:1rem!important;
-}
-
-.stAlert{
-  border-radius:10px!important;
-  border-left-width:3px!important;
-}
-
+div[data-baseweb="select"]>div{background:var(--bg3)!important;border:1px solid var(--line)!important;border-radius:10px!important;color:var(--ink)!important;min-height:42px!important}
+.stSelectbox label,.stRadio label{color:var(--soft)!important;font-size:.62rem!important;text-transform:uppercase!important;letter-spacing:.14em!important}
+.stButton>button{background:linear-gradient(180deg,var(--gold2),var(--gold))!important;color:#101216!important;border:none!important;border-radius:10px!important;padding:.62rem 1.35rem!important;font-family:'IBM Plex Sans',sans-serif!important;font-weight:700!important;font-size:.74rem!important;letter-spacing:.06em!important;text-transform:uppercase!important;box-shadow:none!important}
+.stButton>button:hover{filter:brightness(1.04)!important}
+.streamlit-expanderHeader{background:var(--bg3)!important;border:1px solid var(--line)!important;border-radius:12px!important;color:var(--ink)!important;font-family:'IBM Plex Sans',sans-serif!important;font-size:.82rem!important;font-weight:600!important}
+.streamlit-expanderContent{background:transparent!important;border:none!important;padding-top:1rem!important}
+.stAlert{border-radius:10px!important;border-left-width:3px!important}
 hr{border-color:var(--line)!important;opacity:1!important}
-
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:var(--bg2)}
-::-webkit-scrollbar-thumb{background:var(--line3);border-radius:12px}
-
-@keyframes fadeUp{
-  from{opacity:0;transform:translateY(10px)}
-  to{opacity:1;transform:translateY(0)}
-}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:999px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -172,31 +84,50 @@ hr{border-color:var(--line)!important;opacity:1!important}
 # ══════════════════════════════════════════════════════════════════════════
 _SC = {
     "OVERDUE": {
-        "row": "#161214", "tag_bg": "#2b1717", "tag_fg": "#d08a8a",
-        "comp": "#e4caca", "dim": "#a98f8f", "num": "#ddb1b1",
-        "bar_f": "#a85d5d", "bar_e": "#2b1717", "bord": "#3a2020"
+        "row": "#161214", "tag_bg": "#291818", "tag_fg": "#d39797",
+        "comp": "#ead7d7", "dim": "#b59b9b", "num": "#e0baba",
+        "bar_f": "#a86a6a", "bar_e": "#291818", "bord": "#3a2424"
     },
     "HIGH PRIORITY": {
-        "row": "#181511", "tag_bg": "#2a2115", "tag_fg": "#d0a56b",
-        "comp": "#eadcc6", "dim": "#b9a083", "num": "#e2c298",
-        "bar_f": "#b78a52", "bar_e": "#2a2115", "bord": "#3b2d1c"
+        "row": "#181510", "tag_bg": "#2a2116", "tag_fg": "#d1a870",
+        "comp": "#eadfcf", "dim": "#bda58a", "num": "#e4c49e",
+        "bar_f": "#b88a54", "bar_e": "#2a2116", "bord": "#3d2e1c"
     },
     "OK": {
-        "row": "#121814", "tag_bg": "#132219", "tag_fg": "#7db08b",
-        "comp": "#d8e5dc", "dim": "#91a796", "num": "#b8d0be",
-        "bar_f": "#5f8c6c", "bar_e": "#132219", "bord": "#203226"
+        "row": "#121814", "tag_bg": "#132119", "tag_fg": "#80ae8f",
+        "comp": "#dce8e0", "dim": "#9cb09f", "num": "#bdd0c4",
+        "bar_f": "#638a71", "bar_e": "#132119", "bord": "#203127"
     },
     "NO DATA": {
-        "row": "#111820", "tag_bg": "#16202a", "tag_fg": "#7b93ab",
-        "comp": "#d8e0e8", "dim": "#90a1b1", "num": "#b2c1cf",
-        "bar_f": "#5d768f", "bar_e": "#16202a", "bord": "#22303d"
+        "row": "#111820", "tag_bg": "#18212b", "tag_fg": "#88a0b7",
+        "comp": "#dae3eb", "dim": "#9bafc1", "num": "#b7c7d5",
+        "bar_f": "#667d95", "bar_e": "#18212b", "bord": "#233140"
     },
 }
 _ORD = {"OVERDUE": 0, "HIGH PRIORITY": 1, "OK": 2, "NO DATA": 3}
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  CONVERSION  (.doc → .docx via LibreOffice)
+#  COMPONENT MAPS
+# ══════════════════════════════════════════════════════════════════════════
+ME_COMPONENTS = {
+    "CYLINDER COVER", "PISTON ASSEMBLY", "STUFFING BOX", "PISTON CROWN",
+    "CYLINDER LINER", "EXHAUST VALVE", "STARTING VALVE", "SAFETY VALVE",
+    "FUEL VALVES", "FUEL PUMP", "PLUNGER AND BARREL(RENEWAL)",
+    "PLUNGER AND BARREL", "FUEL PUMP SUCTION VALVE",
+    "FUEL PUMP PUNCTURE VALVE", "CROSSHEAD BEARINGS",
+    "BOTTOM END BEARINGS", "MAIN BEARINGS"
+}
+
+AUX_COMPONENTS = {
+    "CYLINDER HEAD", "PISTON", "CONNECTING ROD", "CYLINDER LINERS",
+    "FUEL VALVES (1)", "FUEL PUMPS", "CRANK PIN BEARING", "MAIN BEARING",
+    "ADJUST VALVE HEAD CLEARANCE"
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  CONVERSION
 # ══════════════════════════════════════════════════════════════════════════
 def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
@@ -281,12 +212,31 @@ def _fl(t: Any) -> str:
             return s
     return ''
 
+def _norm_spaces(s: str) -> str:
+    return re.sub(r'\s+', ' ', _fl(s).upper()).strip(" :-#")
+
 def _clean_name(t: Any) -> str:
     s = _fl(t)
     s = re.sub(r'(?i)^MV\s+', '', s)
-    s = re.sub(r'(?i)ALEXIS\s*Date?', '', s)
     s = re.sub(r'(?i)Page\s*\d+\s*of\s*\d+', '', s)
     return re.sub(r'  +', ' ', s).strip(" -:")
+
+def _normalize_label(t: Any) -> str:
+    s = _norm_spaces(t)
+    fixes = {
+        "CYLINDER HEAD": "CYLINDER HEAD",
+        "CYLINDER LINERS": "CYLINDER LINERS",
+        "CYLINDER LINER": "CYLINDER LINER",
+        "FUEL PUMPS": "FUEL PUMPS",
+        "FUEL PUMP": "FUEL PUMP",
+        "MAIN BEARING": "MAIN BEARING",
+        "MAIN BEARINGS": "MAIN BEARINGS",
+        "PLUNGER AND BARREL": "PLUNGER AND BARREL",
+        "PLUNGER AND BARREL(RENEWAL)": "PLUNGER AND BARREL(RENEWAL)",
+        "ADJUST VALVE HEAD CLEARANCE": "ADJUST VALVE HEAD CLEARANCE",
+        "FUEL VALVES (1)": "FUEL VALVES (1)",
+    }
+    return fixes.get(s, s)
 
 def _parse_number(t: Any) -> float:
     s = _fl(t).strip().upper()
@@ -308,7 +258,7 @@ def _parse_number(t: Any) -> float:
         b = re.sub(r'[,\.]', '', b)
     try:
         return float(b)
-    except:
+    except Exception:
         return 0.0
 
 def _parse_date(t: Any) -> str:
@@ -325,6 +275,23 @@ def _parse_date(t: Any) -> str:
         return ''
     return s if re.search(r'[A-Za-z0-9/]', s) else ''
 
+def _fmt_date(s: str) -> str:
+    s = _parse_date(s)
+    if not s:
+        return ''
+    s2 = s.replace('.', ' ').replace('-', '/').strip()
+    s2 = re.sub(r'\s+', ' ', s2)
+    for fmt in (
+        "%d/%m/%y", "%d/%m/%Y", "%d %b %y", "%d %b %Y", "%d %B %y", "%d %B %Y",
+        "%d %m %y", "%d %m %Y"
+    ):
+        try:
+            dt = datetime.strptime(s2.title(), fmt)
+            return dt.strftime("%d %b %Y")
+        except Exception:
+            pass
+    return s.upper()
+
 def _status(hrs: float, period: float) -> str:
     if hrs <= 0 or period <= 0:
         return 'NO DATA'
@@ -339,76 +306,89 @@ def _pct(hrs: float, period: float) -> float:
     return round(hrs / period, 4) if hrs and period else 0.0
 
 def _is_comp(n: str) -> bool:
-    u = _fl(n).upper()
+    u = _norm_spaces(n)
     if not u or len(u) < 2:
         return False
     BAD = (
         'DESCRIPTION', 'REMARKS', 'COMPONENT', 'PERIODICITY', 'PERIODICTLY', 'DATE OF LAST',
         'RUNNING HOURS', 'MAIN ENGINE', 'AUX. ENGINE', 'TYPE:', '1-DATE OF LAST',
         'TOTAL RUNNING', 'THIS MONTH', 'CYL. NO', 'NOTE 1', 'BASED ON', 'SERIAL NR',
-        'HOURS THIS MONTH', 'AUX. ENGINE MAKER'
+        'HOURS THIS MONTH', 'AUX. ENGINE MAKER', 'D/G NO1', 'D/G NO2', 'D/G NO3'
     )
     if any(b in u for b in BAD):
         return False
-    if re.fullmatch(r'[\d./ ,:\-\[\]\(\)]+', u):
+    if re.fullmatch(r'[\d./ ,:\-\[\]()]+', u):
         return False
-    return bool(re.search(r'[A-Za-z]', u))
+    return bool(re.search(r'[A-Z]', u))
 
 def _mk(cat, eng, unit, nm, per, dt, hrs) -> Dict:
     return {
-        'category': cat, 'engine_label': eng, 'unit': unit, 'description': nm,
-        'periodicity': per, 'last_oh_date': dt, 'hrs_since': hrs,
-        'pct_used': _pct(hrs, per), 'status': _status(hrs, per)
+        'category': cat,
+        'engine_label': eng,
+        'unit': unit,
+        'description': nm,
+        'periodicity': per,
+        'last_oh_date': _fmt_date(dt),
+        'hrs_since': hrs,
+        'pct_used': _pct(hrs, per),
+        'status': _status(hrs, per),
     }
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  ME PARSER
+#  MAIN ENGINE PARSER
 # ══════════════════════════════════════════════════════════════════════════
-def _parse_me(grid: List[List[str]]) -> List[Dict]:
-    if not grid:
-        return []
-    if not any('MAIN ENGINE' in (_fl(grid[r][c]).upper() if c < len(grid[r]) else '')
-               for r in range(min(3, len(grid))) for c in range(min(15, len(grid[r])))):
-        return []
-
+def _find_me_header(grid: List[List[str]]) -> Tuple[int, int]:
     rem_col = None
-    for r in range(min(5, len(grid))):
+    start_row = 0
+    for r in range(min(8, len(grid))):
+        joined = ' '.join(_fl(x) for x in grid[r]).upper()
+        if 'MAIN ENGINE' in joined:
+            start_row = r
         for ci, txt in enumerate(grid[r]):
             if 'REMARK' in _fl(txt).upper() and ci > 3:
                 rem_col = ci
                 break
-        if rem_col:
+        if rem_col is not None:
             break
     if rem_col is None:
         rem_col = 12
+    return start_row, rem_col
 
-    MARKER = 2
-    PERIOD = 1
-    FIRST = 3
+def _parse_me(grid: List[List[str]]) -> List[Dict]:
+    if not grid:
+        return []
+    if not any('MAIN ENGINE' in (_fl(grid[r][c]).upper() if c < len(grid[r]) else '')
+               for r in range(min(4, len(grid))) for c in range(min(16, len(grid[r])))):
+        return []
+
+    start_row, rem_col = _find_me_header(grid)
+    MARKER, PERIOD, FIRST = 2, 1, 3
     actual_cyls = max(1, min(8, rem_col - FIRST))
 
     end = len(grid)
     for r, row in enumerate(grid):
         j = ' '.join(_fl(x) for x in row).upper()
-        if 'NOTE 1' in j or 'TURBOCHARGER' in j or 'AUX. ENGINE MAKER' in j:
+        if r > start_row and ('NOTE 1' in j or 'TURBOCHARGER' in j or 'AUX. ENGINE MAKER' in j):
             end = r
             break
 
     result = []
-    r = 0
+    r = start_row
     while r < end - 1:
-        nm = _clean_name(grid[r][0] if grid[r] else '')
+        nm = _normalize_label(grid[r][0] if grid[r] else '')
         period = _parse_number(grid[r][PERIOD] if PERIOD < len(grid[r]) else '')
         marker = _fl(grid[r][MARKER] if MARKER < len(grid[r]) else '').strip()
-        if _is_comp(nm) and marker == '1':
+        if nm in ME_COMPONENTS and marker == '1':
             nxt = grid[r + 1] if r + 1 < len(grid) else []
+            row_records = []
             for cyl in range(1, actual_cyls + 1):
                 ci = FIRST + cyl - 1
                 d = _parse_date(grid[r][ci] if ci < len(grid[r]) else '')
                 h = _parse_number(nxt[ci] if ci < len(nxt) else '')
                 if d or h > 0:
-                    result.append(_mk('MAIN_ENGINE', 'ME', f'Cyl {cyl}', nm, period, d, h))
+                    row_records.append(_mk('MAIN_ENGINE', 'ME', f'Cyl {cyl}', nm, period, d, h))
+            result.extend(row_records)
             r += 2
         else:
             r += 1
@@ -418,7 +398,7 @@ def _parse_me(grid: List[List[str]]) -> List[Dict]:
 # ══════════════════════════════════════════════════════════════════════════
 #  AUX PARSER
 # ══════════════════════════════════════════════════════════════════════════
-def _find_aux_groups(grid: List[List[str]]) -> Tuple[int, List[Tuple]]:
+def _find_aux_groups(grid: List[List[str]]) -> Tuple[int, List[Tuple[str, int, int]]]:
     dr = None
     for i, row in enumerate(grid):
         rt = ' | '.join(_fl(c) for c in row).upper()
@@ -427,19 +407,14 @@ def _find_aux_groups(grid: List[List[str]]) -> Tuple[int, List[Tuple]]:
             break
     if dr is None:
         return -1, []
-    nums = [(c, int(_fl(grid[dr][c])))
-            for c in range(2, len(grid[dr]))
-            if re.fullmatch(r'\d+', _fl(grid[dr][c]))]
-    if nums:
-        starts = [c for c, n in nums if n == 1]
-        groups = []
-        for i, s in enumerate(starts[:3]):
-            ds = s + 1
-            de = (starts[i + 1] + 1) if i + 1 < len(starts) else len(grid[dr])
-            groups.append((['AUX-1', 'AUX-2', 'AUX-3'][i], ds, de))
-        if groups:
-            return dr, groups
-    return dr, []
+    nums = [(c, int(_fl(grid[dr][c]))) for c in range(2, len(grid[dr])) if re.fullmatch(r'\d+', _fl(grid[dr][c]))]
+    starts = [c for c, n in nums if n == 1]
+    groups = []
+    for i, s in enumerate(starts[:3]):
+        ds = s + 1
+        de = (starts[i + 1] + 1) if i + 1 < len(starts) else len(grid[dr])
+        groups.append((['AUX-1', 'AUX-2', 'AUX-3'][i], ds, de))
+    return dr, groups
 
 def _parse_aux(grid: List[List[str]]) -> List[Dict]:
     if not grid:
@@ -450,17 +425,21 @@ def _parse_aux(grid: List[List[str]]) -> List[Dict]:
     result = []
     r = dr + 1
     while r < len(grid) - 1:
-        nm = _clean_name(grid[r][0] if grid[r] else '')
+        nm = _normalize_label(grid[r][0] if grid[r] else '')
         period = _parse_number(grid[r][1] if len(grid[r]) > 1 else '')
         marker = _fl(grid[r][2] if len(grid[r]) > 2 else '').strip()
-        if _is_comp(nm) and marker == '1':
+        if nm in AUX_COMPONENTS and marker == '1':
             nxt = grid[r + 1] if r + 1 < len(grid) else []
+            row_records = []
             for eng, start, end in groups:
-                for ci_idx, ci in enumerate(range(start, min(end, len(grid[r])))):
+                cyl_no = 1
+                for ci in range(start, min(end, len(grid[r]))):
                     d = _parse_date(grid[r][ci] if ci < len(grid[r]) else '')
                     h = _parse_number(nxt[ci] if ci < len(nxt) else '')
                     if d or h > 0:
-                        result.append(_mk('AUX_ENGINE', eng, f'Cyl {ci_idx+1}', nm, period, d, h))
+                        row_records.append(_mk('AUX_ENGINE', eng, f'Cyl {cyl_no}', nm, period, d, h))
+                    cyl_no += 1
+            result.extend(row_records)
             r += 2
         else:
             r += 1
@@ -468,7 +447,7 @@ def _parse_aux(grid: List[List[str]]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  OE PARSER
+#  OTHER EQUIPMENT PARSER
 # ══════════════════════════════════════════════════════════════════════════
 _OE_HEADER = {
     'TURBOCHARGER', 'AUXILIARY BOILER', 'COOLERS', 'EXH GAS BOILER', 'EXH GAS  BOILER',
@@ -478,12 +457,32 @@ _OE_HEADER = {
 }
 
 def _is_oe_comp(n: str) -> bool:
-    u = _fl(n).upper().strip()
+    u = _norm_spaces(n)
     if not u or len(u) < 2 or u in _OE_HEADER:
         return False
-    if re.fullmatch(r'[\d./ ,:\-\[\]\(\)]+', u):
+    if re.fullmatch(r'[\d./ ,:\-\[\]()]+', u):
         return False
-    return bool(re.search(r'[A-Za-z]', u))
+    return bool(re.search(r'[A-Z]', u))
+
+def _oe_section_for(desc: str, zone: str) -> str:
+    d = _norm_spaces(desc)
+    if zone == 'A':
+        if 'TURBOCHARGER' in d or 'AIR COOLER' in d or 'GENERAL O/H' in d or 'ROTOR' in d:
+            return 'Turbocharger'
+        if 'BOILER' in d or 'BURNER' in d or 'FEED PUMPS' in d or 'FORCED DRAFT FAN' in d or 'FURNACE' in d:
+            return 'Boiler Equipment'
+        return 'Machinery Services'
+    if zone == 'B':
+        if 'COOLER' in d or 'L.O.' in d or 'WASHING THE TUBES' in d or 'CIRC. PUMP' in d:
+            return 'Coolers / Water Systems'
+        return 'Cooling Systems'
+    if zone == 'C':
+        if 'COMPRESSOR' in d:
+            return 'Compressors'
+        if 'CONDENSER' in d or 'COOLER' in d:
+            return 'Air Conditioning / Refrigeration'
+        return 'A/C & Refrigeration'
+    return 'Other Equipment'
 
 def _parse_oe(grid: List[List[str]]) -> List[Dict]:
     rows = []
@@ -495,33 +494,24 @@ def _parse_oe(grid: List[List[str]]) -> List[Dict]:
         if _is_oe_comp(da):
             per = _parse_number(gc(1)); dt = _parse_date(gc(2)); hrs = _parse_number(gc(3))
             if dt or hrs > 0 or per > 0:
-                rows.append({
-                    'section': 'Turbocharger / Aux Boiler', 'description': da,
-                    'periodicity': per, 'last_date': dt, 'run_hrs': hrs
-                })
+                rows.append({'section': _oe_section_for(da, 'A'), 'description': da, 'periodicity': per, 'last_date': _fmt_date(dt), 'run_hrs': hrs})
 
         db = _clean_name(gc(5))
         if _is_oe_comp(db):
             dt = _parse_date(gc(6)); hrs = _parse_number(gc(7))
             if dt or hrs > 0:
-                rows.append({
-                    'section': 'Coolers / Exh Gas Boiler', 'description': db,
-                    'periodicity': 0, 'last_date': dt, 'run_hrs': hrs
-                })
+                rows.append({'section': _oe_section_for(db, 'B'), 'description': db, 'periodicity': 0, 'last_date': _fmt_date(dt), 'run_hrs': hrs})
 
         dc = _clean_name(gc(10))
         if _is_oe_comp(dc):
             dt = _parse_date(gc(11)); hrs = _parse_number(gc(12))
             if dt or hrs > 0:
-                rows.append({
-                    'section': 'A/C & Compressors', 'description': dc,
-                    'periodicity': 0, 'last_date': dt, 'run_hrs': hrs
-                })
+                rows.append({'section': _oe_section_for(dc, 'C'), 'description': dc, 'periodicity': 0, 'last_date': _fmt_date(dt), 'run_hrs': hrs})
     return rows
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  DG PARSER
+#  D/G PARSER
 # ══════════════════════════════════════════════════════════════════════════
 _DG_SKIP = {'DESCRIPTION', 'PERIODICTLY', 'PERIODICITY', 'D/G NO1', 'D/G NO2', 'D/G NO3', ''}
 
@@ -536,28 +526,24 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
         def gc2(i, _row=r2): return _fl(_row[i]) if i < len(_row) else ''
 
         dl = _clean_name(gc1(0))
-        if _is_oe_comp(dl) and dl.upper() not in _DG_SKIP and gc1(2) == '1':
+        if _is_oe_comp(dl) and _norm_spaces(dl) not in _DG_SKIP and gc1(2) == '1':
             per = _parse_number(gc1(1))
             for gi, gl in enumerate(['D/G 1', 'D/G 2', 'D/G 3']):
                 dt = _parse_date(gc1(3 + gi)); hrs = _parse_number(gc2(3 + gi))
                 if dt or hrs > 0:
-                    rows.append({
-                        'section': 'D/G Equipment', 'description': dl, 'engine_label': gl,
-                        'periodicity': per, 'last_date': dt, 'run_hrs': hrs,
-                        'status': _status(hrs, per)
-                    })
+                    rows.append({'section': 'D/G Equipment', 'description': dl, 'engine_label': gl,
+                                 'periodicity': per, 'last_date': _fmt_date(dt), 'run_hrs': hrs,
+                                 'status': _status(hrs, per)})
 
         dr = _clean_name(gc1(9))
-        if _is_oe_comp(dr) and dr.upper() not in _DG_SKIP and gc1(11) == '1':
+        if _is_oe_comp(dr) and _norm_spaces(dr) not in _DG_SKIP and gc1(11) == '1':
             per = _parse_number(gc1(10))
             for gi, gl in enumerate(['D/G 1', 'D/G 2', 'D/G 3']):
                 dt = _parse_date(gc1(12 + gi)); hrs = _parse_number(gc2(12 + gi))
                 if dt or hrs > 0:
-                    rows.append({
-                        'section': 'D/G Equipment', 'description': dr, 'engine_label': gl,
-                        'periodicity': per, 'last_date': dt, 'run_hrs': hrs,
-                        'status': _status(hrs, per)
-                    })
+                    rows.append({'section': 'D/G Equipment', 'description': dr, 'engine_label': gl,
+                                 'periodicity': per, 'last_date': _fmt_date(dt), 'run_hrs': hrs,
+                                 'status': _status(hrs, per)})
         r += 1
     return rows
 
@@ -599,26 +585,28 @@ def _parse_me_text(lines: List[str]) -> List[Dict]:
     data = [x for x in seg if _fl(x)]
     i = 0
     while i < len(data):
-        nm = _clean_name(data[i])
-        if _is_comp(nm):
+        nm = _normalize_label(data[i])
+        if nm in ME_COMPONENTS:
             period = _parse_number(data[i + 1]) if i + 1 < len(data) else 0.0
             if _fl(data[i + 2] if i + 2 < len(data) else '') == '1':
                 dates = []
                 j = i + 3
                 while j < len(data) and len(dates) < 8 and _fl(data[j]) != '2':
-                    dates.append(_fl(data[j])); j += 1
+                    dates.append(_fl(data[j]))
+                    j += 1
                 if j < len(data) and _fl(data[j]) == '2':
                     j += 1
                     hv = []
                     while j < len(data) and len(hv) < 8:
                         if _is_comp(_fl(data[j])):
                             break
-                        hv.append(_fl(data[j])); j += 1
+                        hv.append(_fl(data[j]))
+                        j += 1
                     for k in range(8):
                         d = _parse_date(dates[k]) if k < len(dates) else ''
                         h = _parse_number(hv[k]) if k < len(hv) else 0.0
                         if d or h > 0:
-                            rows.append(_mk('MAIN_ENGINE', 'ME', f'Cyl {k+1}', nm, period, d, h))
+                            rows.append(_mk('MAIN_ENGINE', 'ME', f'Cyl {k + 1}', nm, period, d, h))
                     i = j
                     continue
         i += 1
@@ -626,8 +614,7 @@ def _parse_me_text(lines: List[str]) -> List[Dict]:
 
 def _parse_aux_text(lines: List[str]) -> List[Dict]:
     rows = []
-    seg = _between(lines, ['AUX. ENGINE MAKER / TYPE', 'AUX. ENGINE NO.1'],
-                   ['D/G NO1', 'TURBOCHARGER (2)', '1ST COPY'])
+    seg = _between(lines, ['AUX. ENGINE MAKER / TYPE', 'AUX. ENGINE NO.1'], ['D/G NO1', 'TURBOCHARGER (2)', '1ST COPY'])
     if not seg:
         seg = _between(lines, ['AUX. ENGINE NO.1'], ['D/G NO1', 'TURBOCHARGER (2)', '1ST COPY'])
     si = None
@@ -637,33 +624,35 @@ def _parse_aux_text(lines: List[str]) -> List[Dict]:
             break
     if si is None:
         return rows
-    data = [_fl(x) for x in seg[si+1:] if _fl(x)]
+    data = [_fl(x) for x in seg[si + 1:] if _fl(x)]
     i = 0
     while i < len(data):
-        nm = _clean_name(data[i])
-        if _is_comp(nm):
-            period = _parse_number(data[i+1]) if i+1 < len(data) else 0.0
-            if _fl(data[i+2] if i+2 < len(data) else '') == '1':
+        nm = _normalize_label(data[i])
+        if nm in AUX_COMPONENTS:
+            period = _parse_number(data[i + 1]) if i + 1 < len(data) else 0.0
+            if _fl(data[i + 2] if i + 2 < len(data) else '') == '1':
                 dates = []
                 j = i + 3
                 while j < len(data) and len(dates) < 18 and _fl(data[j]) != '2':
                     if _is_comp(_fl(data[j])):
                         break
-                    dates.append(_fl(data[j])); j += 1
+                    dates.append(_fl(data[j]))
+                    j += 1
                 if j < len(data) and _fl(data[j]) == '2':
                     j += 1
                     hv = []
                     while j < len(data) and len(hv) < 18:
                         if _is_comp(_fl(data[j])):
                             break
-                        hv.append(_fl(data[j])); j += 1
+                        hv.append(_fl(data[j]))
+                        j += 1
                     for ei, elbl in enumerate(['AUX-1', 'AUX-2', 'AUX-3']):
                         for cyl in range(6):
                             idx = ei * 6 + cyl
                             d = _parse_date(dates[idx]) if idx < len(dates) else ''
                             h = _parse_number(hv[idx]) if idx < len(hv) else 0.0
                             if d or h > 0:
-                                rows.append(_mk('AUX_ENGINE', elbl, f'Cyl {cyl+1}', nm, period, d, h))
+                                rows.append(_mk('AUX_ENGINE', elbl, f'Cyl {cyl + 1}', nm, period, d, h))
                     i = j
                     continue
         i += 1
@@ -671,7 +660,7 @@ def _parse_aux_text(lines: List[str]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  DEDUP + MASTER PARSE
+#  DEDUP + VALIDATION
 # ══════════════════════════════════════════════════════════════════════════
 def _dedupe(records: List[Dict]) -> List[Dict]:
     best = {}
@@ -682,6 +671,25 @@ def _dedupe(records: List[Dict]) -> List[Dict]:
         if prev is None or score > prev[0]:
             best[key] = (score, r)
     return [v[1] for v in best.values()]
+
+def _filter_placeholder_rows(records: List[Dict]) -> List[Dict]:
+    out = []
+    for r in records:
+        desc = _norm_spaces(r.get('description', ''))
+        dt = _norm_spaces(r.get('last_oh_date', ''))
+        hrs = float(r.get('hrs_since', 0) or 0)
+        if dt == desc:
+            continue
+        if hrs <= 0 and not dt:
+            continue
+        out.append(r)
+    return out
+
+def _warn_anomalies(records: List[Dict], warnings: List[str], label: str):
+    bad = [r for r in records if r.get('periodicity', 0) and r.get('pct_used', 0) > 2.5]
+    if bad:
+        warnings.append(f"{label}: {len(bad)} records exceed 250% utilization; review source values.")
+
 
 def parse_docx(docx_bytes: bytes) -> Dict:
     from docx import Document
@@ -711,7 +719,7 @@ def parse_docx(docx_bytes: bytes) -> Dict:
         if m := re.search(r"Vessel[\u2019\u2018']?s?\s+Name\s*:\s*(?:MV\s+)?([A-Z][A-Z0-9 \-]+?)(?:\s{2,}|\t|Date:|$)", txt, re.I):
             vn = _clean_name(m.group(1))
         if m := re.search(r"Date\s*:\s*(.+)", txt, re.I):
-            rd = _parse_date(m.group(1).strip())
+            rd = _fmt_date(m.group(1).strip())
         if vn != 'UNKNOWN' and rd:
             break
     if vn == 'UNKNOWN':
@@ -740,25 +748,32 @@ def parse_docx(docx_bytes: bytes) -> Dict:
 
         me_g.extend(_parse_me(rg))
         aux_g.extend(_parse_aux(dg))
-
         if 'TURBOCHARGER' in full and 'A/C & REFR' in full and 'COOLERS' in full:
             oe_rows.extend(_parse_oe(dg))
-
         if 'D/G NO' in full.replace(' ', '').replace('.', ''):
             dg_rows.extend(_parse_dg(dg))
 
     all_lines = _lines_from_doc(doc)
-    me = _dedupe(me_g + _parse_me_text(all_lines))
-    aux = _dedupe(aux_g + _parse_aux_text(all_lines))
+    me = _filter_placeholder_rows(_dedupe(me_g + _parse_me_text(all_lines)))
+    aux = _filter_placeholder_rows(_dedupe(aux_g + _parse_aux_text(all_lines)))
     oe = _dedupe(oe_rows)
+    dg_rows = _dedupe(dg_rows)
+
+    _warn_anomalies(me, warns, 'Main Engine')
+    _warn_anomalies(aux, warns, 'Auxiliary Engines')
 
     if not me and not aux:
         warns.append("No components extracted.")
 
     return {
-        'vessel_name': vn, 'report_date': rd,
-        'me_total_hrs': mt, 'me_this_month': mo,
-        'me': me, 'aux': aux, 'oe': oe, 'dg': dg_rows,
+        'vessel_name': vn,
+        'report_date': rd,
+        'me_total_hrs': mt,
+        'me_this_month': mo,
+        'me': me,
+        'aux': aux,
+        'oe': oe,
+        'dg': dg_rows,
         'warnings': warns,
         'parsed_at': datetime.utcnow().isoformat(),
     }
@@ -773,20 +788,17 @@ def _cyl_n(u: str) -> int:
 
 def _sort_recs(records: List[Dict], mode: str) -> List[Dict]:
     if mode == 'matrix':
-        return sorted(records, key=lambda c: (c['description'].upper(), c.get('engine_label', ''), _cyl_n(c.get('unit', ''))))
-    return sorted(records, key=lambda c: (_ORD.get(c['status'], 4), -(c.get('pct_used') or 0)))
+        return sorted(records, key=lambda c: (c['engine_label'], c['description'].upper(), _cyl_n(c.get('unit', ''))))
+    return sorted(records, key=lambda c: (_ORD.get(c['status'], 4), -(c.get('pct_used') or 0), c['description']))
 
 def _matrix_html(records: List[Dict], mode: str = 'matrix') -> str:
     if not records:
         return ''
-    HEADS = ['Status', 'Component', 'Engine', 'Unit', 'Periodicity', 'Last O/H', 'Hrs Since', '% Used']
-    TH = (
-        "padding:11px 14px;font-family:Inter,sans-serif;font-size:.60rem;font-weight:600;"
-        "text-transform:uppercase;letter-spacing:.12em;color:#7f93a7;text-align:left;"
-        "white-space:nowrap;border-bottom:1px solid #223243;background:#111821"
-    )
-    header = '<tr>' + ''.join(f'<th style="{TH}">{h}</th>' for h in HEADS) + '</tr>'
-
+    heads = ['Status', 'Component', 'Engine', 'Unit', 'Periodicity', 'Last O/H', 'Hrs Since', '% Used']
+    th = ("padding:11px 14px;font-family:Inter,sans-serif;font-size:.60rem;font-weight:600;"
+          "text-transform:uppercase;letter-spacing:.12em;color:#8093a7;text-align:left;"
+          "white-space:nowrap;border-bottom:1px solid #223244;background:#111821")
+    header = '<tr>' + ''.join(f'<th style="{th}">{h}</th>' for h in heads) + '</tr>'
     body = ''
     for rec in _sort_recs(records, mode):
         s = str(rec.get('status', 'NO DATA'))
@@ -799,28 +811,18 @@ def _matrix_html(records: List[Dict], mode: str = 'matrix') -> str:
         per_s = f"{int(per):,}" if per > 0 else '—'
         dt_s = str(rec.get('last_oh_date') or '—') or '—'
         bw = min(100, pct * 100)
-
-        tag = (
-            f'<span style="display:inline-block;padding:4px 9px;border-radius:999px;'
-            f'background:{c["tag_bg"]};color:{c["tag_fg"]};font-family:JetBrains Mono,monospace;'
-            f'font-size:.61rem;font-weight:700;white-space:nowrap">{s}</span>'
-        )
-        bar = (
-            f'<div style="display:flex;align-items:center;gap:8px;min-width:130px">'
-            f'<div style="flex:1;height:5px;background:{c["bar_e"]};border-radius:999px;overflow:hidden">'
-            f'<div style="width:{bw:.1f}%;height:100%;background:{c["bar_f"]};border-radius:999px"></div>'
-            f'</div>'
-            f'<span style="font-family:JetBrains Mono,monospace;font-size:.69rem;font-weight:600;'
-            f'color:{c["num"]};min-width:46px;text-align:right">{pct_s}</span></div>'
-        )
-
+        tag = (f'<span style="display:inline-block;padding:4px 9px;border-radius:999px;'
+               f'background:{c["tag_bg"]};color:{c["tag_fg"]};font-family:JetBrains Mono,monospace;'
+               f'font-size:.61rem;font-weight:700;white-space:nowrap">{s}</span>')
+        bar = (f'<div style="display:flex;align-items:center;gap:8px;min-width:130px">'
+               f'<div style="flex:1;height:5px;background:{c["bar_e"]};border-radius:999px;overflow:hidden">'
+               f'<div style="width:{bw:.1f}%;height:100%;background:{c["bar_f"]};border-radius:999px"></div>'
+               f'</div><span style="font-family:JetBrains Mono,monospace;font-size:.69rem;font-weight:600;'
+               f'color:{c["num"]};min-width:46px;text-align:right">{pct_s}</span></div>')
         def td(v, fg, fw='400', align='left', ff="'Inter',sans-serif", fs='.78rem', mw=''):
             mw_s = f'max-width:{mw};overflow:hidden;text-overflow:ellipsis;' if mw else ''
-            return (
-                f'<td style="padding:11px 14px;color:{fg};font-family:{ff};font-size:{fs};'
-                f'font-weight:{fw};text-align:{align};white-space:nowrap;{mw_s}">{v}</td>'
-            )
-
+            return (f'<td style="padding:11px 14px;color:{fg};font-family:{ff};font-size:{fs};'
+                    f'font-weight:{fw};text-align:{align};white-space:nowrap;{mw_s}">{v}</td>')
         body += (
             f'<tr style="background:{c["row"]};border-bottom:1px solid {c["bord"]}">'
             f'<td style="padding:11px 14px">{tag}</td>'
@@ -832,117 +834,80 @@ def _matrix_html(records: List[Dict], mode: str = 'matrix') -> str:
             + td(hrs_s, c['num'], '700', 'right', 'JetBrains Mono,monospace', '.75rem')
             + f'<td style="padding:11px 14px">{bar}</td></tr>'
         )
-
-    return (
-        f'<div style="overflow-x:auto;border-radius:12px;border:1px solid #223243;'
-        f'background:#111821;overflow:hidden;box-shadow:var(--shadow)">'
-        f'<table style="width:100%;border-collapse:collapse">'
-        f'<thead>{header}</thead><tbody>{body}</tbody></table></div>'
-    )
+    return (f'<div style="overflow-x:auto;border-radius:12px;border:1px solid #223244;'
+            f'background:#111821;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.18)">'
+            f'<table style="width:100%;border-collapse:collapse"><thead>{header}</thead><tbody>{body}</tbody></table></div>')
 
 def _oe_html(rows: List[Dict], show_status: bool = False) -> str:
     if not rows:
         return ''
-    HEADS = (['Component', 'Engine', 'Period', 'Last Date', 'Run Hrs', 'Status']
+    heads = (['Component', 'Engine', 'Period', 'Last Date', 'Run Hrs', 'Status']
              if show_status else ['Component', 'Section', 'Period', 'Last Date', 'Run Hrs'])
-    TH = (
-        "padding:11px 14px;font-family:Inter,sans-serif;font-size:.60rem;font-weight:600;"
-        "text-transform:uppercase;letter-spacing:.12em;color:#7f93a7;text-align:left;"
-        "border-bottom:1px solid #223243;background:#111821"
-    )
-    header = '<tr>' + ''.join(f'<th style="{TH}">{h}</th>' for h in HEADS) + '</tr>'
-
+    th = ("padding:11px 14px;font-family:Inter,sans-serif;font-size:.60rem;font-weight:600;"
+          "text-transform:uppercase;letter-spacing:.12em;color:#8093a7;text-align:left;"
+          "border-bottom:1px solid #223244;background:#111821")
+    header = '<tr>' + ''.join(f'<th style="{th}">{h}</th>' for h in heads) + '</tr>'
     body = ''
-    for row in sorted(rows, key=lambda r: (r.get('description', ''), r.get('engine_label', ''))):
+    for row in sorted(rows, key=lambda r: (r.get('section', ''), r.get('description', ''), r.get('engine_label', ''))):
         bg = '#121922'; fm = '#e3eaf1'; fd = '#94a6b8'
         if show_status:
-            s = str(row.get('status', 'NO DATA'))
-            cc = _SC.get(s, _SC['NO DATA'])
+            s = str(row.get('status', 'NO DATA')); cc = _SC.get(s, _SC['NO DATA'])
             bg = cc['row']; fm = cc['comp']; fd = cc['dim']
-
         per = float(row.get('periodicity', 0) or 0)
         per_s = f"{int(per):,}" if per > 0 else '—'
         dt_s = str(row.get('last_date') or '—') or '—'
         hrs = float(row.get('run_hrs', 0) or 0)
         hrs_s = f"{int(hrs):,}" if hrs > 0 else '—'
-
         st_cell = ''
         if show_status:
-            s = str(row.get('status', 'NO DATA'))
-            cc = _SC.get(s, _SC['NO DATA'])
-            st_cell = (
-                f'<td style="padding:11px 14px"><span style="display:inline-block;padding:4px 9px;'
-                f'border-radius:999px;background:{cc["tag_bg"]};color:{cc["tag_fg"]};'
-                f'font-family:JetBrains Mono,monospace;font-size:.61rem;font-weight:700">{s}</span></td>'
-            )
-
+            s = str(row.get('status', 'NO DATA')); cc = _SC.get(s, _SC['NO DATA'])
+            st_cell = (f'<td style="padding:11px 14px"><span style="display:inline-block;padding:4px 9px;'
+                       f'border-radius:999px;background:{cc["tag_bg"]};color:{cc["tag_fg"]};'
+                       f'font-family:JetBrains Mono,monospace;font-size:.61rem;font-weight:700">{s}</span></td>')
         def td(v, fg, ff="'Inter',sans-serif", fw='400', align='left'):
-            return (
-                f'<td style="padding:11px 14px;color:{fg};font-family:{ff};font-size:.78rem;'
-                f'font-weight:{fw};text-align:{align};white-space:nowrap">{v}</td>'
-            )
+            return (f'<td style="padding:11px 14px;color:{fg};font-family:{ff};font-size:.78rem;'
+                    f'font-weight:{fw};text-align:{align};white-space:nowrap">{v}</td>')
+        body += (f'<tr style="background:{bg};border-bottom:1px solid #223244">'
+                 + td(row.get('description', ''), fm, "'IBM Plex Sans',sans-serif", '600')
+                 + (td(row.get('engine_label', ''), fd, 'JetBrains Mono,monospace') if show_status else td(row.get('section', ''), fd))
+                 + f'<td style="padding:11px 14px;color:{fd};font-family:JetBrains Mono,monospace;font-size:.76rem;text-align:right">{per_s}</td>'
+                 + td(dt_s, fd, 'JetBrains Mono,monospace')
+                 + f'<td style="padding:11px 14px;color:#c8d4df;font-family:JetBrains Mono,monospace;font-size:.76rem;font-weight:700;text-align:right">{hrs_s}</td>'
+                 + st_cell + '</tr>')
+    return (f'<div style="overflow-x:auto;border-radius:12px;border:1px solid #223244;'
+            f'background:#111821;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.18)">'
+            f'<table style="width:100%;border-collapse:collapse"><thead>{header}</thead><tbody>{body}</tbody></table></div>')
 
-        body += (
-            f'<tr style="background:{bg};border-bottom:1px solid #223243">'
-            + td(row.get('description', ''), fm, "'IBM Plex Sans',sans-serif", '600')
-            + (td(row.get('engine_label', ''), fd, 'JetBrains Mono,monospace') if show_status
-               else td(row.get('section', ''), fd))
-            + f'<td style="padding:11px 14px;color:{fd};font-family:JetBrains Mono,monospace;font-size:.76rem;text-align:right">{per_s}</td>'
-            + td(dt_s, fd, 'JetBrains Mono,monospace')
-            + f'<td style="padding:11px 14px;color:#c8d4df;font-family:JetBrains Mono,monospace;font-size:.76rem;font-weight:700;text-align:right">{hrs_s}</td>'
-            + st_cell + '</tr>'
-        )
-
-    return (
-        f'<div style="overflow-x:auto;border-radius:12px;border:1px solid #223243;'
-        f'background:#111821;overflow:hidden;box-shadow:var(--shadow)">'
-        f'<table style="width:100%;border-collapse:collapse">'
-        f'<thead>{header}</thead><tbody>{body}</tbody></table></div>'
+def _empty_box(msg: str):
+    st.markdown(
+        '<div style="background:#121922;border:1px solid #223244;border-radius:12px;padding:1.2rem;'
+        'text-align:center;color:#9caec0;font-family:IBM Plex Sans,sans-serif;font-size:.82rem;font-weight:500">'
+        + msg + '</div>',
+        unsafe_allow_html=True,
     )
 
 def _show(records: List[Dict], mode: str = 'matrix'):
     if not records:
-        st.markdown(
-            '<div style="background:#121922;border:1px solid #223243;border-radius:12px;'
-            'padding:1.2rem;text-align:center;color:#9cb0c3;'
-            'font-family:IBM Plex Sans,sans-serif;font-size:.82rem;font-weight:500">'
-            'No records match the current filter.</div>',
-            unsafe_allow_html=True
-        )
+        _empty_box('No records match the current filter.')
     else:
         st.markdown(_matrix_html(records, mode), unsafe_allow_html=True)
 
-
-# ══════════════════════════════════════════════════════════════════════════
-#  UI COMPONENTS
-# ══════════════════════════════════════════════════════════════════════════
 def _kpi(val: Any, lbl: str, accent: str) -> str:
-    return (
-        f'<div style="background:linear-gradient(180deg,var(--panel2),var(--panel));'
-        f'border:1px solid var(--line);border-radius:12px;padding:1rem 1rem .95rem;'
-        f'box-shadow:var(--shadow);min-height:102px">'
-        f'<div style="width:34px;height:3px;border-radius:999px;background:{accent};margin-bottom:.85rem"></div>'
-        f'<div style="font-family:IBM Plex Sans,sans-serif;font-size:1.22rem;font-weight:700;line-height:1.15;'
-        f'letter-spacing:-.02em;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{val}</div>'
-        f'<div style="font-family:Inter,sans-serif;font-size:.60rem;font-weight:600;text-transform:uppercase;'
-        f'letter-spacing:.14em;color:var(--soft);margin-top:.55rem">{lbl}</div>'
-        f'</div>'
-    )
+    return (f'<div style="background:linear-gradient(180deg,var(--panel2),var(--panel));'
+            f'border:1px solid var(--line);border-radius:12px;padding:1rem 1rem .95rem;'
+            f'box-shadow:var(--shadow);min-height:102px">'
+            f'<div style="width:34px;height:3px;border-radius:999px;background:{accent};margin-bottom:.85rem"></div>'
+            f'<div style="font-family:IBM Plex Sans,sans-serif;font-size:1.22rem;font-weight:700;line-height:1.15;'
+            f'letter-spacing:-.02em;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{val}</div>'
+            f'<div style="font-family:Inter,sans-serif;font-size:.60rem;font-weight:600;text-transform:uppercase;'
+            f'letter-spacing:.14em;color:var(--soft);margin-top:.55rem">{lbl}</div></div>')
 
 def _section(title: str, sub: str, badge: str) -> str:
-    return (
-        f'<div style="display:flex;align-items:end;gap:1rem;margin:2.2rem 0 .95rem">'
-        f'<div style="flex:1">'
-        f'<div style="font-family:IBM Plex Sans,sans-serif;font-size:1.02rem;font-weight:700;color:var(--ink);'
-        f'letter-spacing:-.01em">{title}</div>'
-        f'<div style="font-family:Inter,sans-serif;font-size:.72rem;color:var(--soft);margin-top:.28rem">{sub}</div>'
-        f'</div>'
-        f'<div style="font-family:JetBrains Mono,monospace;font-size:.61rem;font-weight:600;padding:6px 10px;'
-        f'border-radius:999px;background:var(--bg3);border:1px solid var(--line);'
-        f'color:var(--muted);white-space:nowrap">{badge}</div>'
-        f'</div>'
-        f'<div style="height:1px;background:linear-gradient(90deg,var(--gold),var(--line),transparent);margin-bottom:1rem"></div>'
-    )
+    return (f'<div style="display:flex;align-items:end;gap:1rem;margin:2.2rem 0 .95rem">'
+            f'<div style="flex:1"><div style="font-family:IBM Plex Sans,sans-serif;font-size:1.02rem;font-weight:700;color:var(--ink);letter-spacing:-.01em">{title}</div>'
+            f'<div style="font-family:Inter,sans-serif;font-size:.72rem;color:var(--soft);margin-top:.28rem">{sub}</div></div>'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:.61rem;font-weight:600;padding:6px 10px;border-radius:999px;background:var(--bg3);border:1px solid var(--line);color:var(--muted);white-space:nowrap">{badge}</div></div>'
+            f'<div style="height:1px;background:linear-gradient(90deg,var(--gold),var(--line),transparent);margin-bottom:1rem"></div>')
 
 def _rec_line(recs: List[Dict]) -> str:
     n = len(recs)
@@ -951,49 +916,39 @@ def _rec_line(recs: List[Dict]) -> str:
     ok = sum(1 for c in recs if c.get('status') == 'OK')
     nd = sum(1 for c in recs if c.get('status') == 'NO DATA')
     parts = [f'<span style="color:var(--ink);font-weight:700">{n}</span> records']
-    if od: parts.append(f'<span style="color:#d08a8a;font-weight:600">{od} overdue</span>')
-    if hp: parts.append(f'<span style="color:#d0a56b;font-weight:600">{hp} high priority</span>')
-    if ok: parts.append(f'<span style="color:#7db08b;font-weight:600">{ok} OK</span>')
-    if nd: parts.append(f'<span style="color:#8ca4bc;font-weight:600">{nd} no data</span>')
-    return (
-        f'<div style="font-family:JetBrains Mono,monospace;font-size:.61rem;color:var(--soft);'
-        f'margin-bottom:.65rem;line-height:1.8">{"  ·  ".join(parts)}</div>'
-    )
+    if od: parts.append(f'<span style="color:#d39797;font-weight:600">{od} overdue</span>')
+    if hp: parts.append(f'<span style="color:#d1a870;font-weight:600">{hp} high priority</span>')
+    if ok: parts.append(f'<span style="color:#80ae8f;font-weight:600">{ok} OK</span>')
+    if nd: parts.append(f'<span style="color:#88a0b7;font-weight:600">{nd} no data</span>')
+    return (f'<div style="font-family:JetBrains Mono,monospace;font-size:.61rem;color:var(--soft);margin-bottom:.65rem;line-height:1.8">{"  ·  ".join(parts)}</div>')
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  SESSION STATE
+#  STATE
 # ══════════════════════════════════════════════════════════════════════════
 if 'data' not in st.session_state:
     st.session_state.data = None
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  PAGE HEADER
+#  HEADER
 # ══════════════════════════════════════════════════════════════════════════
 st.markdown(
     '<div style="padding:1.6rem 0 0;animation:fadeUp .35s ease both">'
     '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap">'
     '<div>'
-    '<div style="font-family:Inter,sans-serif;font-size:.60rem;font-weight:600;letter-spacing:.28em;'
-    'text-transform:uppercase;color:#b8955f;margin-bottom:.36rem">Fleet Technical Operations</div>'
-    '<div style="font-family:IBM Plex Sans,sans-serif;font-size:2.05rem;font-weight:700;color:#e7edf4;'
-    'letter-spacing:-.03em;line-height:1.05">Running Hours Control Panel</div>'
+    '<div style="font-family:Inter,sans-serif;font-size:.60rem;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:#b99764;margin-bottom:.36rem">Fleet Technical Operations</div>'
+    '<div style="font-family:IBM Plex Sans,sans-serif;font-size:2.05rem;font-weight:700;color:#e8edf3;letter-spacing:-.03em;line-height:1.05">Running Hours Control Panel</div>'
     '</div>'
-    '<div style="font-family:JetBrains Mono,monospace;font-size:.64rem;color:#7b8ea2;'
-    'padding:.6rem .8rem;border:1px solid #233243;border-radius:999px;background:#101720">'
-    'TEC-004 Enterprise View'
-    '</div>'
-    '</div>'
-    '</div>'
-    '<div style="height:1px;margin:1rem 0 1.5rem;'
-    'background:linear-gradient(90deg,#b8955f,#233243 34%,transparent)"></div>',
+    '<div style="font-family:JetBrains Mono,monospace;font-size:.64rem;color:#7c90a3;padding:.6rem .8rem;border:1px solid #223244;border-radius:999px;background:#101721">TEC-004 Executive Parser</div>'
+    '</div></div>'
+    '<div style="height:1px;margin:1rem 0 1.5rem;background:linear-gradient(90deg,#b99764,#223244 34%,transparent)"></div>',
     unsafe_allow_html=True
 )
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  UPLOAD PANEL
+#  UPLOAD
 # ══════════════════════════════════════════════════════════════════════════
 with st.expander("Upload TEC-004 Report", expanded=(st.session_state.data is None)):
     uc, ic = st.columns([2.2, 1.0], gap='large')
@@ -1001,15 +956,12 @@ with st.expander("Upload TEC-004 Report", expanded=(st.session_state.data is Non
         uploaded = st.file_uploader('Drop TEC-004 .doc', type=['doc'], label_visibility='collapsed')
     with ic:
         st.markdown(
-            '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;'
-            'padding:1rem 1rem .95rem;font-family:Inter,sans-serif;font-size:.76rem;'
-            'color:var(--muted);line-height:1.85">'
-            '<div style="font-family:IBM Plex Sans,sans-serif;color:var(--ink);font-weight:700;margin-bottom:.45rem">'
-            'Document Profile</div>'
+            '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1rem 1rem .95rem;font-family:Inter,sans-serif;font-size:.76rem;color:var(--muted);line-height:1.85">'
+            '<div style="font-family:IBM Plex Sans,sans-serif;color:var(--ink);font-weight:700;margin-bottom:.45rem">Document Profile</div>'
             '<b style="color:var(--ink)">Format:</b> TEC-004 Running Hours Report (.doc)<br>'
-            '<b style="color:var(--ink)">Parser:</b> Raw-grid ME · Dedup AUX · Exact OE/DG<br>'
+            '<b style="color:var(--ink)">Parser:</b> Dynamic ME · Dedup AUX · Refined OE/DG<br>'
             '<b style="color:var(--ink)">Output:</b> Main Engine · Auxiliary · Other Eqpt · D/G<br>'
-            '<b style="color:var(--ink)">Thresholds:</b> 100% overdue · 80% high priority'
+            '<b style="color:var(--ink)">Display:</b> Normalized dates · Placeholder suppression'
             '</div>',
             unsafe_allow_html=True
         )
@@ -1048,34 +1000,17 @@ with st.expander("Upload TEC-004 Report", expanded=(st.session_state.data is Non
             hp = sum(1 for c in ac if c['status'] == 'HIGH PRIORITY')
 
             st.markdown(
-                f'<div style="background:linear-gradient(180deg,#132019,#101720);'
-                f'border:1px solid #284031;border-radius:12px;padding:.9rem 1rem;'
-                f'color:#b8d0be;font-family:IBM Plex Sans,sans-serif;font-size:.83rem;font-weight:500">'
-                f'<span style="color:#7db08b;font-weight:700">Validated:</span> '
-                f'<span style="color:#e7edf4;font-weight:700">{result["vessel_name"]}</span> — '
-                f'{len(ac)} components · {od} overdue · {hp} high priority'
+                f'<div style="background:linear-gradient(180deg,#132019,#101721);border:1px solid #284031;border-radius:12px;padding:.9rem 1rem;color:#bdd0c4;font-family:IBM Plex Sans,sans-serif;font-size:.83rem;font-weight:500">'
+                f'<span style="color:#80ae8f;font-weight:700">Validated:</span> <span style="color:#e8edf3;font-weight:700">{result["vessel_name"]}</span> — {len(ac)} components · {od} overdue · {hp} high priority'
                 f'</div>',
                 unsafe_allow_html=True
             )
 
-
 if st.session_state.data is None:
-    st.markdown(
-        '<div style="display:flex;align-items:center;justify-content:center;'
-        'height:40vh;flex-direction:column;gap:1rem">'
-        '<div style="width:64px;height:64px;border-radius:50%;border:1px solid #233243;'
-        'display:flex;align-items:center;justify-content:center;background:#101720;color:#b8955f;'
-        'font-size:1.3rem">⚓</div>'
-        '<div style="font-family:IBM Plex Sans,sans-serif;font-size:.86rem;color:#7b8ea2;letter-spacing:.02em">'
-        'Upload a TEC-004 report to view the operational matrices</div></div>',
-        unsafe_allow_html=True
-    )
+    _empty_box('Upload a TEC-004 report to view the operational matrices')
     st.stop()
 
 
-# ══════════════════════════════════════════════════════════════════════════
-#  DATA READY
-# ══════════════════════════════════════════════════════════════════════════
 d = st.session_state.data
 me = d['me']
 aux = d['aux']
@@ -1087,28 +1022,20 @@ n_hp = sum(1 for c in ac if c['status'] == 'HIGH PRIORITY')
 mt = d.get('me_total_hrs')
 mo = d.get('me_this_month')
 
-
-# ══════════════════════════════════════════════════════════════════════════
-#  KPI ROW
-# ══════════════════════════════════════════════════════════════════════════
 cols = st.columns(8)
 for col, (val, lbl, acc) in zip(cols, [
-    (d['vessel_name'], 'Vessel', '#b8955f'),
-    (d['report_date'] or '—', 'Report Date', '#3f6e9a'),
-    (f"{mt:,}" if mt else '—', 'M/E Total Hrs', '#4c7a5a'),
-    (f"{mo:,}" if mo else '—', 'M/E This Month', '#4c7a5a'),
-    (len(me), 'ME Records', '#b8955f'),
-    (len(aux), 'AUX Records', '#3f6e9a'),
-    (n_od, 'Overdue', '#8a4b4b'),
-    (n_hp, 'High Priority', '#9b7441'),
+    (d['vessel_name'], 'Vessel', '#b99764'),
+    (d['report_date'] or '—', 'Report Date', '#4e6f93'),
+    (f"{mt:,}" if mt else '—', 'M/E Total Hrs', '#5f836b'),
+    (f"{mo:,}" if mo else '—', 'M/E This Month', '#5f836b'),
+    (len(me), 'ME Records', '#b99764'),
+    (len(aux), 'AUX Records', '#4e6f93'),
+    (n_od, 'Overdue', '#976060'),
+    (n_hp, 'High Priority', '#a78255'),
 ]):
     with col:
         st.markdown(_kpi(val, lbl, acc), unsafe_allow_html=True)
 
-
-# ══════════════════════════════════════════════════════════════════════════
-#  MAIN ENGINE
-# ══════════════════════════════════════════════════════════════════════════
 me_od = sum(1 for c in me if c['status'] == 'OVERDUE')
 me_hp = sum(1 for c in me if c['status'] == 'HIGH PRIORITY')
 st.markdown(_section('Main Engine', f'{len(me)} component records', f'{me_od} OD · {me_hp} HP'), unsafe_allow_html=True)
@@ -1133,15 +1060,9 @@ elif ms_sel == 'OK only':
 st.markdown(_rec_line(v), unsafe_allow_html=True)
 _show(v, mode='matrix' if 'Component' in mr_sel else 'priority')
 
-
-# ══════════════════════════════════════════════════════════════════════════
-#  AUXILIARY ENGINES
-# ══════════════════════════════════════════════════════════════════════════
 ax_od = sum(1 for c in aux if c['status'] == 'OVERDUE')
 ax_hp = sum(1 for c in aux if c['status'] == 'HIGH PRIORITY')
-st.markdown(_section('Auxiliary Engines',
-                     f'{len(aux)} component records · AUX-1 · AUX-2 · AUX-3',
-                     f'{ax_od} OD · {ax_hp} HP'), unsafe_allow_html=True)
+st.markdown(_section('Auxiliary Engines', f'{len(aux)} component records · AUX-1 · AUX-2 · AUX-3', f'{ax_od} OD · {ax_hp} HP'), unsafe_allow_html=True)
 
 g1, g2, g3, g4 = st.columns([1.3, 2, 2, 3])
 with g1:
@@ -1167,55 +1088,21 @@ elif as_sel == 'OK only':
 st.markdown(_rec_line(v), unsafe_allow_html=True)
 _show(v, mode='matrix' if 'Component' in ar_sel else 'priority')
 
-
-# ══════════════════════════════════════════════════════════════════════════
-#  OTHER EQUIPMENT
-# ══════════════════════════════════════════════════════════════════════════
-st.markdown(_section('Other Equipment',
-                     'Turbocharger · Coolers · A/C & Compressors',
-                     f'{len(oe)} records'), unsafe_allow_html=True)
-
+st.markdown(_section('Other Equipment', 'Refined categories · Compressors · Boilers · Cooling', f'{len(oe)} records'), unsafe_allow_html=True)
 if not oe:
-    st.markdown(
-        '<div style="background:#121922;border:1px solid #223243;'
-        'border-radius:12px;padding:1.2rem;text-align:center;color:#9cb0c3;'
-        'font-family:IBM Plex Sans,sans-serif;font-size:.82rem;font-weight:500">'
-        'No other equipment data found.</div>',
-        unsafe_allow_html=True
-    )
+    _empty_box('No other equipment data found.')
 else:
     secs = sorted({r['section'] for r in oe})
     os_sel = st.selectbox('Section', ['All'] + secs, key='oe_s')
     ov = oe if os_sel == 'All' else [r for r in oe if r['section'] == os_sel]
-    st.markdown(
-        f'<div style="font-family:JetBrains Mono,monospace;font-size:.61rem;color:var(--soft);'
-        f'margin-bottom:.65rem;line-height:1.8"><span style="color:var(--ink);font-weight:700">{len(ov)}</span> records</div>',
-        unsafe_allow_html=True
-    )
+    st.markdown(f'<div style="font-family:JetBrains Mono,monospace;font-size:.61rem;color:var(--soft);margin-bottom:.65rem;line-height:1.8"><span style="color:var(--ink);font-weight:700">{len(ov)}</span> records</div>', unsafe_allow_html=True)
     st.markdown(_oe_html(ov, show_status=False), unsafe_allow_html=True)
 
-
-# ══════════════════════════════════════════════════════════════════════════
-#  D/G EQUIPMENT
-# ══════════════════════════════════════════════════════════════════════════
-st.markdown(_section('D/G Equipment',
-                     'Diesel Generator components · D/G 1 · D/G 2 · D/G 3',
-                     f'{len(dg)} records'), unsafe_allow_html=True)
-
+st.markdown(_section('D/G Equipment', 'Diesel Generator components · D/G 1 · D/G 2 · D/G 3', f'{len(dg)} records'), unsafe_allow_html=True)
 if not dg:
-    st.markdown(
-        '<div style="background:#121922;border:1px solid #223243;'
-        'border-radius:12px;padding:1.2rem;text-align:center;color:#9cb0c3;'
-        'font-family:IBM Plex Sans,sans-serif;font-size:.82rem;font-weight:500">'
-        'No D/G equipment data found.</div>',
-        unsafe_allow_html=True
-    )
+    _empty_box('No D/G equipment data found.')
 else:
     dg_sel = st.selectbox('D/G Unit', ['All'] + sorted({r.get('engine_label', '') for r in dg}), key='dge')
     dv = dg if dg_sel == 'All' else [r for r in dg if r.get('engine_label') == dg_sel]
-    st.markdown(
-        f'<div style="font-family:JetBrains Mono,monospace;font-size:.61rem;color:var(--soft);'
-        f'margin-bottom:.65rem;line-height:1.8"><span style="color:var(--ink);font-weight:700">{len(dv)}</span> records</div>',
-        unsafe_allow_html=True
-    )
+    st.markdown(f'<div style="font-family:JetBrains Mono,monospace;font-size:.61rem;color:var(--soft);margin-bottom:.65rem;line-height:1.8"><span style="color:var(--ink);font-weight:700">{len(dv)}</span> records</div>', unsafe_allow_html=True)
     st.markdown(_oe_html(dv, show_status=True), unsafe_allow_html=True)
