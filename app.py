@@ -1,24 +1,16 @@
 """
-Fleet Running Hours  v16  ·  FINAL 10/10
+Fleet Running Hours  v16  ·  FRONTEND REVISED / BACKEND PRESERVED
 ══════════════════════════════════════════════════════════════════════════════
-BACKEND — validated against two real TEC-004 vessels:
-  ME : raw-grid parser   · hardcoded MARKER_COL=2, FIRST_CYL=3
-       handles merged cylinder cells (vessel-specific cyl count)
-       10/10 GT: Jan-2026 vessel (96 rec) + MINOAN MARATHON (85 rec)
+BACKEND — preserved as-is in logic and schema:
+  ME : raw-grid parser
+  AUX: dedup-grid parser
+  OE : exact column-indexed parser
+  DG : paired-row dedup parser
 
-  AUX: dedup-grid parser · data_start = label_col + 1 (avoids marker col)
-       10/10 GT: 162/162 on both vessels, zero ghost cyls
-
-  OE : exact column-indexed (Turbocharger col0-3 / Coolers col5-7 / A/C col10-12)
-       zero duplicates, zero column contamination
-
-  DG : paired-row dedup parser, gc1/gc2 use default-arg capture (no closure bug)
-       27 records, both left and right table sections
-
-FRONTEND — pure HTML via st.markdown(), guaranteed on every Streamlit version
-  Premium dark design: Space Grotesk · Inter · JetBrains Mono
-  Animated KPI cards · status-coloured matrices · inline progress bars
-  Single page · no tabs · session_state prevents re-parse on widget interaction
+FRONTEND — fully revised:
+  Refined dark UI · cleaner hierarchy · responsive KPI grid
+  Card-based sections · improved filters · polished HTML tables
+  Better upload panel · better empty states · better matrix readability
 ══════════════════════════════════════════════════════════════════════════════
 """
 import streamlit as st
@@ -37,86 +29,580 @@ import pandas as pd
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  DESIGN SYSTEM
+#  DESIGN SYSTEM  — REVISED FRONTEND
 # ══════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 :root{
-  --bg:#030508; --bg2:#050a14; --bg3:#080e1c; --bg4:#0b1324; --bg5:#0f192e;
-  --rim:#142030; --rim2:#1c2e44; --rim3:#263e5c;
+  --bg:#050814;
+  --bg2:#08101d;
+  --bg3:#0c1526;
+  --bg4:#101b30;
+  --bg5:#13203a;
+  --bg6:#182743;
 
-  --au3:#c08818; --au4:#dca828; --au5:#f4c840;
-  --cr3:#c81818; --cr4:#e83030;
-  --am3:#a84e0e; --am4:#cc6820;
-  --em3:#066830; --em4:#0a9040;
-  --az3:#0c2ca0; --az4:#2050d8;
+  --line:#1b2b44;
+  --line2:#243754;
+  --line3:#30486a;
 
-  --tx0:#b0ccee; --tx1:#587890; --tx2:#2c4860; --tx3:#102030;
+  --gold:#c08818;
+  --gold2:#d8a93a;
+  --gold3:#f2c85c;
+
+  --red:#d83939;
+  --amber:#dd8426;
+  --green:#11a85b;
+  --blue:#3e73da;
+
+  --txt:#e5eefc;
+  --txt2:#a8bdd8;
+  --txt3:#6f88a7;
+  --txt4:#445a77;
+  --txt5:#1d2f47;
+
   --ff:'Space Grotesk',sans-serif;
   --fi:'Inter',sans-serif;
   --fm:'JetBrains Mono',monospace;
+
+  --shadow-lg:0 28px 80px rgba(0,0,0,.42);
+  --shadow-md:0 14px 42px rgba(0,0,0,.28);
+  --shadow-sm:0 8px 24px rgba(0,0,0,.18);
+  --radius-xl:20px;
+  --radius-lg:16px;
+  --radius-md:12px;
+  --radius-sm:10px;
 }
 
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body,[class*="css"]{font-family:var(--fi)!important;background:var(--bg)!important;color:var(--tx1)!important;-webkit-font-smoothing:antialiased}
-.main,.main>div{background:var(--bg)!important}
-.block-container{max-width:100%!important;padding:0 2.25rem 6rem!important}
-.main::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse 130% 70% at -20% -15%,rgba(192,136,24,.055) 0%,transparent 55%),
-             radial-gradient(ellipse 100% 60% at 120% 115%,rgba(3,8,20,.06) 0%,transparent 55%)}
-.block-container>*{position:relative;z-index:1}
+*,*::before,*::after{box-sizing:border-box}
+html,body,[class*="css"]{
+  background:var(--bg)!important;
+  color:var(--txt2)!important;
+  font-family:var(--fi)!important;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+body{margin:0}
+.main,.main>div{background:transparent!important}
+.block-container{
+  max-width:1500px!important;
+  padding:1.2rem 1.4rem 5rem!important;
+}
+.block-container > *{position:relative;z-index:1}
+.main::before{
+  content:'';
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(900px 500px at -10% -15%, rgba(192,136,24,.10), transparent 58%),
+    radial-gradient(900px 600px at 120% 110%, rgba(62,115,218,.08), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,.01), transparent 18%);
+}
 [data-testid="stSidebar"],[data-testid="collapsedControl"]{display:none!important}
+[data-testid="stAppViewContainer"]{background:transparent!important}
+section.main > div{padding-top:0!important}
 
-[data-testid="stFileUploadDropzone"]{background:linear-gradient(150deg,rgba(192,136,24,.045),transparent)!important;border:1.5px dashed var(--au3)!important;border-radius:14px!important;padding:2.25rem 2rem!important;transition:all .22s!important}
-[data-testid="stFileUploadDropzone"]:hover{background:rgba(192,136,24,.07)!important;border-color:var(--au4)!important;box-shadow:0 0 36px rgba(192,136,24,.06)!important}
-[data-testid="stFileUploadDropzone"] p,[data-testid="stFileUploadDropzone"] span{color:var(--au4)!important;font-family:var(--ff)!important;font-size:.88rem!important;font-weight:500!important}
-[data-testid="stFileUploadDropzone"] small{color:var(--tx3)!important}
+a,button{transition:all .18s ease}
+hr{border-color:var(--line)!important;opacity:1!important}
 
-div[data-baseweb="select"]>div{background:var(--bg4)!important;border:1px solid var(--rim2)!important;border-radius:8px!important;color:var(--tx0)!important}
-.stSelectbox label,.stRadio label{color:var(--tx3)!important;font-size:.62rem!important;text-transform:uppercase!important;letter-spacing:.12em!important}
-
-.stButton>button{background:linear-gradient(135deg,var(--au4),var(--au3))!important;color:#000!important;border:none!important;border-radius:8px!important;padding:.52rem 1.5rem!important;font-family:var(--ff)!important;font-weight:700!important;font-size:.77rem!important;letter-spacing:.07em!important;text-transform:uppercase!important;box-shadow:0 2px 14px rgba(192,136,24,.22)!important;transition:all .16s!important}
-.stButton>button:hover{background:linear-gradient(135deg,var(--au5),var(--au4))!important;box-shadow:0 5px 22px rgba(192,136,24,.38)!important;transform:translateY(-2px)!important}
-
-.streamlit-expanderHeader{background:var(--bg3)!important;border:1px solid var(--rim2)!important;border-radius:10px!important;font-family:var(--ff)!important;font-size:.81rem!important;font-weight:500!important;color:var(--tx1)!important}
-.streamlit-expanderHeader:hover{background:var(--bg4)!important;border-color:var(--rim3)!important}
-.streamlit-expanderContent{background:var(--bg2)!important;border:1px solid var(--rim2)!important;border-top:none!important;border-radius:0 0 10px 10px!important;padding:1.15rem!important}
-
-.stAlert{border-radius:8px!important;border-left-width:3px!important}
-hr{border-color:var(--rim)!important;opacity:1!important}
-::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--bg2)}
-::-webkit-scrollbar-thumb{background:var(--rim3);border-radius:2px}
+::-webkit-scrollbar-thumb{background:var(--line3);border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background:#3b5880}
 
-@keyframes D  {from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)}}
-@keyframes U  {from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)}}
-@keyframes G  {from{width:0;opacity:0}                    to{width:100%;opacity:1}}
-@keyframes N  {from{opacity:0;transform:translateY(6px)}  to{opacity:1;transform:translateY(0)}}
-@keyframes POP{0%{transform:scale(.82);opacity:0}58%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
+/* Upload */
+[data-testid="stFileUploader"] > div:first-child{width:100%}
+[data-testid="stFileUploadDropzone"]{
+  background:
+    radial-gradient(circle at top right, rgba(192,136,24,.09), transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,.015), rgba(255,255,255,.01))!important;
+  border:1.5px dashed rgba(216,169,58,.55)!important;
+  border-radius:18px!important;
+  padding:2.6rem 2rem!important;
+  transition:all .22s ease!important;
+  min-height:180px!important;
+}
+[data-testid="stFileUploadDropzone"]:hover{
+  border-color:rgba(242,200,92,.95)!important;
+  background:
+    radial-gradient(circle at top right, rgba(192,136,24,.13), transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.012))!important;
+  box-shadow:0 0 0 1px rgba(216,169,58,.14), 0 20px 60px rgba(0,0,0,.18)!important;
+}
+[data-testid="stFileUploadDropzone"] p,
+[data-testid="stFileUploadDropzone"] span{
+  color:var(--txt)!important;
+  font-family:var(--ff)!important;
+  font-size:.96rem!important;
+  font-weight:600!important;
+}
+[data-testid="stFileUploadDropzone"] small{
+  color:var(--txt3)!important;
+  font-size:.78rem!important;
+}
+
+/* Inputs */
+.stSelectbox label,.stRadio label{
+  color:var(--txt4)!important;
+  font-size:.60rem!important;
+  font-weight:600!important;
+  text-transform:uppercase!important;
+  letter-spacing:.16em!important;
+  margin-bottom:.35rem!important;
+}
+div[data-baseweb="select"] > div{
+  background:linear-gradient(180deg,var(--bg4),var(--bg3))!important;
+  border:1px solid var(--line2)!important;
+  border-radius:12px!important;
+  color:var(--txt)!important;
+  min-height:46px!important;
+  box-shadow:none!important;
+}
+div[data-baseweb="select"] *{
+  color:var(--txt)!important;
+  font-family:var(--fi)!important;
+}
+[data-baseweb="radio"]{
+  background:transparent!important;
+}
+[data-baseweb="radio"] label{
+  background:linear-gradient(180deg,var(--bg4),var(--bg3));
+  border:1px solid var(--line2);
+  border-radius:12px;
+  padding:.55rem .9rem;
+  margin-right:.45rem;
+}
+[data-baseweb="radio"] label:hover{
+  border-color:var(--line3);
+}
+
+/* Buttons */
+.stButton>button{
+  background:linear-gradient(135deg,var(--gold2),var(--gold))!important;
+  color:#06111d!important;
+  border:none!important;
+  border-radius:12px!important;
+  padding:.72rem 1.2rem!important;
+  font-family:var(--ff)!important;
+  font-weight:700!important;
+  font-size:.76rem!important;
+  letter-spacing:.08em!important;
+  text-transform:uppercase!important;
+  box-shadow:0 10px 24px rgba(192,136,24,.22)!important;
+}
+.stButton>button:hover{
+  transform:translateY(-1px)!important;
+  box-shadow:0 16px 34px rgba(192,136,24,.28)!important;
+  background:linear-gradient(135deg,var(--gold3),var(--gold2))!important;
+}
+
+/* Expander */
+.streamlit-expanderHeader{
+  background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.01))!important;
+  border:1px solid var(--line2)!important;
+  border-radius:16px!important;
+  color:var(--txt)!important;
+  font-family:var(--ff)!important;
+  font-size:.90rem!important;
+  font-weight:600!important;
+}
+.streamlit-expanderHeader:hover{
+  border-color:var(--line3)!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))!important;
+}
+.streamlit-expanderContent{
+  background:transparent!important;
+  border:none!important;
+  padding:1.2rem 0 .35rem!important;
+}
+
+.stAlert{
+  border-radius:12px!important;
+  border-left-width:3px!important;
+}
+
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(14px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes fadeDown{
+  from{opacity:0;transform:translateY(-10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes glowLine{
+  from{width:0;opacity:0}
+  to{width:100%;opacity:1}
+}
+@keyframes popIn{
+  0%{opacity:0;transform:scale(.97)}
+  100%{opacity:1;transform:scale(1)}
+}
+
+/* Utility classes used by HTML */
+.app-hero{
+  position:relative;
+  overflow:hidden;
+  margin:.2rem 0 1.25rem;
+  border:1px solid rgba(255,255,255,.05);
+  border-radius:24px;
+  background:
+    radial-gradient(700px 260px at 0% 0%, rgba(192,136,24,.12), transparent 60%),
+    radial-gradient(600px 240px at 100% 100%, rgba(62,115,218,.09), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+  box-shadow:var(--shadow-lg);
+  padding:1.35rem 1.4rem 1.35rem;
+  animation:fadeDown .45s cubic-bezier(.22,1,.36,1) both;
+}
+.app-hero::after{
+  content:'';
+  position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(90deg, rgba(255,255,255,.05), transparent 18%, transparent 82%, rgba(255,255,255,.03));
+  opacity:.35;
+}
+.hero-grid{
+  display:grid;
+  grid-template-columns: 1.65fr .95fr;
+  gap:1rem;
+  align-items:stretch;
+}
+.hero-kicker{
+  font-family:var(--fm);
+  font-size:.64rem;
+  letter-spacing:.24em;
+  text-transform:uppercase;
+  color:var(--gold2);
+}
+.hero-title{
+  font-family:var(--ff);
+  font-size:clamp(1.7rem,3vw,2.55rem);
+  line-height:1.02;
+  letter-spacing:-.045em;
+  color:var(--txt);
+  font-weight:700;
+  margin-top:.48rem;
+}
+.hero-text{
+  color:var(--txt3);
+  font-size:.92rem;
+  max-width:72ch;
+  line-height:1.65;
+  margin-top:.8rem;
+}
+.hero-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.6rem;
+  margin-top:1rem;
+}
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:.45rem;
+  padding:.44rem .72rem;
+  border-radius:999px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);
+  color:var(--txt2);
+  font-family:var(--fm);
+  font-size:.66rem;
+  white-space:nowrap;
+}
+.hero-panel{
+  border-radius:20px;
+  border:1px solid rgba(255,255,255,.06);
+  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.012));
+  padding:1rem 1rem .95rem;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  min-height:100%;
+}
+.hero-panel-title{
+  color:var(--txt);
+  font-family:var(--ff);
+  font-size:.95rem;
+  font-weight:600;
+  margin-bottom:.7rem;
+}
+.hero-stat{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:.7rem;
+  padding:.58rem 0;
+  border-top:1px solid rgba(255,255,255,.05);
+}
+.hero-stat:first-of-type{border-top:none;padding-top:0}
+.hero-stat-label{
+  color:var(--txt3);
+  font-size:.72rem;
+  text-transform:uppercase;
+  letter-spacing:.13em;
+}
+.hero-stat-val{
+  color:var(--txt);
+  font-family:var(--fm);
+  font-size:.78rem;
+  font-weight:600;
+  text-align:right;
+}
+
+/* KPI cards */
+.kpi-card{
+  position:relative;
+  overflow:hidden;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.05);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.008)),
+    linear-gradient(160deg,var(--bg4),var(--bg3));
+  padding:1rem 1rem .95rem;
+  min-height:118px;
+  box-shadow:var(--shadow-sm);
+  animation:fadeUp .38s ease both;
+}
+.kpi-card::before{
+  content:'';
+  position:absolute; inset:0;
+  background:linear-gradient(145deg,var(--accent-fade),transparent 58%);
+  pointer-events:none;
+}
+.kpi-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:.8rem;
+}
+.kpi-label{
+  color:var(--txt4);
+  font-size:.60rem;
+  line-height:1.2;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.16em;
+}
+.kpi-icon{
+  width:34px;height:34px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.06);
+  color:var(--accent);
+  font-size:.9rem;
+}
+.kpi-value{
+  margin-top:.8rem;
+  color:var(--txt);
+  font-family:var(--ff);
+  font-size:clamp(1.05rem,2vw,1.55rem);
+  line-height:1.02;
+  font-weight:700;
+  letter-spacing:-.04em;
+  word-break:break-word;
+}
+.kpi-sub{
+  margin-top:.52rem;
+  color:var(--accent);
+  font-family:var(--fm);
+  font-size:.66rem;
+  letter-spacing:.05em;
+}
+
+/* Section card */
+.section-shell{
+  margin-top:1.45rem;
+  border-radius:22px;
+  border:1px solid rgba(255,255,255,.05);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.018), rgba(255,255,255,.008));
+  box-shadow:var(--shadow-md);
+  overflow:hidden;
+}
+.section-head{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:.9rem;
+  align-items:center;
+  padding:1rem 1.05rem .95rem;
+  border-bottom:1px solid rgba(255,255,255,.05);
+  background:linear-gradient(180deg, rgba(255,255,255,.012), transparent);
+}
+.section-icon{
+  width:42px;height:42px;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent-box);
+  border:1px solid var(--accent-line);
+  font-size:1rem;
+}
+.section-title{
+  color:var(--txt);
+  font-family:var(--ff);
+  font-size:1.02rem;
+  font-weight:600;
+  line-height:1.05;
+}
+.section-sub{
+  color:var(--txt3);
+  font-family:var(--fm);
+  font-size:.62rem;
+  letter-spacing:.06em;
+  margin-top:.28rem;
+}
+.section-badge{
+  white-space:nowrap;
+  padding:.46rem .8rem;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.07);
+  background:rgba(255,255,255,.03);
+  color:var(--txt2);
+  font-family:var(--fm);
+  font-size:.64rem;
+}
+
+/* Micro summary */
+.microline{
+  margin:.15rem 0 .95rem;
+  color:var(--txt4);
+  font-family:var(--fm);
+  font-size:.64rem;
+  line-height:1.9;
+}
+.microline b{color:var(--txt2)}
+
+/* Empty blocks */
+.empty-block{
+  border-radius:16px;
+  padding:1.2rem 1rem;
+  text-align:center;
+  border:1px dashed rgba(255,255,255,.08);
+  background:linear-gradient(180deg, rgba(255,255,255,.018), rgba(255,255,255,.008));
+  color:var(--txt3);
+  font-family:var(--ff);
+  font-size:.88rem;
+  font-weight:500;
+}
+.upload-note{
+  height:100%;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.06);
+  background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.008));
+  padding:1rem 1rem .9rem;
+}
+.upload-note h4{
+  color:var(--txt);
+  font-family:var(--ff);
+  font-size:.92rem;
+  font-weight:600;
+  margin:0 0 .75rem;
+}
+.upload-note ul{
+  list-style:none;
+  margin:0;padding:0;
+  display:grid;gap:.68rem;
+}
+.upload-note li{
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:.58rem;
+  align-items:start;
+  color:var(--txt2);
+  font-size:.79rem;
+  line-height:1.55;
+}
+.upload-note .dot{
+  width:9px;height:9px;border-radius:999px;
+  background:linear-gradient(180deg,var(--gold3),var(--gold));
+  margin-top:.35rem;
+  box-shadow:0 0 0 4px rgba(192,136,24,.10);
+}
+.upload-note b{color:var(--txt)}
+
+.status-ok{color:#6ee48f}
+.status-hp{color:#ef9f49}
+.status-od{color:#f16666}
+.status-nd{color:#79a0ef}
+
+.success-banner{
+  margin-top:1rem;
+  border-radius:16px;
+  padding:.95rem 1rem;
+  border:1px solid rgba(17,168,91,.25);
+  background:linear-gradient(135deg, rgba(17,168,91,.14), rgba(17,168,91,.05));
+  color:#8df0b3;
+  font-family:var(--ff);
+  font-size:.88rem;
+  font-weight:500;
+  box-shadow:var(--shadow-sm);
+  animation:popIn .35s ease both;
+}
+.success-banner strong{color:#c7ffd8}
+
+/* Table shells */
+.table-shell{
+  overflow-x:auto;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.05);
+  background:linear-gradient(180deg, rgba(255,255,255,.012), rgba(255,255,255,.004));
+  box-shadow:var(--shadow-sm);
+}
+.matrix-table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  min-width:980px;
+}
+.matrix-table thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+}
+.filters-caption{
+  color:var(--txt4);
+  font-family:var(--fm);
+  font-size:.60rem;
+  text-transform:uppercase;
+  letter-spacing:.18em;
+  margin-bottom:.65rem;
+}
+
+/* Small helpers */
+.footer-note{
+  margin-top:1rem;
+  text-align:right;
+  color:var(--txt5);
+  font-family:var(--fm);
+  font-size:.58rem;
+  letter-spacing:.08em;
+}
+
+@media (max-width: 1200px){
+  .hero-grid{grid-template-columns:1fr}
+}
+@media (max-width: 900px){
+  .block-container{padding:1rem .75rem 4rem!important}
+  .section-head{grid-template-columns:auto 1fr}
+  .section-badge{grid-column:1 / -1; justify-self:start}
+}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  STATUS COLOUR PALETTE
+#  STATUS COLOUR PALETTE  — BACKEND/OUTPUT CONTRACT PRESERVED
 # ══════════════════════════════════════════════════════════════════════════
 _SC = {
-    "OVERDUE":       {"row":"#160202","tag_bg":"#220303","tag_fg":"#e01010","comp":"#e04040",
-                      "dim":"#441010","num":"#e05858","bar_f":"#d80808","bar_e":"#2a0303","bord":"#2e0404"},
-    "HIGH PRIORITY": {"row":"#160800","tag_bg":"#200c01","tag_fg":"#d86808","comp":"#e08828",
-                      "dim":"#442408","num":"#e09838","bar_f":"#d87800","bar_e":"#281000","bord":"#2e1200"},
-    "OK":            {"row":"#010b04","tag_bg":"#010e05","tag_fg":"#059028","comp":"#0ea840",
-                      "dim":"#052510","num":"#12b040","bar_f":"#059028","bar_e":"#011404","bord":"#021808"},
-    "NO DATA":       {"row":"#020510","tag_bg":"#030714","tag_fg":"#183858","comp":"#183858",
-                      "dim":"#0b1428","num":"#183858","bar_f":"#0e2848","bar_e":"#060e18","bord":"#080d1e"},
+    "OVERDUE":       {"row":"#180607","tag_bg":"#2a0b0d","tag_fg":"#ff6d74","comp":"#ff8b92",
+                      "dim":"#9b5b60","num":"#ff8d94","bar_f":"#ea4c55","bar_e":"#351013","bord":"#381215"},
+    "HIGH PRIORITY": {"row":"#1a1106","tag_bg":"#2c1b08","tag_fg":"#ffb054","comp":"#ffc070",
+                      "dim":"#a07d54","num":"#ffc070","bar_f":"#dd8426","bar_e":"#34210e","bord":"#3b250f"},
+    "OK":            {"row":"#07140d","tag_bg":"#0d2417","tag_fg":"#56d68a","comp":"#73e5a0",
+                      "dim":"#5b8f70","num":"#73e5a0","bar_f":"#11a85b","bar_e":"#0d2617","bord":"#11301d"},
+    "NO DATA":       {"row":"#09101a","tag_bg":"#0d1726","tag_fg":"#7ea2ef","comp":"#92b2f7",
+                      "dim":"#6d83a5","num":"#92b2f7","bar_f":"#3e73da","bar_e":"#101b2d","bord":"#16243a"},
 }
 _ORD = {"OVERDUE":0,"HIGH PRIORITY":1,"OK":2,"NO DATA":3}
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  CONVERSION  (.doc → .docx via LibreOffice)
+#  CONVERSION  (.doc → .docx via LibreOffice)  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
@@ -144,9 +630,7 @@ def convert_doc_to_docx(raw: bytes) -> bytes:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  GRID BUILDERS
-#  raw_grid : ALL cells including merged duplicates (needed for ME)
-#  dedup_grid: one cell per unique _tc element  (needed for AUX/OE/DG)
+#  GRID BUILDERS  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 def _raw_grid(table) -> List[List[str]]:
     grid=[]; mc=0
@@ -178,7 +662,7 @@ def _dedup_grid(table) -> List[List[str]]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  TEXT HELPERS
+#  TEXT HELPERS  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 def _fl(t: Any) -> str:
     raw=str(t or "").replace('\x07','').replace('\xa0',' ').replace('\t',' ')
@@ -202,9 +686,9 @@ def _parse_number(t: Any) -> float:
     m=re.search(r'\d[\d,\.]*',s)
     if not m: return 0.0
     b=m.group(); sep=max(b.rfind('.'),b.rfind(','))
-    if sep>0 and len(b)-sep==4: b=re.sub(r'[,\.]','',b)   # thousands separator
-    elif sep>0: b=re.sub(r'[,\.]','',b[:sep])               # decimal → drop fraction
-    else: b=re.sub(r'[,\.]','',b)
+    if sep>0 and len(b)-sep==4: b=re.sub(r'[,.]','',b)
+    elif sep>0: b=re.sub(r'[,.]','',b[:sep])
+    else: b=re.sub(r'[,.]','',b)
     try: return float(b)
     except: return 0.0
 
@@ -214,7 +698,7 @@ def _parse_date(t: Any) -> str:
     s=s.replace('[','').replace(']','').strip()
     if s in ('-','1','2','N/A','n/a','NA','Central','CENTRAL','COOLER',
              'NO RECORD','NOT WORKING','N.A.'): return ''
-    if re.fullmatch(r'^\d+$',s): return ''   # pure number = hours, not a date
+    if re.fullmatch(r'^\d+$',s): return ''
     if len(s)>32: return ''
     return s if re.search(r'[A-Za-z0-9/]',s) else ''
 
@@ -246,20 +730,7 @@ def _mk(cat,eng,unit,nm,per,dt,hrs) -> Dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  ME PARSER  —  raw grid
-#
-#  TEC-004 column layout (same across all vessels):
-#    col 0 = component name
-#    col 1 = periodicity
-#    col 2 = row marker  (1 = dates row,  2 = hours row)   ← HARDCODED
-#    col 3 = Cyl 1 data                                     ← HARDCODED
-#    col 4 = Cyl 2 data  …
-#    col N = REMARKS  (stop before)
-#
-#  Why raw (not dedup):
-#    Some vessels have merged cells spanning two physical columns for the same
-#    cylinder.  The raw grid includes both copies, giving the cylinder its data
-#    in both positions.  dedup would collapse them and produce a wrong cyl count.
+#  ME PARSER  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 def _parse_me(grid: List[List[str]]) -> List[Dict]:
     if not grid: return []
@@ -299,15 +770,7 @@ def _parse_me(grid: List[List[str]]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  AUX PARSER  —  dedup grid
-#
-#  desc_row has cylinder labels 1–6 repeating for each engine:
-#    col 2='1',3='2',4='3',5='4',6='5',7='6'  ← AUX-1 labels
-#    col 8='1',9='2', …                         ← AUX-2 labels
-#    col14='1',15='2', …                        ← AUX-3 labels
-#
-#  The '1' label at col s aligns with the MARKER column in data rows.
-#  Actual Cyl 1 data is one column further right → data_start = s + 1.
+#  AUX PARSER  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 def _find_aux_groups(grid: List[List[str]]) -> Tuple[int, List[Tuple]]:
     dr=None
@@ -322,7 +785,7 @@ def _find_aux_groups(grid: List[List[str]]) -> Tuple[int, List[Tuple]]:
         starts=[c for c,n in nums if n==1]
         groups=[]
         for i,s in enumerate(starts[:3]):
-            ds=s+1                                              # skip marker/label col
+            ds=s+1
             de=(starts[i+1]+1) if i+1<len(starts) else len(grid[dr])
             groups.append((['AUX-1','AUX-2','AUX-3'][i],ds,de))
         if groups: return dr,groups
@@ -351,12 +814,7 @@ def _parse_aux(grid: List[List[str]]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  OE PARSER  (Table 1: Turbocharger / Coolers / A/C)  —  dedup grid
-#
-#  X-ray validated column map (consistent across all TEC-004 vessels):
-#    Turbocharger:  col 0=desc, col 1=period, col 2=date, col 3=run_hrs
-#    Coolers:       col 5=desc, col 6=date,   col 7=run_hrs      (no period)
-#    A/C:           col10=desc, col11=date,   col12=run_hrs      (no period)
+#  OE PARSER  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 _OE_HEADER = {
     'TURBOCHARGER','AUXILIARY BOILER','COOLERS','EXH GAS BOILER','EXH GAS  BOILER',
@@ -374,10 +832,9 @@ def _is_oe_comp(n: str) -> bool:
 def _parse_oe(grid: List[List[str]]) -> List[Dict]:
     rows=[]
     for row in grid:
-        r=row  # capture row for default-arg lambdas below
+        r=row
         def gc(i,_r=r): return _fl(_r[i]) if i<len(_r) else ''
 
-        # Section A — TURBOCHARGER
         da=_clean_name(gc(0))
         if _is_oe_comp(da):
             per=_parse_number(gc(1)); dt=_parse_date(gc(2)); hrs=_parse_number(gc(3))
@@ -385,7 +842,6 @@ def _parse_oe(grid: List[List[str]]) -> List[Dict]:
                 rows.append({'section':'Turbocharger / Aux Boiler','description':da,
                              'periodicity':per,'last_date':dt,'run_hrs':hrs})
 
-        # Section B — COOLERS (no period column)
         db=_clean_name(gc(5))
         if _is_oe_comp(db):
             dt=_parse_date(gc(6)); hrs=_parse_number(gc(7))
@@ -393,7 +849,6 @@ def _parse_oe(grid: List[List[str]]) -> List[Dict]:
                 rows.append({'section':'Coolers / Exh Gas Boiler','description':db,
                              'periodicity':0,'last_date':dt,'run_hrs':hrs})
 
-        # Section C — A/C & COMPRESSORS (no period column)
         dc=_clean_name(gc(10))
         if _is_oe_comp(dc):
             dt=_parse_date(gc(11)); hrs=_parse_number(gc(12))
@@ -404,14 +859,7 @@ def _parse_oe(grid: List[List[str]]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  DG PARSER  (Table 3: D/G Equipment)  —  dedup grid
-#
-#  X-ray validated column map:
-#    LEFT  section: col 0=desc, col 1=period, col 2=marker, col 3/4/5=DG1/DG2/DG3
-#    RIGHT section: col 9=desc, col10=period, col11=marker, col12/13/14=DG1/DG2/DG3
-#
-#  gc1/gc2 use default-argument capture to avoid Python closure bug
-#  (inner functions in loops capture by reference, not by value).
+#  DG PARSER  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 _DG_SKIP = {'DESCRIPTION','PERIODICTLY','PERIODICITY','D/G NO1','D/G NO2','D/G NO3',''}
 
@@ -420,11 +868,9 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
     while r<len(grid)-1:
         r1=grid[r]; r2=grid[r+1] if r+1<len(grid) else []
 
-        # Default-arg capture prevents the closure-over-loop-variable bug
         def gc1(i,_row=r1): return _fl(_row[i]) if i<len(_row) else ''
         def gc2(i,_row=r2): return _fl(_row[i]) if i<len(_row) else ''
 
-        # LEFT section
         dl=_clean_name(gc1(0))
         if _is_oe_comp(dl) and dl.upper() not in _DG_SKIP and gc1(2)=='1':
             per=_parse_number(gc1(1))
@@ -435,7 +881,6 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
                                  'periodicity':per,'last_date':dt,'run_hrs':hrs,
                                  'status':_status(hrs,per)})
 
-        # RIGHT section
         dr=_clean_name(gc1(9))
         if _is_oe_comp(dr) and dr.upper() not in _DG_SKIP and gc1(11)=='1':
             per=_parse_number(gc1(10))
@@ -450,7 +895,7 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  TEXT FALLBACK  (resilience for unusual documents)
+#  TEXT FALLBACK  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 def _lines_from_doc(doc) -> List[str]:
     lines=[]
@@ -536,7 +981,7 @@ def _parse_aux_text(lines: List[str]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  DEDUP + MASTER PARSE
+#  DEDUPE + MASTER PARSE  — BACKEND UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════
 def _dedupe(records: List[Dict]) -> List[Dict]:
     best={}
@@ -560,7 +1005,6 @@ def parse_docx(docx_bytes: bytes) -> Dict:
 
     if not doc.tables: raise ValueError("No tables found — is this a TEC-004 report?")
 
-    # Vessel name + report date
     vn='UNKNOWN'; rd=None
     for para in doc.paragraphs:
         txt=para.text.strip()
@@ -590,14 +1034,10 @@ def parse_docx(docx_bytes: bytes) -> Dict:
                     if m:=re.search(r'This Month[\s:]+([\d,]+)',line,re.I):
                         mo=int(_parse_number(m.group(1)))
 
-        # ME: raw grid (handles merged cyl cells)
         me_g.extend(_parse_me(rg))
-        # AUX: dedup grid (avoids ghost cyls)
         aux_g.extend(_parse_aux(dg))
-        # OE: exact column-indexed, dedup grid
         if 'TURBOCHARGER' in full and 'A/C & REFR' in full and 'COOLERS' in full:
             oe_rows.extend(_parse_oe(dg))
-        # DG: paired-row parser, dedup grid; case-insensitive detection
         if 'D/G NO' in full.replace(' ','').replace('.',''):
             dg_rows.extend(_parse_dg(dg))
 
@@ -618,8 +1058,15 @@ def parse_docx(docx_bytes: bytes) -> Dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  HTML MATRIX  —  pure st.markdown(), zero Styler/column_config bugs
+#  FRONTEND HELPERS  — REVISED
 # ══════════════════════════════════════════════════════════════════════════
+def _html_escape(v: Any) -> str:
+    s = str(v if v is not None else "")
+    return (s.replace("&", "&amp;")
+             .replace("<", "&lt;")
+             .replace(">", "&gt;")
+             .replace('"', "&quot;"))
+
 def _cyl_n(u: str) -> int:
     m=re.search(r'\d+',str(u)); return int(m.group()) if m else 999
 
@@ -628,145 +1075,42 @@ def _sort_recs(records: List[Dict], mode: str) -> List[Dict]:
         return sorted(records,key=lambda c:(c['description'].upper(),c.get('engine_label',''),_cyl_n(c.get('unit',''))))
     return sorted(records,key=lambda c:(_ORD.get(c['status'],4),-(c.get('pct_used') or 0)))
 
-def _matrix_html(records: List[Dict], mode: str='matrix') -> str:
-    if not records: return ''
-    HEADS=['Status','Component','Engine','Unit','Periodicity','Last O/H','Hrs Since','% Used']
-    TH=("padding:9px 14px;font-family:'Inter',sans-serif;font-size:.56rem;font-weight:600;"
-        "text-transform:uppercase;letter-spacing:.14em;color:#102030;text-align:left;"
-        "white-space:nowrap;border-bottom:1px solid #142030")
-    header='<tr style="background:#020508">'+\
-        ''.join(f'<th style="{TH}">{h}</th>' for h in HEADS)+'</tr>'
-    body=''
-    for rec in _sort_recs(records,mode):
-        s=str(rec.get('status','NO DATA')); c=_SC.get(s,_SC['NO DATA'])
-        pct=float(rec.get('pct_used') or 0); hrs=float(rec.get('hrs_since') or 0)
-        per=float(rec.get('periodicity') or 0)
-        pct_s=f"{pct*100:.1f}%" if pct>0 else '—'
-        hrs_s=f"{int(hrs):,}" if hrs>0 else '—'
-        per_s=f"{int(per):,}" if per>0 else '—'
-        dt_s=str(rec.get('last_oh_date') or '—') or '—'
-        bw=min(100,pct*100)
-        tag=(f'<span style="display:inline-block;padding:3px 9px;border-radius:4px;'
-             f'background:{c["tag_bg"]};color:{c["tag_fg"]};font-family:JetBrains Mono,monospace;'
-             f'font-size:.62rem;font-weight:700;letter-spacing:.03em;white-space:nowrap">{s}</span>')
-        bar=(f'<div style="display:flex;align-items:center;gap:7px;min-width:124px">'
-             f'<div style="flex:1;height:3px;background:{c["bar_e"]};border-radius:2px;overflow:hidden">'
-             f'<div style="width:{bw:.1f}%;height:100%;background:{c["bar_f"]};border-radius:2px"></div>'
-             f'</div><span style="font-family:JetBrains Mono,monospace;font-size:.69rem;font-weight:700;'
-             f'color:{c["bar_f"]};min-width:42px;text-align:right">{pct_s}</span></div>')
-        def td(v,fg,fw='400',align='left',ff="'Inter',sans-serif",fs='.78rem',mw=''):
-            mw_s=f'max-width:{mw};overflow:hidden;text-overflow:ellipsis;' if mw else ''
-            return (f'<td style="padding:9px 14px;color:{fg};font-family:{ff};font-size:{fs};'
-                    f'font-weight:{fw};text-align:{align};white-space:nowrap;{mw_s}">{v}</td>')
-        body+=(
-            f'<tr style="background:{c["row"]};border-bottom:1px solid {c["bord"]};'
-            f'transition:filter .1s" '
-            f'onmouseover="this.style.filter=\'brightness(1.35)\'" '
-            f'onmouseout="this.style.filter=\'brightness(1)\'">'
-            f'<td style="padding:9px 14px">{tag}</td>'
-            +td(rec.get('description',''),c['comp'],'600','left',"'Space Grotesk',sans-serif",'.79rem','295px')
-            +td(rec.get('engine_label',''),c['dim'])
-            +td(rec.get('unit',''),c['dim'],'400','left','JetBrains Mono,monospace','.74rem')
-            +td(per_s,c['dim'],'400','right','JetBrains Mono,monospace','.74rem')
-            +td(dt_s,c['dim'],'400','left','JetBrains Mono,monospace','.74rem')
-            +td(hrs_s,c['num'],'600','right','JetBrains Mono,monospace','.76rem')
-            +f'<td style="padding:9px 14px">{bar}</td></tr>'
-        )
-    return (f'<div style="overflow-x:auto;border-radius:12px;border:1px solid #182a40;'
-            f'overflow:hidden;box-shadow:0 8px 38px rgba(0,0,0,.62)">'
-            f'<table style="width:100%;border-collapse:collapse">'
-            f'<thead>{header}</thead><tbody>{body}</tbody></table></div>')
+def _empty_html(msg: str, accent: str = "#6f88a7") -> str:
+    return (
+        f'<div class="empty-block" style="border-color:rgba(255,255,255,.08);">'
+        f'<div style="font-size:1.05rem;margin-bottom:.35rem;color:{accent}">●</div>'
+        f'{_html_escape(msg)}'
+        f'</div>'
+    )
 
-def _oe_html(rows: List[Dict], show_status: bool=False) -> str:
-    if not rows: return ''
-    HEADS=(['Component','Engine','Period','Last Date','Run Hrs','Status']
-           if show_status else ['Component','Section','Period','Last Date','Run Hrs'])
-    TH=("padding:9px 14px;font-family:'Inter',sans-serif;font-size:.56rem;font-weight:600;"
-        "text-transform:uppercase;letter-spacing:.14em;color:#102030;text-align:left;border-bottom:1px solid #142030")
-    header='<tr style="background:#020508">'+\
-        ''.join(f'<th style="{TH}">{h}</th>' for h in HEADS)+'</tr>'
-    body=''
-    for row in sorted(rows,key=lambda r:(r.get('description',''),r.get('engine_label',''))):
-        bg='#020510'; fm='#183858'; fd='#0c1828'
-        if show_status:
-            s=str(row.get('status','NO DATA')); cc=_SC.get(s,_SC['NO DATA'])
-            bg=cc['row']; fm=cc['comp']; fd=cc['dim']
-        per=float(row.get('periodicity',0) or 0)
-        per_s=f"{int(per):,}" if per>0 else '—'
-        dt_s=str(row.get('last_date') or '—') or '—'
-        hrs=float(row.get('run_hrs',0) or 0)
-        hrs_s=f"{int(hrs):,}" if hrs>0 else '—'
-        st_cell=''
-        if show_status:
-            s=str(row.get('status','NO DATA')); cc=_SC.get(s,_SC['NO DATA'])
-            st_cell=(f'<td style="padding:9px 14px"><span style="display:inline-block;padding:3px 8px;'
-                     f'border-radius:4px;background:{cc["tag_bg"]};color:{cc["tag_fg"]};'
-                     f'font-family:JetBrains Mono,monospace;font-size:.61rem;font-weight:700">{s}</span></td>')
-        def td(v,fg,ff="'Inter',sans-serif",fw='400',align='left'):
-            return (f'<td style="padding:9px 14px;color:{fg};font-family:{ff};font-size:.77rem;'
-                    f'font-weight:{fw};text-align:{align};white-space:nowrap">{v}</td>')
-        body+=(f'<tr style="background:{bg};border-bottom:1px solid #0e1c2c;transition:filter .1s" '
-               f'onmouseover="this.style.filter=\'brightness(1.35)\'" '
-               f'onmouseout="this.style.filter=\'brightness(1)\'">'
-               +td(row.get('description',''),fm,"'Space Grotesk',sans-serif",'600')
-               +(td(row.get('engine_label',''),fd,'JetBrains Mono,monospace') if show_status
-                 else td(row.get('section',''),fd))
-               +f'<td style="padding:9px 14px;color:{fd};font-family:JetBrains Mono,monospace;font-size:.77rem;text-align:right">{per_s}</td>'
-               +td(dt_s,fd,'JetBrains Mono,monospace')
-               +f'<td style="padding:9px 14px;color:#1840b8;font-family:JetBrains Mono,monospace;font-size:.77rem;font-weight:600;text-align:right">{hrs_s}</td>'
-               +st_cell+'</tr>')
-    return (f'<div style="overflow-x:auto;border-radius:12px;border:1px solid #182a40;'
-            f'overflow:hidden;box-shadow:0 4px 22px rgba(0,0,0,.52)">'
-            f'<table style="width:100%;border-collapse:collapse">'
-            f'<thead>{header}</thead><tbody>{body}</tbody></table></div>')
-
-def _show(records: List[Dict], mode: str='matrix'):
-    if not records:
-        st.markdown('<div style="background:rgba(1,36,14,.05);border:1px solid rgba(1,36,14,.12);'
-                    'border-radius:10px;padding:1.2rem;text-align:center;color:#059028;'
-                    'font-family:Space Grotesk,sans-serif;font-size:.81rem;font-weight:500">'
-                    'No records match the current filter.</div>',unsafe_allow_html=True)
-    else:
-        st.markdown(_matrix_html(records,mode),unsafe_allow_html=True)
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  UI COMPONENTS
-# ══════════════════════════════════════════════════════════════════════════
-def _kpi(val: Any, lbl: str, accent: str, delay: float=0.0) -> str:
+def _kpi(val: Any, lbl: str, accent: str, icon: str='•', sub: str='') -> str:
     r,g,b=int(accent[1:3],16),int(accent[3:5],16),int(accent[5:7],16)
-    return (f'<div style="background:linear-gradient(160deg,var(--bg4),var(--bg3));'
-            f'border:1px solid rgba({r},{g},{b},.22);border-top:2px solid {accent};'
-            f'border-radius:10px;padding:.82rem 1rem .92rem;position:relative;overflow:hidden;'
-            f'cursor:default;animation:U .34s {delay}s ease both;animation-fill-mode:both;'
-            f'transition:transform .17s,box-shadow .18s" '
-            f'onmouseover="this.style.transform=\'translateY(-4px)\';this.style.boxShadow=\'0 12px 36px rgba(0,0,0,.65)\'" '
-            f'onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
-            f'<div style="position:absolute;inset:0;border-radius:10px;pointer-events:none;'
-            f'background:linear-gradient(160deg,rgba({r},{g},{b},.048),transparent 55%)"></div>'
-            f'<div style="font-family:var(--ff);font-size:1.52rem;font-weight:700;line-height:1.1;'
-            f'letter-spacing:-.04em;color:{accent};position:relative;'
-            f'animation:N .34s {delay+.07}s ease both;animation-fill-mode:both">{val}</div>'
-            f'<div style="font-family:var(--fi);font-size:.54rem;font-weight:500;text-transform:uppercase;'
-            f'letter-spacing:.18em;color:var(--tx3);margin-top:5px;position:relative">{lbl}</div>'
-            f'</div>')
+    val = _html_escape(val)
+    lbl = _html_escape(lbl)
+    sub = _html_escape(sub)
+    return (
+        f'<div class="kpi-card" style="--accent:{accent};--accent-fade:rgba({r},{g},{b},.12)">'
+        f'  <div class="kpi-top">'
+        f'    <div class="kpi-label">{lbl}</div>'
+        f'    <div class="kpi-icon">{icon}</div>'
+        f'  </div>'
+        f'  <div class="kpi-value">{val}</div>'
+        f'  <div class="kpi-sub">{sub}</div>'
+        f'</div>'
+    )
 
 def _section(icon: str, title: str, sub: str, badge: str, accent: str) -> str:
     r,g,b=int(accent[1:3],16),int(accent[3:5],16),int(accent[5:7],16)
-    return (f'<div style="display:flex;align-items:center;gap:.85rem;margin:2.4rem 0 1rem">'
-            f'<div style="width:34px;height:34px;border-radius:8px;'
-            f'background:rgba({r},{g},{b},.1);border:1px solid rgba({r},{g},{b},.2);'
-            f'display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0">'
-            f'{icon}</div>'
-            f'<div style="flex:1">'
-            f'<div style="font-family:var(--ff);font-size:.96rem;font-weight:600;color:var(--tx0);'
-            f'letter-spacing:-.01em;line-height:1">{title}</div>'
-            f'<div style="font-family:var(--fm);font-size:.54rem;color:var(--tx3);'
-            f'margin-top:3px;letter-spacing:.05em">{sub}</div></div>'
-            f'<div style="flex:1;height:1px;background:linear-gradient(90deg,var(--rim2),transparent)"></div>'
-            f'<div style="font-family:var(--fm);font-size:.55rem;font-weight:500;padding:3px 9px;'
-            f'border-radius:20px;background:var(--bg4);border:1px solid var(--rim2);'
-            f'color:var(--tx2);flex-shrink:0;white-space:nowrap">{badge}</div></div>')
+    return (
+        f'<div class="section-head" style="--accent-box:rgba({r},{g},{b},.10);--accent-line:rgba({r},{g},{b},.28)">'
+        f'  <div class="section-icon">{icon}</div>'
+        f'  <div>'
+        f'    <div class="section-title">{_html_escape(title)}</div>'
+        f'    <div class="section-sub">{_html_escape(sub)}</div>'
+        f'  </div>'
+        f'  <div class="section-badge">{_html_escape(badge)}</div>'
+        f'</div>'
+    )
 
 def _rec_line(recs: List[Dict]) -> str:
     n=len(recs)
@@ -774,13 +1118,196 @@ def _rec_line(recs: List[Dict]) -> str:
     hp=sum(1 for c in recs if c.get('status')=='HIGH PRIORITY')
     ok=sum(1 for c in recs if c.get('status')=='OK')
     nd=sum(1 for c in recs if c.get('status')=='NO DATA')
-    parts=[f'<b style="color:var(--tx1)">{n}</b> records']
-    if od: parts.append(f'<span style="color:#c81818;font-weight:700">{od} overdue</span>')
-    if hp: parts.append(f'<span style="color:#a84e0e;font-weight:700">{hp} high priority</span>')
-    if ok: parts.append(f'<span style="color:#066830;font-weight:700">{ok} OK</span>')
-    if nd: parts.append(f'<span style="color:#0c2ca0;font-weight:600">{nd} no data</span>')
-    return (f'<div style="font-family:var(--fm);font-size:.58rem;color:var(--tx3);'
-            f'margin-bottom:.52rem;line-height:1.8">{" · ".join(parts)}</div>')
+    parts=[f'<b>{n}</b> records']
+    if od: parts.append(f'<span class="status-od">{od} overdue</span>')
+    if hp: parts.append(f'<span class="status-hp">{hp} high priority</span>')
+    if ok: parts.append(f'<span class="status-ok">{ok} OK</span>')
+    if nd: parts.append(f'<span class="status-nd">{nd} no data</span>')
+    return f'<div class="microline">{" · ".join(parts)}</div>'
+
+def _matrix_html(records: List[Dict], mode: str='matrix') -> str:
+    if not records: return ''
+    HEADS=['Status','Component','Engine','Unit','Periodicity','Last O/H','Hrs Since','Usage']
+    th = (
+        "padding:12px 14px;background:#0c1526;color:#647d9a;"
+        "font-family:Inter,sans-serif;font-size:.60rem;font-weight:700;"
+        "text-transform:uppercase;letter-spacing:.16em;text-align:left;"
+        "border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap"
+    )
+    header='<tr>' + ''.join(f'<th style="{th}">{h}</th>' for h in HEADS) + '</tr>'
+
+    body=''
+    for rec in _sort_recs(records,mode):
+        s=str(rec.get('status','NO DATA'))
+        c=_SC.get(s,_SC['NO DATA'])
+        pct=float(rec.get('pct_used') or 0)
+        hrs=float(rec.get('hrs_since') or 0)
+        per=float(rec.get('periodicity') or 0)
+        pct_s=f"{pct*100:.1f}%" if pct>0 else '—'
+        hrs_s=f"{int(hrs):,}" if hrs>0 else '—'
+        per_s=f"{int(per):,}" if per>0 else '—'
+        dt_s=_html_escape(str(rec.get('last_oh_date') or '—') or '—')
+        bw=max(0,min(100,pct*100))
+        desc=_html_escape(rec.get('description',''))
+        eng=_html_escape(rec.get('engine_label',''))
+        unit=_html_escape(rec.get('unit',''))
+
+        tag=(f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+             f'padding:4px 10px;border-radius:999px;background:{c["tag_bg"]};color:{c["tag_fg"]};'
+             f'font-family:JetBrains Mono,monospace;font-size:.62rem;font-weight:700;'
+             f'letter-spacing:.04em;white-space:nowrap">{_html_escape(s)}</span>')
+
+        bar=(
+            f'<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;min-width:140px">'
+            f'  <div style="height:6px;background:{c["bar_e"]};border-radius:999px;overflow:hidden">'
+            f'    <div style="width:{bw:.1f}%;height:100%;background:{c["bar_f"]};border-radius:999px"></div>'
+            f'  </div>'
+            f'  <span style="font-family:JetBrains Mono,monospace;font-size:.69rem;font-weight:700;'
+            f'         color:{c["bar_f"]};min-width:46px;text-align:right">{pct_s}</span>'
+            f'</div>'
+        )
+
+        def td(v, fg, fw='400', align='left', ff="'Inter',sans-serif", fs='.80rem', mw=''):
+            mw_s=f'max-width:{mw};overflow:hidden;text-overflow:ellipsis;' if mw else ''
+            return (f'<td style="padding:11px 14px;color:{fg};font-family:{ff};font-size:{fs};'
+                    f'font-weight:{fw};text-align:{align};white-space:nowrap;{mw_s}">{v}</td>')
+
+        body += (
+            f'<tr style="background:{c["row"]};border-bottom:1px solid {c["bord"]};">'
+            f'<td style="padding:11px 14px">{tag}</td>'
+            + td(desc,c['comp'],'600','left',"'Space Grotesk',sans-serif",'.83rem','340px')
+            + td(eng,c['dim'],'500')
+            + td(unit,c['dim'],'500','left',"'JetBrains Mono',monospace",'.74rem')
+            + td(per_s,c['dim'],'500','right',"'JetBrains Mono',monospace",'.74rem')
+            + td(dt_s,c['dim'],'500','left',"'JetBrains Mono',monospace",'.74rem')
+            + td(hrs_s,c['num'],'700','right',"'JetBrains Mono',monospace",'.76rem')
+            + f'<td style="padding:11px 14px">{bar}</td>'
+            f'</tr>'
+        )
+
+    return (
+        f'<div class="table-shell">'
+        f'  <table class="matrix-table">'
+        f'    <thead>{header}</thead>'
+        f'    <tbody>{body}</tbody>'
+        f'  </table>'
+        f'</div>'
+    )
+
+def _oe_html(rows: List[Dict], show_status: bool=False) -> str:
+    if not rows: return ''
+    HEADS=(['Component','Engine','Period','Last Date','Run Hrs','Status']
+           if show_status else ['Component','Section','Period','Last Date','Run Hrs'])
+    th = (
+        "padding:12px 14px;background:#0c1526;color:#647d9a;"
+        "font-family:Inter,sans-serif;font-size:.60rem;font-weight:700;"
+        "text-transform:uppercase;letter-spacing:.16em;text-align:left;"
+        "border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap"
+    )
+    header='<tr>' + ''.join(f'<th style="{th}">{h}</th>' for h in HEADS) + '</tr>'
+    body=''
+
+    for row in sorted(rows,key=lambda r:(r.get('description',''),r.get('engine_label',''))):
+        bg='#0a1321'; fm='#b7caf0'; fd='#7f96b4'
+        if show_status:
+            s=str(row.get('status','NO DATA'))
+            cc=_SC.get(s,_SC['NO DATA'])
+            bg=cc['row']; fm=cc['comp']; fd=cc['dim']
+
+        per=float(row.get('periodicity',0) or 0)
+        per_s=f"{int(per):,}" if per>0 else '—'
+        dt_s=_html_escape(str(row.get('last_date') or '—') or '—')
+        hrs=float(row.get('run_hrs',0) or 0)
+        hrs_s=f"{int(hrs):,}" if hrs>0 else '—'
+        desc=_html_escape(row.get('description',''))
+
+        st_cell=''
+        if show_status:
+            s=str(row.get('status','NO DATA')); cc=_SC.get(s,_SC['NO DATA'])
+            st_cell=(f'<td style="padding:11px 14px">'
+                     f'<span style="display:inline-flex;padding:4px 10px;border-radius:999px;'
+                     f'background:{cc["tag_bg"]};color:{cc["tag_fg"]};font-family:JetBrains Mono,monospace;'
+                     f'font-size:.62rem;font-weight:700;letter-spacing:.04em">{_html_escape(s)}</span></td>')
+
+        def td(v,fg,ff="'Inter',sans-serif",fw='500',align='left',fs='.80rem'):
+            return (f'<td style="padding:11px 14px;color:{fg};font-family:{ff};font-size:{fs};'
+                    f'font-weight:{fw};text-align:{align};white-space:nowrap">{v}</td>')
+
+        body += (
+            f'<tr style="background:{bg};border-bottom:1px solid rgba(255,255,255,.05)">'
+            + td(desc,fm,"'Space Grotesk',sans-serif",'600','left','.82rem')
+            + (td(_html_escape(row.get('engine_label','')),fd,"'JetBrains Mono',monospace",'500','left','.75rem') if show_status
+               else td(_html_escape(row.get('section','')),fd,"'Inter',sans-serif",'500','left','.79rem'))
+            + td(per_s,fd,"'JetBrains Mono',monospace",'500','right','.75rem')
+            + td(dt_s,fd,"'JetBrains Mono',monospace",'500','left','.75rem')
+            + td(hrs_s,'#8db3ff',"'JetBrains Mono',monospace",'700','right','.76rem')
+            + st_cell
+            + '</tr>'
+        )
+
+    return (
+        f'<div class="table-shell">'
+        f'  <table class="matrix-table" style="min-width:860px">'
+        f'    <thead>{header}</thead>'
+        f'    <tbody>{body}</tbody>'
+        f'  </table>'
+        f'</div>'
+    )
+
+def _show(records: List[Dict], mode: str='matrix'):
+    if not records:
+        st.markdown(_empty_html("No records match the current filter."), unsafe_allow_html=True)
+    else:
+        st.markdown(_matrix_html(records,mode), unsafe_allow_html=True)
+
+def _hero_html() -> str:
+    return """
+    <div class="app-hero">
+      <div class="hero-grid">
+        <div>
+          <div class="hero-kicker">Running Hours Management System</div>
+          <div class="hero-title">Fleet Running Hours Extraction Matrix</div>
+          <div class="hero-text">
+            Upload a TEC-004 report to extract Main Engine, Auxiliary Engines,
+            Other Equipment, and D/G Equipment into structured running-hours matrices
+            with priority classification and cleaner operational review.
+          </div>
+          <div class="hero-meta">
+            <span class="pill">⚓ TEC-004 Parser</span>
+            <span class="pill">ME · AUX · OE · D/G</span>
+            <span class="pill">Priority Logic: 80% / 100%</span>
+          </div>
+        </div>
+        <div class="hero-panel">
+          <div>
+            <div class="hero-panel-title">System Profile</div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">Input</div>
+              <div class="hero-stat-val">Legacy .doc report</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">Conversion</div>
+              <div class="hero-stat-val">LibreOffice headless</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">Backend</div>
+              <div class="hero-stat-val">Section-specific parsers</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">UI</div>
+              <div class="hero-stat-val">Pure Streamlit + HTML matrices</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+
+def _section_open():
+    st.markdown('<div class="section-shell">', unsafe_allow_html=True)
+
+def _section_close():
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -791,79 +1318,92 @@ if 'data' not in st.session_state:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  PAGE  HEADER
+#  PAGE HEADER  — REVISED
 # ══════════════════════════════════════════════════════════════════════════
-st.markdown(
-    '<div style="padding:1.9rem 0 0;animation:D .42s cubic-bezier(.22,1,.36,1) both">'
-    '<div style="font-family:var(--fi);font-size:.52rem;font-weight:500;letter-spacing:.3em;'
-    'text-transform:uppercase;color:#c08818;margin-bottom:.26rem">Running Hours Management System</div>'
-    '<div style="font-family:var(--ff);font-size:1.95rem;font-weight:700;color:#b0ccee;'
-    'letter-spacing:-.04em;line-height:1.05">Fleet Overview</div>'
-    '</div>'
-    '<div style="height:1px;margin:.8rem 0 1.4rem;'
-    'background:linear-gradient(90deg,#c08818,#1c2e44 30%,transparent);'
-    'animation:G .6s .07s ease both;animation-fill-mode:both"></div>',
-    unsafe_allow_html=True)
+st.markdown(_hero_html(), unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  UPLOAD PANEL
+#  UPLOAD PANEL  — REVISED
 # ══════════════════════════════════════════════════════════════════════════
-with st.expander("Upload TEC-004 Report",expanded=(st.session_state.data is None)):
-    uc,ic=st.columns([2.2,1.0],gap='large')
+with st.expander("Upload TEC-004 Report", expanded=(st.session_state.data is None)):
+    uc, ic = st.columns([1.7, 1.0], gap='large')
+
     with uc:
         uploaded=st.file_uploader('Drop TEC-004 .doc',type=['doc'],label_visibility='collapsed')
+
     with ic:
-        st.markdown(
-            '<div style="font-family:var(--fi);font-size:.76rem;color:var(--tx2);line-height:1.9">'
-            '<b style="color:var(--tx1)">Format:</b> TEC-004 Running Hours Report (.doc)<br>'
-            '<b style="color:var(--tx1)">Parser:</b> Raw-grid ME · Dedup AUX · Column-exact OE/DG<br>'
-            '<b style="color:var(--tx1)">Output:</b> ME · AUX-1/2/3 · OE · D/G Equipment<br>'
-            '<b style="color:var(--tx1)">Thresholds:</b> ≥ 100% Overdue · ≥ 80% High Priority'
-            '</div>',unsafe_allow_html=True)
+        st.markdown("""
+        <div class="upload-note">
+          <h4>Upload Notes</h4>
+          <ul>
+            <li><span class="dot"></span><span><b>Format:</b> legacy TEC-004 running-hours report in <b>.doc</b> format.</span></li>
+            <li><span class="dot"></span><span><b>Parsing:</b> raw-grid Main Engine, dedup Auxiliary, exact-index OE and paired D/G logic.</span></li>
+            <li><span class="dot"></span><span><b>Output:</b> structured matrices for ME, AUX-1/2/3, Other Equipment, and D/G Equipment.</span></li>
+            <li><span class="dot"></span><span><b>Priority bands:</b> over 100% = Overdue, 80%+ = High Priority.</span></li>
+          </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
     if uploaded:
         raw=uploaded.read(); fh=hashlib.md5(raw).hexdigest()
         if st.session_state.data is None or st.session_state.data.get('_hash')!=fh:
             with st.spinner('Converting .doc → .docx via LibreOffice…'):
                 try: docx=convert_doc_to_docx(raw)
-                except Exception as e: st.error(f'Conversion failed: {e}'); st.stop()
+                except Exception as e:
+                    st.error(f'Conversion failed: {e}')
+                    st.stop()
+
             with st.spinner('Parsing TEC-004 tables…'):
                 try: result=parse_docx(docx)
-                except ValueError as e: st.error(f'Parse failed: {e}'); st.stop()
-            for w in result['warnings']: st.warning(f'⚠ {w}')
+                except ValueError as e:
+                    st.error(f'Parse failed: {e}')
+                    st.stop()
+
+            for w in result['warnings']:
+                st.warning(f'⚠ {w}')
+
             if not result['me'] and not result['aux']:
-                st.error('No components extracted. Verify this is a TEC-004 report.'); st.stop()
-            result['_hash']=fh; result['_filename']=uploaded.name
+                st.error('No components extracted. Verify this is a TEC-004 report.')
+                st.stop()
+
+            result['_hash']=fh
+            result['_filename']=uploaded.name
             st.session_state.data=result
+
             ac=result['me']+result['aux']
             od=sum(1 for c in ac if c['status']=='OVERDUE')
             hp=sum(1 for c in ac if c['status']=='HIGH PRIORITY')
+
             st.markdown(
-                f'<div style="background:linear-gradient(135deg,rgba(1,72,26,.14),rgba(1,72,26,.04));'
-                f'border:1px solid rgba(5,144,40,.26);border-radius:10px;padding:.82rem 1.25rem;'
-                f'color:#60e090;font-family:Space Grotesk,sans-serif;font-size:.84rem;font-weight:500;'
-                f'animation:POP .46s cubic-bezier(.34,1.56,.64,1) both;'
-                f'display:flex;align-items:center;gap:.6rem">'
-                f'<span>&#10003;</span>'
-                f'<span><strong>{result["vessel_name"]}</strong> — '
-                f'{len(ac)} components · {od} overdue · {hp} high priority</span></div>',
-                unsafe_allow_html=True)
+                f'<div class="success-banner">✓ <strong>{_html_escape(result["vessel_name"])}</strong> loaded successfully — '
+                f'{len(ac)} tracked records · {od} overdue · {hp} high priority</div>',
+                unsafe_allow_html=True
+            )
 
 
-# ── empty state ──────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+#  EMPTY STATE  — REVISED
+# ══════════════════════════════════════════════════════════════════════════
 if st.session_state.data is None:
-    st.markdown(
-        '<div style="display:flex;align-items:center;justify-content:center;'
-        'height:40vh;flex-direction:column;gap:1rem">'
-        '<svg width="52" height="52" viewBox="0 0 64 64" fill="none" '
-        'xmlns="http://www.w3.org/2000/svg" style="opacity:.08">'
-        '<path d="M32 8v48M32 8L20 20M32 8l12 12M8 32h48" '
-        'stroke="#587890" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'
-        '<circle cx="32" cy="48" r="8" stroke="#587890" stroke-width="2.5"/></svg>'
-        '<div style="font-family:Inter,sans-serif;font-size:.81rem;color:#102030;letter-spacing:.05em">'
-        'Upload a TEC-004 report to view the matrices</div></div>',
-        unsafe_allow_html=True); st.stop()
+    st.markdown("""
+    <div style="display:flex;align-items:center;justify-content:center;min-height:34vh;">
+      <div style="width:min(760px,100%);border-radius:24px;padding:2rem 1.4rem;text-align:center;
+                  border:1px solid rgba(255,255,255,.06);
+                  background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.008));
+                  box-shadow:var(--shadow-md);">
+        <div style="font-size:2rem;color:var(--gold2);margin-bottom:.65rem">⚓</div>
+        <div style="font-family:var(--ff);font-size:1.15rem;font-weight:600;color:var(--txt);">
+          No report loaded
+        </div>
+        <div style="margin-top:.6rem;color:var(--txt3);font-size:.92rem;line-height:1.7;max-width:58ch;margin-inline:auto;">
+          Upload a TEC-004 running-hours report to generate structured matrices for the
+          main engine, auxiliary engines, other equipment, and diesel generator equipment.
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -874,60 +1414,93 @@ me=d['me']; aux=d['aux']; oe=d['oe']; dg=d['dg']
 ac=me+aux
 n_od=sum(1 for c in ac if c['status']=='OVERDUE')
 n_hp=sum(1 for c in ac if c['status']=='HIGH PRIORITY')
+n_ok=sum(1 for c in ac if c['status']=='OK')
 mt=d.get('me_total_hrs'); mo=d.get('me_this_month')
 
 
-# ── KPI row ──────────────────────────────────────────────────────────────
-cols=st.columns(8)
-for col,(val,lbl,acc,dly) in zip(cols,[
-    (d['vessel_name'],         'Vessel',         '#2050d8',0.00),
-    (d['report_date'] or '—', 'Report Date',    '#c08818',0.04),
-    (f"{mt:,}" if mt else '—','M/E Total Hrs',  '#0a9040',0.08),
-    (f"{mo:,}" if mo else '—','M/E This Month', '#0a9040',0.12),
-    (len(me),                  'ME Records',     '#c08818',0.16),
-    (len(aux),                 'AUX Records',    '#c08818',0.20),
-    (n_od,                     'Overdue',        '#c81818',0.24),
-    (n_hp,                     'High Priority',  '#a84e0e',0.28),
-]):
-    with col: st.markdown(_kpi(val,lbl,acc,dly),unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════════════════════
+#  KPI GRID  — REVISED
+# ══════════════════════════════════════════════════════════════════════════
+k1,k2,k3,k4 = st.columns(4, gap='large')
+for col, payload in zip(
+    [k1,k2,k3,k4],
+    [
+        (d['vessel_name'], 'Vessel', '#3e73da', '⚓', _html_escape(d.get('_filename','report.doc'))),
+        (d['report_date'] or '—', 'Report Date', '#d8a93a', '🗓', 'Report metadata'),
+        (f"{mt:,}" if mt else '—', 'M/E Total Hours', '#11a85b', 'Σ', 'Main engine cumulative'),
+        (f"{mo:,}" if mo else '—', 'M/E This Month', '#11a85b', '△', 'Monthly increment'),
+    ]
+):
+    with col:
+        st.markdown(_kpi(*payload), unsafe_allow_html=True)
+
+k5,k6,k7,k8 = st.columns(4, gap='large')
+for col, payload in zip(
+    [k5,k6,k7,k8],
+    [
+        (len(me), 'ME Records', '#c08818', '⚙', 'Main engine matrix'),
+        (len(aux), 'AUX Records', '#3e73da', '🔩', 'Auxiliary engine matrix'),
+        (n_od, 'Overdue', '#d83939', '▲', 'Immediate attention'),
+        (n_hp, 'High Priority', '#dd8426', '◆', f'{n_ok} records currently OK'),
+    ]
+):
+    with col:
+        st.markdown(_kpi(*payload), unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  MATRIX 1 — MAIN ENGINE
+#  MATRIX 1 — MAIN ENGINE  — REVISED FRONTEND
 # ══════════════════════════════════════════════════════════════════════════
 me_od=sum(1 for c in me if c['status']=='OVERDUE')
 me_hp=sum(1 for c in me if c['status']=='HIGH PRIORITY')
-st.markdown(_section('⚙','Main Engine',f'{len(me)} component records',
-                     f'{me_od} OD · {me_hp} HP','#c08818'),unsafe_allow_html=True)
 
-f1,f2,f3=st.columns([2,2,3])
-with f1: mc_sel=st.selectbox('Component',['All']+sorted({c['description'] for c in me}),key='mc')
-with f2: ms_sel=st.selectbox('Status',['All','Overdue only','High Priority +','OK only'],key='ms')
-with f3: mr_sel=st.radio('Sort',['Component → Cylinder','Priority → % Used'],horizontal=True,key='mr')
+_section_open()
+st.markdown(_section('⚙','Main Engine',f'{len(me)} component records',f'{me_od} OD · {me_hp} HP','#c08818'),unsafe_allow_html=True)
+st.markdown('<div style="padding:1rem 1.05rem 1.15rem">', unsafe_allow_html=True)
+st.markdown('<div class="filters-caption">Filters and ordering</div>', unsafe_allow_html=True)
+
+f1,f2,f3=st.columns([2.2,2.1,3.2], gap='large')
+with f1:
+    mc_sel=st.selectbox('Component',['All']+sorted({c['description'] for c in me}),key='mc')
+with f2:
+    ms_sel=st.selectbox('Status',['All','Overdue only','High Priority +','OK only'],key='ms')
+with f3:
+    mr_sel=st.radio('Sort',['Component → Cylinder','Priority → % Used'],horizontal=True,key='mr')
 
 v=me[:]
 if mc_sel!='All':              v=[c for c in v if c['description']==mc_sel]
 if ms_sel=='Overdue only':     v=[c for c in v if c['status']=='OVERDUE']
 elif ms_sel=='High Priority +':v=[c for c in v if c['status'] in ('OVERDUE','HIGH PRIORITY')]
 elif ms_sel=='OK only':        v=[c for c in v if c['status']=='OK']
+
 st.markdown(_rec_line(v),unsafe_allow_html=True)
 _show(v,mode='matrix' if 'Component' in mr_sel else 'priority')
+st.markdown('</div>', unsafe_allow_html=True)
+_section_close()
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  MATRIX 2 — AUX ENGINES
+#  MATRIX 2 — AUX ENGINES  — REVISED FRONTEND
 # ══════════════════════════════════════════════════════════════════════════
 ax_od=sum(1 for c in aux if c['status']=='OVERDUE')
 ax_hp=sum(1 for c in aux if c['status']=='HIGH PRIORITY')
-st.markdown(_section('⚙','Auxiliary Engines',
-                     f'{len(aux)} component records  ·  AUX-1 · AUX-2 · AUX-3',
-                     f'{ax_od} OD · {ax_hp} HP','#2050d8'),unsafe_allow_html=True)
 
-g1,g2,g3,g4=st.columns([1.3,2,2,3])
-with g1: ae_sel=st.selectbox('Engine',['All']+sorted({c['engine_label'] for c in aux}),key='ae')
-with g2: ac_sel=st.selectbox('Component',['All']+sorted({c['description'] for c in aux}),key='ac')
-with g3: as_sel=st.selectbox('Status',['All','Overdue only','High Priority +','OK only'],key='axs')
-with g4: ar_sel=st.radio('Sort',['Component → Cylinder','Priority → % Used'],horizontal=True,key='ar')
+_section_open()
+st.markdown(_section('🔩','Auxiliary Engines',
+                     f'{len(aux)} component records · AUX-1 · AUX-2 · AUX-3',
+                     f'{ax_od} OD · {ax_hp} HP','#3e73da'),unsafe_allow_html=True)
+st.markdown('<div style="padding:1rem 1.05rem 1.15rem">', unsafe_allow_html=True)
+st.markdown('<div class="filters-caption">Filters and ordering</div>', unsafe_allow_html=True)
+
+g1,g2,g3,g4=st.columns([1.4,2.0,2.0,3.0],gap='large')
+with g1:
+    ae_sel=st.selectbox('Engine',['All']+sorted({c['engine_label'] for c in aux}),key='ae')
+with g2:
+    ac_sel=st.selectbox('Component',['All']+sorted({c['description'] for c in aux}),key='ac')
+with g3:
+    as_sel=st.selectbox('Status',['All','Overdue only','High Priority +','OK only'],key='axs')
+with g4:
+    ar_sel=st.radio('Sort',['Component → Cylinder','Priority → % Used'],horizontal=True,key='ar')
 
 v=aux[:]
 if ae_sel!='All':              v=[c for c in v if c['engine_label']==ae_sel]
@@ -935,46 +1508,62 @@ if ac_sel!='All':              v=[c for c in v if c['description']==ac_sel]
 if as_sel=='Overdue only':     v=[c for c in v if c['status']=='OVERDUE']
 elif as_sel=='High Priority +':v=[c for c in v if c['status'] in ('OVERDUE','HIGH PRIORITY')]
 elif as_sel=='OK only':        v=[c for c in v if c['status']=='OK']
+
 st.markdown(_rec_line(v),unsafe_allow_html=True)
 _show(v,mode='matrix' if 'Component' in ar_sel else 'priority')
+st.markdown('</div>', unsafe_allow_html=True)
+_section_close()
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  MATRIX 3 — OTHER EQUIPMENT
+#  MATRIX 3 — OTHER EQUIPMENT  — REVISED FRONTEND
 # ══════════════════════════════════════════════════════════════════════════
-st.markdown(_section('&#9737;','Other Equipment',
+_section_open()
+st.markdown(_section('🛠','Other Equipment',
                      'Turbocharger · Coolers · A/C & Compressors',
-                     f'{len(oe)} records','#066830'),unsafe_allow_html=True)
+                     f'{len(oe)} records','#11a85b'),unsafe_allow_html=True)
+st.markdown('<div style="padding:1rem 1.05rem 1.15rem">', unsafe_allow_html=True)
+
 if not oe:
-    st.markdown('<div style="background:rgba(1,36,14,.04);border:1px solid rgba(1,36,14,.1);'
-                'border-radius:10px;padding:1.2rem;text-align:center;color:#059028;'
-                'font-family:Space Grotesk,sans-serif;font-size:.81rem;font-weight:500">'
-                'No other equipment data found.</div>',unsafe_allow_html=True)
+    st.markdown(_empty_html("No other equipment data found.", "#56d68a"), unsafe_allow_html=True)
 else:
     secs=sorted({r['section'] for r in oe})
+    st.markdown('<div class="filters-caption">Section filter</div>', unsafe_allow_html=True)
     os_sel=st.selectbox('Section',['All']+secs,key='oe_s')
     ov=oe if os_sel=='All' else [r for r in oe if r['section']==os_sel]
-    st.markdown(f'<div style="font-family:var(--fm);font-size:.58rem;color:var(--tx3);'
-                f'margin-bottom:.52rem;line-height:1.8"><b style="color:var(--tx1)">'
-                f'{len(ov)}</b> records</div>',unsafe_allow_html=True)
+    st.markdown(f'<div class="microline"><b>{len(ov)}</b> records</div>',unsafe_allow_html=True)
     st.markdown(_oe_html(ov,show_status=False),unsafe_allow_html=True)
 
+st.markdown('</div>', unsafe_allow_html=True)
+_section_close()
+
 
 # ══════════════════════════════════════════════════════════════════════════
-#  MATRIX 4 — D/G EQUIPMENT
+#  MATRIX 4 — D/G EQUIPMENT  — REVISED FRONTEND
 # ══════════════════════════════════════════════════════════════════════════
-st.markdown(_section('&#9889;','D/G Equipment',
+_section_open()
+st.markdown(_section('⚡','D/G Equipment',
                      'Diesel Generator components · D/G 1 · D/G 2 · D/G 3',
-                     f'{len(dg)} records','#0c2ca0'),unsafe_allow_html=True)
+                     f'{len(dg)} records','#3e73da'),unsafe_allow_html=True)
+st.markdown('<div style="padding:1rem 1.05rem 1.15rem">', unsafe_allow_html=True)
+
 if not dg:
-    st.markdown('<div style="background:rgba(2,14,54,.04);border:1px solid rgba(2,14,54,.1);'
-                'border-radius:10px;padding:1.2rem;text-align:center;color:#2050d8;'
-                'font-family:Space Grotesk,sans-serif;font-size:.81rem;font-weight:500">'
-                'No D/G equipment data found.</div>',unsafe_allow_html=True)
+    st.markdown(_empty_html("No D/G equipment data found.", "#7ea2ef"), unsafe_allow_html=True)
 else:
+    st.markdown('<div class="filters-caption">Unit filter</div>', unsafe_allow_html=True)
     dg_sel=st.selectbox('D/G Unit',['All']+sorted({r.get('engine_label','') for r in dg}),key='dge')
     dv=dg if dg_sel=='All' else [r for r in dg if r.get('engine_label')==dg_sel]
-    st.markdown(f'<div style="font-family:var(--fm);font-size:.58rem;color:var(--tx3);'
-                f'margin-bottom:.52rem;line-height:1.8"><b style="color:var(--tx1)">'
-                f'{len(dv)}</b> records</div>',unsafe_allow_html=True)
+    st.markdown(f'<div class="microline"><b>{len(dv)}</b> records</div>',unsafe_allow_html=True)
     st.markdown(_oe_html(dv,show_status=True),unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+_section_close()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  FOOTER
+# ══════════════════════════════════════════════════════════════════════════
+st.markdown(
+    f'<div class="footer-note">Parsed at { _html_escape(d.get("parsed_at","")) }</div>',
+    unsafe_allow_html=True
+)
