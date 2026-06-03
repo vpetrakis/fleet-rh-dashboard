@@ -1,11 +1,10 @@
 import os
 import re
-import json
 import shutil
 import tempfile
 import subprocess
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -22,96 +21,136 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
-:root {
-  --bg: #071019;
-  --bg2: #0c1623;
-  --bg3: #102033;
-  --line: #1b2d44;
-  --gold: #c99818;
-  --t0: #ebf3ff;
-  --t1: #a9bdd4;
-  --ok: #1f9d55;
-  --warn: #c27a00;
-  --bad: #c0392b;
-  --info: #2d7ff9;
+
+:root{
+  --bg:#06111a;
+  --bg2:#0c1826;
+  --bg3:#102131;
+  --line:#1d3148;
+  --gold:#c99818;
+  --t0:#edf4ff;
+  --t1:#a8bfd7;
+  --ok:#2e8b57;
+  --warn:#c27a00;
+  --bad:#b94034;
+  --muted:#6f879f;
 }
-html, body, [class*="css"] {
-  background: var(--bg)!important;
-  color: var(--t1)!important;
-  font-family: 'Inter', sans-serif!important;
+
+html, body, [class*="css"]{
+  background:var(--bg)!important;
+  color:var(--t1)!important;
+  font-family:'Inter', sans-serif!important;
 }
-.main, .block-container { background: var(--bg)!important; }
-[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none!important; }
-.hero-k {
-  font-size:.66rem;
+
+.main, .block-container{background:var(--bg)!important;}
+[data-testid="stSidebar"], [data-testid="collapsedControl"]{display:none!important;}
+
+.hero-k{
+  font-size:.68rem;
   letter-spacing:.24em;
   text-transform:uppercase;
   color:var(--gold);
   font-weight:700;
 }
-.hero-h {
+
+.hero-h{
   font-family:'Space Grotesk', sans-serif;
-  font-size:1.8rem;
+  font-size:1.95rem;
   font-weight:700;
   color:var(--t0);
-  line-height:1.1;
+  line-height:1.05;
   margin-top:.2rem;
 }
-.hero-rule {
+
+.hero-rule{
   height:1px;
-  margin:1rem 0 1rem 0;
+  margin:1rem 0 1.2rem 0;
   background:linear-gradient(90deg,var(--gold),var(--line),transparent);
 }
-.metric-grid {
+
+.metric-grid{
   display:grid;
-  grid-template-columns:repeat(6,1fr);
+  grid-template-columns:repeat(5,1fr);
   gap:1rem;
-  margin:1.25rem 0 1rem;
+  margin:1rem 0 1.25rem 0;
 }
-.metric {
-  background:var(--bg2);
+
+.metric{
+  background:linear-gradient(180deg, var(--bg2), var(--bg3));
   border:1px solid var(--line);
-  border-radius:12px;
-  padding:1rem;
   border-top:2px solid var(--gold);
+  border-radius:12px;
+  padding:1rem 1rem .95rem 1rem;
 }
-.metric-v {
+
+.metric-v{
   font-family:'Space Grotesk', sans-serif;
-  font-size:1.25rem;
+  font-size:1.45rem;
   font-weight:700;
   color:var(--t0);
+  line-height:1.05;
 }
-.metric-l {
+
+.metric-l{
   font-size:.64rem;
   text-transform:uppercase;
-  letter-spacing:.14em;
-  color:#71879f;
-  margin-top:5px;
+  letter-spacing:.16em;
+  color:var(--muted);
+  margin-top:6px;
 }
-.panel {
+
+.stTabs [data-baseweb="tab-list"]{
+  background:transparent;
+  gap:.3rem;
+  border-bottom:1px solid var(--line);
+  padding:0 0 .5rem 0;
+}
+
+.stTabs [data-baseweb="tab"]{
   background:var(--bg2);
   border:1px solid var(--line);
-  border-radius:12px;
-  padding:1rem;
-  margin:.75rem 0;
-}
-.badge-ok,.badge-warn,.badge-bad,.badge-info {
-  display:inline-block;
-  padding:.25rem .55rem;
-  border-radius:999px;
-  font-size:.75rem;
+  border-radius:10px;
+  color:var(--t1);
+  padding:.55rem .95rem;
   font-weight:600;
-  margin-right:.4rem;
 }
-.badge-ok { background:rgba(31,157,85,.16); color:#87d7a8; }
-.badge-warn { background:rgba(194,122,0,.18); color:#f2c46d; }
-.badge-bad { background:rgba(192,57,43,.18); color:#f2a6a0; }
-.badge-info { background:rgba(45,127,249,.18); color:#9ec4ff; }
-.small { color:#93a8bf; font-size:.88rem; }
-[data-testid="stFileUploadDropzone"] {
-  background:rgba(201,152,24,.05)!important;
-  border:1.5px dashed rgba(201,152,24,.4)!important;
+
+.stTabs [aria-selected="true"]{
+  background:#132437!important;
+  border-color:#294562!important;
+  color:var(--t0)!important;
+}
+
+.stTabs [data-baseweb="tab-panel"]{
+  padding-top:1rem;
+}
+
+[data-testid="stFileUploadDropzone"]{
+  background:rgba(201,152,24,.04)!important;
+  border:1.25px dashed rgba(201,152,24,.32)!important;
   border-radius:12px!important;
+}
+
+.banner{
+  border-radius:12px;
+  padding:.95rem 1rem;
+  margin:.65rem 0 1rem 0;
+  border:1px solid var(--line);
+  background:var(--bg2);
+}
+
+.banner-ok{border-left:3px solid var(--ok);}
+.banner-warn{border-left:3px solid var(--warn);}
+.banner-bad{border-left:3px solid var(--bad);}
+
+.note{
+  color:var(--muted);
+  font-size:.88rem;
+}
+
+.kicker{
+  color:var(--t0);
+  font-weight:600;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -153,12 +192,10 @@ OE_COMPONENTS = {
 ALIASES = {
     "PERIODICTLY": "PERIODICITY",
     "PLUNGER AND BARREL (RENEWAL)": "PLUNGER AND BARREL(RENEWAL)",
-    "COOL WATER THERMOSTAT VALVE": "COOL WATER THERMOSTAT VALVE",
-    "JACKET FW NO.1": "JACKET FW NO.1",
-    "AIR. COND. COOLER CLEANING": "AIR. COND. COOLER CLEANING",
     "FUEL VALVES(1)": "FUEL VALVES (1)",
     "TURBOCHARGER(2)": "TURBOCHARGER (2)",
     "TURBOCHARGER(3)": "TURBOCHARGER (3)",
+    "COOL WATER THERMOSTAT VALVE": "COOL WATER THERMOSTAT VALVE",
 }
 
 @dataclass
@@ -212,13 +249,13 @@ def parse_date(txt: Any) -> Tuple[Optional[str], Optional[str]]:
 
 def get_status(hrs: Optional[int], period: Optional[int]) -> str:
     if not hrs or not period or period <= 0:
-        return "🔵 NO DATA"
+        return "NO DATA"
     ratio = hrs / period
     if ratio >= 1.0:
-        return "🔴 OVERDUE"
+        return "OVERDUE"
     if ratio >= 0.8:
-        return "🟠 HIGH PRIORITY"
-    return "🟢 OK"
+        return "HIGH PRIORITY"
+    return "OK"
 
 def add_warning(warnings: List[WarningItem], section: str, severity: str, message: str, source: str = ""):
     warnings.append(WarningItem(section=section, severity=severity, message=message, source=source))
@@ -282,7 +319,7 @@ def doc_to_grid(docx_bytes: bytes) -> Dict[str, Any]:
         tables = []
         for ti, table in enumerate(doc.tables):
             rows = []
-            for ri, row in enumerate(table.rows):
+            for row in table.rows:
                 row_vals = [fl(c.text) for c in row.cells]
                 if any(row_vals):
                     rows.append(row_vals)
@@ -361,14 +398,12 @@ def extract_me(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
         marker_2 = normalize_token(row2[2] if len(row2) > 2 else "")
 
         if comp in ME_COMPONENTS and marker_1 == "1" and marker_2 == "2":
-            period_cell = row1[1] if len(row1) > 1 else ""
-            period = parse_num(period_cell)
-
-            if period is None and "OBSERVATION" not in normalize_token(period_cell):
-                add_warning(warnings, "Main Engine", "warning", f"Missing periodicity for {comp}", " | ".join(row1))
-
+            period = parse_num(row1[1] if len(row1) > 1 else "")
             max_cols = min(len(row1), len(row2))
             cyl_count = min(max(0, max_cols - 3), 7)
+
+            if period is None and "OBSERVATION" not in normalize_token(row1[1] if len(row1) > 1 else ""):
+                add_warning(warnings, "Main Engine", "warning", f"Missing periodicity for {comp}", " | ".join(row1))
 
             for j in range(cyl_count):
                 raw_date = row1[3 + j] if 3 + j < len(row1) else ""
@@ -379,11 +414,11 @@ def extract_me(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
 
                 if bad_date:
                     add_warning(warnings, "Main Engine", "warning", f"Invalid date for {comp} cyl {j+1}: {bad_date}", raw_date)
-
                 if fl(raw_hrs) and hrs is None:
                     add_warning(warnings, "Main Engine", "warning", f"Non-numeric hours for {comp} cyl {j+1}", raw_hrs)
 
                 if iso or hrs is not None:
+                    ratio = (hrs / period) if (hrs is not None and period and period > 0) else 0.0
                     records.append({
                         "Status": get_status(hrs, period),
                         "Component": comp,
@@ -392,9 +427,8 @@ def extract_me(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
                         "Periodicity": period if period is not None else 0,
                         "Last O/H": iso or (raw_date if fl(raw_date) else "—"),
                         "Hrs Since": hrs if hrs is not None else 0,
-                        "Used Ratio": (hrs / period) if (hrs is not None and period and period > 0) else 0.0,
-                        "Used %": f"{round((hrs / period) * 100, 1)}%" if (hrs is not None and period and period > 0) else "0.0%",
-                        "Confidence": "HIGH" if iso or hrs is not None else "LOW",
+                        "Used Ratio": ratio,
+                        "Used %": round(ratio * 100, 1),
                     })
             i += 2
             continue
@@ -411,7 +445,6 @@ def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tup
     meta = {"aux_total_hours": None, "aux_this_month": None}
 
     blob = " ".join(" ".join(r) for r in table_rows)
-
     totals = re.findall(r"TOTAL HOURS:?\s*([\d,\.]+)", blob, re.I)
     months = re.findall(r"HOURS THIS MONTH\s*([\d,\.]+)", blob, re.I)
 
@@ -433,7 +466,7 @@ def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tup
             break
 
     if start is None:
-        add_warning(warnings, "Aux Engine", "error", "Aux description table header not found")
+        add_warning(warnings, "Aux Engine", "error", "Aux description block not found")
         return records, meta
 
     end_idx = stop if stop is not None else len(table_rows)
@@ -442,38 +475,36 @@ def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tup
     while i < end_idx - 1:
         row1 = table_rows[i]
         row2 = table_rows[i + 1]
-        comp = normalize_token(row1[0]) if row1 else ""
 
+        comp = normalize_token(row1[0]) if row1 else ""
         marker_1 = normalize_token(row1[2] if len(row1) > 2 else "")
         marker_2 = normalize_token(row2[2] if len(row2) > 2 else "")
 
         if comp in AUX_COMPONENTS and marker_1 == "1" and marker_2 == "2":
             period = parse_num(row1[1] if len(row1) > 1 else "")
-            date_cell = row1[3] if len(row1) > 3 else ""
-            hrs_cell = row2[3] if len(row2) > 3 else ""
+            raw_date = row1[3] if len(row1) > 3 else ""
+            raw_hrs = row2[3] if len(row2) > 3 else ""
 
-            iso, bad_date = parse_date(date_cell)
-            hrs = parse_num(hrs_cell)
+            iso, bad_date = parse_date(raw_date)
+            hrs = parse_num(raw_hrs)
 
             if bad_date:
-                add_warning(warnings, "Aux Engine", "warning", f"Invalid date for {comp}: {bad_date}", date_cell)
+                add_warning(warnings, "Aux Engine", "warning", f"Invalid date for {comp}: {bad_date}", raw_date)
+            if fl(raw_hrs) and hrs is None:
+                add_warning(warnings, "Aux Engine", "warning", f"Non-numeric hours for {comp}", raw_hrs)
 
-            if fl(hrs_cell) and hrs is None:
-                add_warning(warnings, "Aux Engine", "warning", f"Non-numeric hours for {comp}", hrs_cell)
-
+            ratio = (hrs / period) if (hrs is not None and period and period > 0) else 0.0
             records.append({
                 "Status": get_status(hrs, period),
                 "Component": comp,
                 "Engine": "AUX-1",
                 "Unit": "Engine",
                 "Periodicity": period if period is not None else 0,
-                "Last O/H": iso or (date_cell if fl(date_cell) else "—"),
+                "Last O/H": iso or (raw_date if fl(raw_date) else "—"),
                 "Hrs Since": hrs if hrs is not None else 0,
-                "Used Ratio": (hrs / period) if (hrs is not None and period and period > 0) else 0.0,
-                "Used %": f"{round((hrs / period) * 100, 1)}%" if (hrs is not None and period and period > 0) else "0.0%",
-                "Confidence": "HIGH" if iso or hrs is not None else "LOW",
+                "Used Ratio": ratio,
+                "Used %": round(ratio * 100, 1),
             })
-
             i += 2
             continue
 
@@ -495,7 +526,6 @@ def extract_dg(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
             break
 
     if start is None:
-        add_warning(warnings, "D/G Equipment", "warning", "D/G table header not found")
         return records
 
     i = start
@@ -511,22 +541,20 @@ def extract_dg(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
             period = parse_num(row1[1] if len(row1) > 1 else "")
 
             for gen_idx in range(3):
-                date_col = 3 + gen_idx
-                hrs_col = 3 + gen_idx
-
-                raw_date = row1[date_col] if date_col < len(row1) else ""
-                raw_hrs = row2[hrs_col] if hrs_col < len(row2) else ""
+                col_idx = 3 + gen_idx
+                raw_date = row1[col_idx] if col_idx < len(row1) else ""
+                raw_hrs = row2[col_idx] if col_idx < len(row2) else ""
 
                 iso, bad_date = parse_date(raw_date)
                 hrs = parse_num(raw_hrs)
 
                 if bad_date:
                     add_warning(warnings, "D/G Equipment", "warning", f"Invalid date for {comp} D/G {gen_idx+1}: {bad_date}", raw_date)
-
                 if fl(raw_hrs) and hrs is None:
                     add_warning(warnings, "D/G Equipment", "warning", f"Non-numeric hours for {comp} D/G {gen_idx+1}", raw_hrs)
 
                 if iso or hrs is not None:
+                    ratio = (hrs / period) if (hrs is not None and period and period > 0) else 0.0
                     records.append({
                         "Status": get_status(hrs, period),
                         "Component": comp,
@@ -535,17 +563,13 @@ def extract_dg(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
                         "Periodicity": period if period is not None else 0,
                         "Last O/H": iso or (raw_date if fl(raw_date) else "—"),
                         "Hrs Since": hrs if hrs is not None else 0,
-                        "Used Ratio": (hrs / period) if (hrs is not None and period and period > 0) else 0.0,
-                        "Used %": f"{round((hrs / period) * 100, 1)}%" if (hrs is not None and period and period > 0) else "0.0%",
-                        "Confidence": "MEDIUM" if bad_date or hrs is None else "HIGH",
+                        "Used Ratio": ratio,
+                        "Used %": round(ratio * 100, 1),
                     })
             i += 2
             continue
 
         i += 1
-
-    if not records:
-        add_warning(warnings, "D/G Equipment", "warning", "No D/G records extracted")
 
     return records
 
@@ -567,25 +591,18 @@ def extract_oe(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
 
                 if bad_date:
                     add_warning(warnings, "Other Equipment", "warning", f"Invalid date for {comp}: {bad_date}", raw_date)
-
                 if fl(raw_hrs) and hrs is None:
                     add_warning(warnings, "Other Equipment", "warning", f"Non-numeric hours for {comp}", raw_hrs)
 
                 if iso or hrs is not None or period is not None:
                     records.append({
-                        "Section": "Other Equipment",
                         "Description": comp,
                         "Periodicity": period if period is not None else 0,
                         "Last Date": iso or (raw_date if fl(raw_date) else "—"),
                         "Run Hrs": hrs if hrs is not None else 0,
-                        "Confidence": "MEDIUM" if bad_date or (fl(raw_hrs) and hrs is None) else "HIGH",
                     })
 
     dedup = [dict(t) for t in {tuple(d.items()) for d in records}]
-
-    if not dedup:
-        add_warning(warnings, "Other Equipment", "warning", "No other-equipment records extracted")
-
     return dedup
 
 def build_payload(docx_bytes: bytes) -> Dict[str, Any]:
@@ -597,12 +614,10 @@ def build_payload(docx_bytes: bytes) -> Dict[str, Any]:
     aux_rows: List[Dict[str, Any]] = []
     dg_rows: List[Dict[str, Any]] = []
     oe_rows: List[Dict[str, Any]] = []
-
     aux_meta = {"aux_total_hours": None, "aux_this_month": None}
 
     for table in model["tables"]:
         kind = classify_table(table["rows"])
-
         if kind == "ME":
             me_rows.extend(extract_me(table["rows"], warnings))
         elif kind == "AUX":
@@ -628,23 +643,17 @@ def build_payload(docx_bytes: bytes) -> Dict[str, Any]:
         "aux_rows": aux_rows,
         "dg_rows": dg_rows,
         "oe_rows": oe_rows,
-        "warnings": [asdict(w) for w in warnings],
+        "warnings": warnings,
         "quality_score": quality_score,
     }
 
-def badge_html(score: int) -> str:
-    if score >= 90:
-        return '<span class="badge-ok">Validated</span>'
-    if score >= 70:
-        return '<span class="badge-warn">Review advised</span>'
-    return '<span class="badge-bad">Manual review required</span>'
-
 def style_dataframe(df: pd.DataFrame):
     def highlight(row):
-        if "OVERDUE" in str(row.get("Status", "")):
-            return ["background-color: rgba(231, 76, 60, 0.2)"] * len(row)
-        if "HIGH PRIORITY" in str(row.get("Status", "")):
-            return ["background-color: rgba(243, 156, 18, 0.2)"] * len(row)
+        status = str(row.get("Status", ""))
+        if "OVERDUE" in status:
+            return ["background-color: rgba(185,64,52,.18); color:#edf4ff;"] * len(row)
+        if "HIGH PRIORITY" in status:
+            return ["background-color: rgba(194,122,0,.16); color:#edf4ff;"] * len(row)
         return [""] * len(row)
     return df.style.apply(highlight, axis=1)
 
@@ -652,18 +661,45 @@ UI_CONFIG = {
     "Periodicity": st.column_config.NumberColumn("Limit", format="%d"),
     "Hrs Since": st.column_config.NumberColumn("Current Hrs", format="%d"),
     "Used Ratio": st.column_config.ProgressColumn("Wear Level", format="%.1f%%", min_value=0, max_value=1),
+    "Used %": st.column_config.NumberColumn("Used %", format="%.1f"),
 }
+
+def render_quality_banner(payload: Dict[str, Any]):
+    warnings: List[WarningItem] = payload["warnings"]
+    score = payload["quality_score"]
+    critical = [w for w in warnings if w.severity == "error"]
+    material = [w for w in warnings if w.severity == "warning"]
+
+    if critical:
+        st.markdown(
+            f'<div class="banner banner-bad"><span class="kicker">Integrity status:</span> '
+            f'critical extraction issues detected. Quality score: {score}/100.</div>',
+            unsafe_allow_html=True,
+        )
+    elif material:
+        st.markdown(
+            f'<div class="banner banner-warn"><span class="kicker">Integrity status:</span> '
+            f'extraction completed with exceptions requiring professional judgment. '
+            f'Quality score: {score}/100.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div class="banner banner-ok"><span class="kicker">Integrity status:</span> '
+            f'no parsing anomalies detected in current extraction. Quality score: {score}/100.</div>',
+            unsafe_allow_html=True,
+        )
 
 st.markdown("""
 <div class="hero-k">Running Hours Management System</div>
-<div class="hero-h">TEC-004 Integrity Console</div>
+<div class="hero-h">TEC-004 Fleet Command Console</div>
 <div class="hero-rule"></div>
 """, unsafe_allow_html=True)
 
 uploaded = st.file_uploader("Upload TEC-004 Report (.doc or .docx)", type=["doc", "docx"])
 
 if uploaded:
-    with st.spinner("Parsing TEC-004 with validation, classification, and review controls..."):
+    with st.spinner("Extracting and validating telemetry..."):
         try:
             raw = uploaded.read()
             docx_data = raw if uploaded.name.lower().endswith(".docx") else convert_doc_to_docx(raw)
@@ -675,11 +711,10 @@ if uploaded:
             aux_data = payload["aux_rows"]
             dg_data = payload["dg_rows"]
             oe_data = payload["oe_rows"]
-            warnings = payload["warnings"]
-            score = payload["quality_score"]
 
-            n_od = sum(1 for r in me_data + aux_data + dg_data if "OVERDUE" in r.get("Status", ""))
-            n_hp = sum(1 for r in me_data + aux_data + dg_data if "HIGH PRIORITY" in r.get("Status", ""))
+            all_operational = me_data + aux_data + dg_data
+            n_od = sum(1 for r in all_operational if r.get("Status") == "OVERDUE")
+            n_hp = sum(1 for r in all_operational if r.get("Status") == "HIGH PRIORITY")
 
             st.markdown(f"""
             <div class="metric-grid">
@@ -688,42 +723,26 @@ if uploaded:
               <div class="metric"><div class="metric-v">{header['me_total_hours'] or 0:,}</div><div class="metric-l">ME Total Hrs</div></div>
               <div class="metric"><div class="metric-v">{header['me_this_month'] or 0:,}</div><div class="metric-l">ME This Month</div></div>
               <div class="metric"><div class="metric-v">{aux_meta['aux_total_hours'] or 0:,}</div><div class="metric-l">Aux Total Hrs</div></div>
-              <div class="metric"><div class="metric-v">{score}/100</div><div class="metric-l">Extraction Quality</div></div>
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown(badge_html(score), unsafe_allow_html=True)
-            st.markdown(
-                f'<span class="badge-bad">Overdue: {n_od}</span>'
-                f'<span class="badge-warn">High priority: {n_hp}</span>'
-                f'<span class="badge-info">Warnings: {len(warnings)}</span>',
-                unsafe_allow_html=True
-            )
+            render_quality_banner(payload)
 
-            if any(w["severity"] == "error" for w in warnings):
-                st.error("Critical extraction issues detected. Review the warnings tab before trusting exports.")
-            elif warnings:
-                st.warning("Extraction completed with warnings. Review recommended before operational use.")
+            if n_od > 0:
+                st.error(f"{n_od} components are overdue and require immediate maintenance attention.")
+            elif n_hp > 0:
+                st.warning(f"{n_hp} components are approaching maintenance threshold.")
             else:
-                st.success("Extraction completed with no detected data-integrity issues.")
+                st.success("No overdue components detected in the extracted operational dataset.")
 
-            review_tab, me_tab, aux_tab, dg_tab, oe_tab, json_tab = st.tabs([
-                f"🧭 Review ({len(warnings)})",
-                f"⚙ Main Engine ({len(me_data)})",
-                f"🔩 Aux Engine ({len(aux_data)})",
-                f"🧰 D/G Equipment ({len(dg_data)})",
-                f"🛠 Other Equipment ({len(oe_data)})",
-                "📦 JSON",
+            tabs = st.tabs([
+                f"Main Engine ({len(me_data)})",
+                f"Aux Engine ({len(aux_data)})",
+                f"D-G Equipment ({len(dg_data)})",
+                f"Other Equipment ({len(oe_data)})",
             ])
 
-            with review_tab:
-                if not warnings:
-                    st.success("No extraction issues detected.")
-                else:
-                    df_warn = pd.DataFrame(warnings)
-                    st.dataframe(df_warn.astype(str), use_container_width=True, hide_index=True)
-
-            with me_tab:
+            with tabs[0]:
                 if not me_data:
                     st.info("No Main Engine records found.")
                 else:
@@ -732,28 +751,28 @@ if uploaded:
                     df_me = df_me.sort_values(by=["Component", "_cyl"]).drop(columns=["_cyl"])
                     st.dataframe(style_dataframe(df_me), use_container_width=True, hide_index=True, column_config=UI_CONFIG)
 
-            with aux_tab:
+            with tabs[1]:
                 if not aux_data:
                     st.info("No Auxiliary Engine records found.")
                 else:
                     df_aux = pd.DataFrame(aux_data)
                     st.dataframe(style_dataframe(df_aux), use_container_width=True, hide_index=True, column_config=UI_CONFIG)
 
-            with dg_tab:
+            with tabs[2]:
                 if not dg_data:
-                    st.info("No D/G Equipment records found.")
+                    st.info("No D-G Equipment records found.")
                 else:
                     df_dg = pd.DataFrame(dg_data)
-                    sub1, sub2, sub3 = st.tabs(["D/G 1", "D/G 2", "D/G 3"])
-                    for idx, tab in enumerate([sub1, sub2, sub3], start=1):
-                        with tab:
+                    sub1, sub2, sub3 = st.tabs(["Generator 1", "Generator 2", "Generator 3"])
+                    for idx, subtab in enumerate([sub1, sub2, sub3], start=1):
+                        with subtab:
                             df_sub = df_dg[df_dg["Engine"] == f"D/G {idx}"]
                             if df_sub.empty:
-                                st.info(f"No records found for D/G {idx}.")
+                                st.info(f"No records found for Generator {idx}.")
                             else:
                                 st.dataframe(style_dataframe(df_sub), use_container_width=True, hide_index=True, column_config=UI_CONFIG)
 
-            with oe_tab:
+            with tabs[3]:
                 if not oe_data:
                     st.info("No Other Equipment records found.")
                 else:
@@ -765,17 +784,28 @@ if uploaded:
                         column_config={"Run Hrs": st.column_config.NumberColumn("Run Hrs", format="%d")}
                     )
 
-            with json_tab:
-                st.json(payload)
+            non_blocking = [w for w in payload["warnings"] if w.severity == "warning"]
+            blocking = [w for w in payload["warnings"] if w.severity == "error"]
+
+            if blocking or non_blocking:
+                with st.expander("Data Quality Notes", expanded=False):
+                    if blocking:
+                        st.markdown("**Blocking issues**")
+                        for w in blocking:
+                            st.write(f"- [{w.section}] {w.message}")
+                    if non_blocking:
+                        st.markdown("**Advisory issues**")
+                        for w in non_blocking:
+                            st.write(f"- [{w.section}] {w.message}")
+
+            st.caption("This console prioritizes extraction integrity and operational readability over silent best-effort parsing.")
 
         except Exception as e:
-            st.error(f"Execution Failed: {e}")
-            st.caption("This build fails loudly rather than silently presenting corrupt extraction.")
+            st.error(f"Execution failed: {e}")
+            st.caption("The application stops on structural/runtime failure instead of presenting unverified telemetry.")
 else:
     st.markdown(
-        '<div class="panel"><div class="small">'
-        'Upload a TEC-004 monthly running-hours report in .doc or .docx format. '
-        'This build prioritizes data integrity, validation, and review visibility over silent best-effort extraction.'
-        '</div></div>',
-        unsafe_allow_html=True
+        '<div class="banner"><span class="kicker">Awaiting input.</span> '
+        'Upload a TEC-004 monthly running-hours report in .doc or .docx format.</div>',
+        unsafe_allow_html=True,
     )
