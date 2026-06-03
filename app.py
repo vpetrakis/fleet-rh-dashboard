@@ -748,84 +748,74 @@ def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tup
     if months:
         meta["aux_this_month"] = parse_num(months[0])
 
-    start = None
-    stop = None
+    header_idx = None
+    stop_idx = len(table_rows)
 
     for idx, row in enumerate(table_rows):
         normed = [normalize_token(c) for c in row]
-        row_join = " ".join(normed)
 
-        has_desc = any(c == "DESCRIPTION" for c in normed)
-        has_period = any(c in {"PERIODICITY", "PERIODICTLY"} for c in normed) or "PERIODICITY" in row_join
-        has_1 = "1" in normed
-        has_2 = "2" in normed
-
-        if has_desc and has_period and has_1 and has_2:
-            start = idx + 1
+        if len(normed) >= 4 and normed[0] == "DESCRIPTION" and normed[1] == "PERIODICITY" and normed[2] == "1" and normed[3] == "2":
+            header_idx = idx
             continue
 
         if any("D/G NO1" in c or "D/G NO.1" in c for c in normed):
-            stop = idx
+            stop_idx = idx
             break
 
-    if start is None:
-        add_warning(warnings, "Aux Engine", "error", "Aux description block not found")
+    if header_idx is None:
+        add_warning(warnings, "Aux Engine", "error", "Aux header row not found")
         return records, meta
 
-    end_idx = stop if stop is not None else len(table_rows)
-
-    for i in range(start, end_idx - 1):
+    i = header_idx + 1
+    while i < stop_idx - 1:
         row1 = table_rows[i]
         row2 = table_rows[i + 1]
 
-        if not row1 or not row2:
-            continue
-
-        comp_raw = normalize_token(row1[0]) if len(row1) > 0 else ""
+        comp_raw = normalize_token(row1[0] if len(row1) > 0 else "")
         comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, "AUX")
 
-        if ambiguous:
-            add_warning(warnings, "Aux Engine", "warning", f"Ambiguous component label: {comp_raw}", comp_raw)
+        marker1 = normalize_token(row1[2] if len(row1) > 2 else "")
+        marker2 = normalize_token(row2[2] if len(row2) > 2 else "")
+
+        if comp in AUX_COMPONENTS and marker1 == "1" and marker2 == "2":
+            periodicity = parse_num(row1[1] if len(row1) > 1 else "")
+            raw_date = row1[3] if len(row1) > 3 else ""
+            raw_hrs = row2[3] if len(row2) > 3 else ""
+
+            iso, state, bad_date = parse_date(raw_date)
+            hrs = parse_num(raw_hrs)
+
+            if was_fuzzy:
+                add_warning(warnings, "Aux Engine", "warning", f"Fuzzy-matched component '{comp_raw}' -> '{comp}'", comp_raw)
+            if ambiguous:
+                add_warning(warnings, "Aux Engine", "warning", f"Ambiguous component label: {comp_raw}", comp_raw)
+            if bad_date:
+                add_warning(warnings, "Aux Engine", "warning", f"Invalid date for {comp}: {bad_date}", raw_date)
+
+            ratio = (hrs / periodicity) if (hrs is not None and periodicity and periodicity > 0) else None
+
+            records.append({
+                "Status": get_status(hrs, periodicity),
+                "Component": comp,
+                "Engine": "AUX-1",
+                "Unit": "Engine",
+                "Periodicity": int(periodicity) if periodicity and float(periodicity).is_integer() else periodicity or "—",
+                "Last O/H": iso or state or (raw_date if fl(raw_date) else "—"),
+                "Hrs Since": hrs,
+                "Hrs Since Display": format_hours(hrs),
+                "Used Ratio": ratio if ratio is not None else 0.0,
+                "Used %": round(ratio * 100, 1) if ratio is not None else None,
+            })
+
+            i += 2
             continue
 
-        marker_1 = normalize_token(row1[2] if len(row1) > 2 else "")
-        marker_2 = normalize_token(row2[2] if len(row2) > 2 else "")
+        i += 1
 
-        if comp not in AUX_COMPONENTS or marker_1 != "1" or marker_2 != "2":
-            continue
+    records = sorted(records, key=lambda r: AUX_ORDER.index(r["Component"]) if r["Component"] in AUX_ORDER else 999)
 
-        if was_fuzzy:
-            add_warning(warnings, "Aux Engine", "warning", f"Fuzzy-matched component '{comp_raw}' -> '{comp}'", comp_raw)
-
-        periodicity = parse_num(row1[1] if len(row1) > 1 else "")
-        raw_date = row1[3] if len(row1) > 3 else ""
-        raw_hrs = row2[3] if len(row2) > 3 else ""
-
-        iso, state, bad_date = parse_date(raw_date)
-        hrs = parse_num(raw_hrs)
-
-        if bad_date:
-            add_warning(warnings, "Aux Engine", "warning", f"Invalid date for {comp}: {bad_date}", raw_date)
-        if fl(raw_hrs) and hrs is None and normalize_token(raw_hrs) not in KNOWN_TEXT_STATES:
-            add_warning(warnings, "Aux Engine", "warning", f"Non-numeric hours for {comp}", raw_hrs)
-
-        ratio = (hrs / periodicity) if (hrs is not None and periodicity and periodicity > 0) else None
-
-        records.append({
-            "Status": get_status(hrs, periodicity),
-            "Component": comp,
-            "Engine": "AUX-1",
-            "Unit": "Engine",
-            "Periodicity": int(periodicity) if periodicity and float(periodicity).is_integer() else periodicity or "—",
-            "Last O/H": iso or state or (raw_date if fl(raw_date) else "—"),
-            "Hrs Since": hrs,
-            "Hrs Since Display": format_hours(hrs),
-            "Used Ratio": ratio if ratio is not None else 0.0,
-            "Used %": round(ratio * 100, 1) if ratio is not None else None,
-        })
-
-    if not records:
-        add_warning(warnings, "Aux Engine", "error", "No auxiliary engine rows extracted after header detection")
+    if len(records) != 9:
+        add_warning(warnings, "Aux Engine", "warning", f"Expected 9 AUX components, extracted {len(records)}")
 
     return records, meta
 
@@ -877,6 +867,7 @@ def extract_dg(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
 
             if bad_date:
                 add_warning(warnings, "D/G Equipment", "warning", f"Invalid date for {comp} generator {gen_idx+1}: {bad_date}", raw_date)
+
             if fl(raw_hrs) and hrs is None and normalize_token(raw_hrs) not in KNOWN_TEXT_STATES:
                 add_warning(warnings, "D/G Equipment", "warning", f"Non-numeric hours for {comp} generator {gen_idx+1}", raw_hrs)
 
@@ -924,6 +915,7 @@ def extract_oe(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
 
             if bad_date:
                 add_warning(warnings, "Other Equipment", "warning", f"Invalid date for {comp}: {bad_date}", raw_date)
+
             if fl(raw_hrs) and hrs is None and normalize_token(raw_hrs) not in KNOWN_TEXT_STATES:
                 add_warning(warnings, "Other Equipment", "warning", f"Non-numeric hours for {comp}", raw_hrs)
 
@@ -1110,7 +1102,7 @@ if uploaded:
 
             tab1, tab2, tab3, tab4 = st.tabs([
                 f"Main Engine ({len(me_data)})",
-                f"Aux Engines ({len(aux_data)})",
+                f"Aux Engine ({len(aux_data)})",
                 f"D/G Equipment ({len(dg_data)})",
                 f"Other Equipment ({len(oe_data)})"
             ])
