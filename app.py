@@ -24,21 +24,17 @@ st.markdown("""
 
 :root{
   --bg:#071019;
-  --bg2:#0c1623;
-  --bg3:#122031;
-  --line:#1f3349;
+  --bg2:#0d1725;
+  --bg3:#122132;
+  --line:#20344a;
   --gold:#c99818;
-  --text:#edf4ff;
-  --muted:#9db3c7;
-  --soft:#71879b;
+  --text:#eef5ff;
+  --muted:#a8bdd2;
+  --soft:#7d92a8;
   --ok:#1f9d68;
-  --ok-bg:rgba(31,157,104,.14);
-  --warn:#d48a10;
-  --warn-bg:rgba(212,138,16,.16);
-  --bad:#d14b3f;
-  --bad-bg:rgba(209,75,63,.16);
-  --nodata:#6d8297;
-  --nodata-bg:rgba(109,130,151,.16);
+  --warn:#d5911e;
+  --bad:#cf5548;
+  --note:#567da4;
 }
 
 html, body, [class*="css"]{
@@ -48,7 +44,7 @@ html, body, [class*="css"]{
 }
 
 .main, .block-container{
-  background:radial-gradient(circle at top right, rgba(201,152,24,.05), transparent 28%), var(--bg)!important;
+  background:radial-gradient(circle at top right, rgba(201,152,24,.05), transparent 24%), var(--bg)!important;
 }
 
 [data-testid="stSidebar"], [data-testid="collapsedControl"]{
@@ -56,7 +52,7 @@ html, body, [class*="css"]{
 }
 
 .block-container{
-  padding-top:1.2rem!important;
+  padding-top:1rem!important;
 }
 
 .hero-k{
@@ -69,11 +65,11 @@ html, body, [class*="css"]{
 
 .hero-h{
   font-family:'Space Grotesk', sans-serif;
-  font-size:2rem;
+  font-size:1.95rem;
   font-weight:700;
   color:var(--text);
   line-height:1.05;
-  margin-top:.2rem;
+  margin-top:.25rem;
 }
 
 .hero-rule{
@@ -95,12 +91,11 @@ html, body, [class*="css"]{
   border-top:2px solid var(--gold);
   border-radius:14px;
   padding:1rem;
-  box-shadow:0 10px 28px rgba(0,0,0,.18);
 }
 
 .metric-v{
   font-family:'Space Grotesk', sans-serif;
-  font-size:1.38rem;
+  font-size:1.32rem;
   font-weight:700;
   color:var(--text);
   line-height:1.05;
@@ -122,7 +117,7 @@ html, body, [class*="css"]{
 }
 
 .stTabs [data-baseweb="tab"]{
-  background:linear-gradient(180deg,var(--bg2),#0f1b2a);
+  background:linear-gradient(180deg,var(--bg2),#112132);
   border:1px solid var(--line);
   border-radius:12px;
   color:var(--muted);
@@ -131,14 +126,14 @@ html, body, [class*="css"]{
 }
 
 .stTabs [aria-selected="true"]{
-  background:linear-gradient(180deg,#14263a,#102131)!important;
-  border-color:#36546e!important;
+  background:linear-gradient(180deg,#17304a,#102132)!important;
+  border-color:#3e607d!important;
   color:var(--text)!important;
 }
 
 [data-testid="stFileUploadDropzone"]{
   background:rgba(201,152,24,.04)!important;
-  border:1.25px dashed rgba(201,152,24,.32)!important;
+  border:1.25px dashed rgba(201,152,24,.34)!important;
   border-radius:14px!important;
 }
 
@@ -146,23 +141,16 @@ html, body, [class*="css"]{
   border:1px solid var(--line);
   background:var(--bg2);
   border-radius:12px;
-  padding:.9rem 1rem;
-  margin:.7rem 0 1rem 0;
+  padding:.95rem 1rem;
+  margin:.8rem 0 1rem 0;
 }
 
-.banner-ok{border-left:3px solid var(--ok);}
-.banner-warn{border-left:3px solid var(--warn);}
-.banner-bad{border-left:3px solid var(--bad);}
+.banner strong{ color:var(--text); }
 
-.kicker{
-  color:var(--text);
-  font-weight:600;
-}
-
-.small{
-  color:var(--soft);
-  font-size:.9rem;
-}
+.banner-ok{ border-left:3px solid var(--ok); }
+.banner-warn{ border-left:3px solid var(--warn); }
+.banner-bad{ border-left:3px solid var(--bad); }
+.banner-note{ border-left:3px solid var(--note); }
 
 .table-wrap{
   overflow-x:auto;
@@ -175,33 +163,30 @@ html, body, [class*="css"]{
   width:100%;
   border-collapse:separate;
   border-spacing:0;
-  min-width:920px;
+  min-width:940px;
 }
 
 .report-table thead th{
-  position:sticky;
-  top:0;
-  z-index:1;
   background:#102030;
   color:var(--text);
   font-size:.76rem;
   text-transform:uppercase;
   letter-spacing:.08em;
-  padding:.9rem .8rem;
+  padding:.85rem .75rem;
   border-bottom:1px solid var(--line);
   white-space:nowrap;
 }
 
 .report-table tbody td{
-  padding:.82rem .8rem;
-  border-bottom:1px solid rgba(31,51,73,.75);
+  padding:.82rem .75rem;
+  border-bottom:1px solid rgba(32,52,74,.75);
   color:var(--muted);
-  font-size:.94rem;
+  font-size:.93rem;
   vertical-align:middle;
 }
 
 .report-table tbody tr:nth-child(even){
-  background:rgba(255,255,255,.015);
+  background:rgba(255,255,255,.016);
 }
 
 .report-table td.num{
@@ -216,37 +201,36 @@ html, body, [class*="css"]{
 .status-chip{
   display:inline-flex;
   align-items:center;
-  gap:.4rem;
-  padding:.28rem .58rem;
+  gap:.38rem;
+  padding:.28rem .56rem;
   border-radius:999px;
   font-size:.78rem;
   font-weight:700;
-  letter-spacing:.02em;
   white-space:nowrap;
 }
 
 .status-overdue{
-  color:#ffd8d3;
-  background:var(--bad-bg);
-  border:1px solid rgba(209,75,63,.35);
+  color:#ffe0db;
+  background:rgba(207,85,72,.16);
+  border:1px solid rgba(207,85,72,.35);
 }
 
 .status-high{
-  color:#ffe7b8;
-  background:var(--warn-bg);
-  border:1px solid rgba(212,138,16,.35);
+  color:#ffe8bf;
+  background:rgba(213,145,30,.16);
+  border:1px solid rgba(213,145,30,.35);
 }
 
 .status-ok{
-  color:#d9ffef;
-  background:var(--ok-bg);
+  color:#d9fff0;
+  background:rgba(31,157,104,.16);
   border:1px solid rgba(31,157,104,.35);
 }
 
 .status-nodata{
-  color:#d8e5f1;
-  background:var(--nodata-bg);
-  border:1px solid rgba(109,130,151,.35);
+  color:#dde7f2;
+  background:rgba(86,125,164,.16);
+  border:1px solid rgba(86,125,164,.35);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -266,7 +250,7 @@ AUX_COMPONENTS = [
     "MAIN BEARING", "ADJUST VALVE HEAD CLEARANCE"
 ]
 
-OTHER_STATUS_COMPONENTS = [
+DG_COMPONENTS = [
     "TURBOCHARGER (2)", "TURBOCHARGER (3)", "COOLING WATER PUMP",
     "COOL WATER THERMOSTAT VALVE", "L.O. THERMOSTAT VALVE",
     "THRUST BEARING", "AIR COOLER", "L.O. COOLER CLEAN",
@@ -290,13 +274,14 @@ ALIASES = {
     "PERIODICTLY": "PERIODICITY",
     "EXAUST VALVE": "EXHAUST VALVE",
     "FUEL VALVES(1)": "FUEL VALVES (1)",
+    "FUEL VALVES **(1)**": "FUEL VALVES (1)",
     "TURBOCHARGER(2)": "TURBOCHARGER (2)",
     "TURBOCHARGER(3)": "TURBOCHARGER (3)",
     "PLUNGER AND BARREL (RENEWAL)": "PLUNGER AND BARREL(RENEWAL)",
     "JACKET FW NO.1": "JACKET FW"
 }
 
-KNOWN_TEXT_STATES = {"N/A", "NO RECORD", "NOT WORKING", "CENTRAL", "COOLER"}
+TEXTUAL_VALUES = {"N/A", "NO RECORD", "NOT WORKING", "CENTRAL", "COOLER"}
 
 def fl(txt: Any) -> str:
     if txt is None:
@@ -315,7 +300,7 @@ def normalize_token(txt: Any) -> str:
 
 def parse_num(txt: Any) -> Optional[float]:
     s = normalize_token(txt)
-    if not s or s in KNOWN_TEXT_STATES or "OBSERVATION" in s:
+    if not s or s in TEXTUAL_VALUES or "OBSERVATION" in s:
         return None
     m = re.search(r"\d[\d,\.]*", s)
     if not m:
@@ -332,32 +317,32 @@ def parse_num(txt: Any) -> Optional[float]:
     except Exception:
         return None
 
-def parse_date(txt: Any) -> Tuple[Optional[str], Optional[str]]:
+def parse_date(txt: Any) -> Tuple[Optional[str], Optional[str], bool]:
     raw = fl(txt).replace("[", "").replace("]", "").strip()
     if not raw or raw in {"-", ""}:
-        return None, None
+        return None, None, False
     norm = normalize_token(raw)
-    if norm in KNOWN_TEXT_STATES:
-        return None, norm
     if norm in {"1", "2"}:
-        return None, None
+        return None, None, False
+    if norm in TEXTUAL_VALUES:
+        return None, norm, False
     try:
         dt = dt_parser.parse(raw, dayfirst=True, fuzzy=False)
-        return dt.date().isoformat(), None
+        return dt.date().isoformat(), None, False
     except Exception:
-        return None, raw
+        return None, raw, True
 
-def format_hours(value: Optional[float]) -> str:
-    if value is None:
+def format_hours(val: Optional[float]) -> str:
+    if val is None:
         return "—"
-    if float(value).is_integer():
-        return f"{int(value):,}"
-    return f"{value:,.1f}"
+    if float(val).is_integer():
+        return f"{int(val):,}"
+    return f"{val:,.1f}"
 
-def format_percent(value: Optional[float]) -> str:
-    if value is None:
+def format_percent(val: Optional[float]) -> str:
+    if val is None:
         return "—"
-    return f"{value:.1f}%"
+    return f"{val:.1f}%"
 
 def get_status(hrs: Optional[float], period: Optional[float]) -> str:
     if hrs is None or period is None or period <= 0:
@@ -368,6 +353,12 @@ def get_status(hrs: Optional[float], period: Optional[float]) -> str:
     if ratio >= 0.8:
         return "HIGH PRIORITY"
     return "OK"
+
+def component_sort_key(name: str, order: List[str]) -> int:
+    try:
+        return order.index(name)
+    except ValueError:
+        return 9999
 
 def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
@@ -434,8 +425,8 @@ def all_rows(paragraphs: List[str], tables: List[List[List[str]]]) -> List[List[
     rows = []
     for p in paragraphs:
         rows.append([p])
-    for table in tables:
-        rows.extend(table)
+    for tbl in tables:
+        rows.extend(tbl)
     return rows
 
 def row_text(row: List[str]) -> str:
@@ -450,7 +441,7 @@ def find_first_row(rows: List[List[str]], predicate) -> Optional[int]:
             return i
     return None
 
-def extract_header(rows: List[List[str]]) -> Dict[str, Any]:
+def extract_header(rows: List[List[str]], review: List[Dict[str, str]]) -> Dict[str, Any]:
     text = " ".join(row_text(r) for r in rows)
     out = {
         "vessel": "UNKNOWN",
@@ -462,8 +453,15 @@ def extract_header(rows: List[List[str]]) -> Dict[str, Any]:
     m = re.search(r"VESSEL['’]S NAME\s*:\s*(?:MV\s+)?(.+?)\s+DATE\s*:?\s*([A-Z0-9/ .-]+)", text, re.I)
     if m:
         out["vessel"] = re.sub(r"(?i)^MV\s+", "", fl(m.group(1))).strip()
-        iso, raw = parse_date(m.group(2))
+        iso, raw, invalid = parse_date(m.group(2))
         out["report_date"] = iso or raw or "—"
+        if invalid:
+            review.append({
+                "Section": "Header",
+                "Item": "Report Date",
+                "Issue": "Invalid date format",
+                "Raw Value": raw or ""
+            })
 
     m = re.search(r"TOTAL RUNNING HOURS\s*:?\s*([\d,\.]+)", text, re.I)
     if m:
@@ -476,36 +474,18 @@ def extract_header(rows: List[List[str]]) -> Dict[str, Any]:
     return out
 
 def find_me_start(rows: List[List[str]]) -> Optional[int]:
-    return find_first_row(
-        rows,
-        lambda r: "MAIN ENGINE" in normalize_token(row_text(r)) or "CYL. NO." in normalize_token(row_text(r))
-    )
-
-def find_aux_start(rows: List[List[str]]) -> Optional[int]:
-    return find_first_row(
-        rows,
-        lambda r: "AUX. ENGINE MAKER / TYPE" in normalize_token(row_text(r))
-    )
-
-def find_dg_start(rows: List[List[str]]) -> Optional[int]:
-    return find_first_row(
-        rows,
-        lambda r: "D/G NO1" in normalize_token(row_text(r)) or "D/G NO.1" in normalize_token(row_text(r))
-    )
+    return find_first_row(rows, lambda r: "MAIN ENGINE" in normalize_token(row_text(r)) or "CYL. NO." in normalize_token(row_text(r)))
 
 def find_other_start(rows: List[List[str]]) -> Optional[int]:
-    return find_first_row(
-        rows,
-        lambda r: "TURBOCHARGER" in normalize_token(row_text(r)) and "COOLERS" in normalize_token(row_text(r))
-    )
+    return find_first_row(rows, lambda r: "TURBOCHARGER" in normalize_token(row_text(r)) and "COOLERS" in normalize_token(row_text(r)))
 
-def component_sort_key(name: str, order: List[str]) -> int:
-    try:
-        return order.index(name)
-    except ValueError:
-        return 9999
+def find_aux_start(rows: List[List[str]]) -> Optional[int]:
+    return find_first_row(rows, lambda r: "AUX. ENGINE MAKER / TYPE" in normalize_token(row_text(r)))
 
-def extract_me(rows: List[List[str]], me_start: Optional[int], other_start: Optional[int]) -> List[Dict[str, Any]]:
+def find_dg_start(rows: List[List[str]]) -> Optional[int]:
+    return find_first_row(rows, lambda r: "D/G NO1" in normalize_token(row_text(r)) or "D/G NO.1" in normalize_token(row_text(r)))
+
+def extract_me(rows: List[List[str]], me_start: Optional[int], other_start: Optional[int], review: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     if me_start is None:
         return []
     end = other_start if other_start is not None and other_start > me_start else len(rows)
@@ -513,9 +493,7 @@ def extract_me(rows: List[List[str]], me_start: Optional[int], other_start: Opti
     out = []
 
     for i in range(len(zone) - 1):
-        r1 = zone[i]
-        r2 = zone[i + 1]
-
+        r1, r2 = zone[i], zone[i + 1]
         if len(r1) < 4 or len(r2) < 4:
             continue
 
@@ -528,9 +506,16 @@ def extract_me(rows: List[List[str]], me_start: Optional[int], other_start: Opti
         if marker1 != "1" or marker2 != "2":
             continue
 
-        period_cell = r1[1] if len(r1) > 1 else ""
-        period = parse_num(period_cell)
-        observation_based = "OBSERVATION" in normalize_token(period_cell)
+        raw_period = r1[1] if len(r1) > 1 else ""
+        period = parse_num(raw_period)
+        observation_based = "OBSERVATION" in normalize_token(raw_period)
+        if observation_based:
+            review.append({
+                "Section": "Main Engine",
+                "Item": comp,
+                "Issue": "Observation-based periodicity",
+                "Raw Value": fl(raw_period)
+            })
 
         max_cols = min(len(r1), len(r2))
         cyl_count = min(max_cols - 3, 7)
@@ -538,10 +523,27 @@ def extract_me(rows: List[List[str]], me_start: Optional[int], other_start: Opti
         for j in range(cyl_count):
             raw_date = r1[3 + j] if 3 + j < len(r1) else ""
             raw_hrs = r2[3 + j] if 3 + j < len(r2) else ""
-            iso, raw_date_keep = parse_date(raw_date)
+
+            iso, raw_text, invalid = parse_date(raw_date)
             hrs = parse_num(raw_hrs)
 
-            if iso or raw_date_keep or hrs is not None:
+            if invalid:
+                review.append({
+                    "Section": "Main Engine",
+                    "Item": f"{comp} / Cyl {j+1}",
+                    "Issue": "Invalid date",
+                    "Raw Value": raw_text or ""
+                })
+
+            if raw_text in TEXTUAL_VALUES:
+                review.append({
+                    "Section": "Main Engine",
+                    "Item": f"{comp} / Cyl {j+1}",
+                    "Issue": "Textual date value kept",
+                    "Raw Value": raw_text
+                })
+
+            if iso or raw_text or hrs is not None:
                 used = (hrs / period * 100) if (hrs is not None and period and period > 0) else None
                 out.append({
                     "Status": get_status(hrs, period),
@@ -549,21 +551,13 @@ def extract_me(rows: List[List[str]], me_start: Optional[int], other_start: Opti
                     "Engine": "ME",
                     "Unit": f"Cyl {j+1}",
                     "Periodicity": "OBSERVATION" if observation_based else (int(period) if period and float(period).is_integer() else (period if period is not None else "—")),
-                    "Last O/H": iso or raw_date_keep or "—",
+                    "Last O/H": iso or raw_text or "—",
                     "Hrs Since": format_hours(hrs),
                     "Used %": format_percent(used)
                 })
 
     out.sort(key=lambda x: (component_sort_key(x["Component"], ME_COMPONENTS), int(re.search(r"\d+", x["Unit"]).group())))
     return out
-
-def find_aux_header_in_zone(zone: List[List[str]]) -> Optional[int]:
-    for i, row in enumerate(zone):
-        nr = norm_row(row)
-        joined = " | ".join(nr)
-        if "DESCRIPTION" in joined and "1" in joined and "2" in joined and ("PERIODICITY" in joined or "PERIODICTLY" in joined):
-            return i
-    return None
 
 def extract_aux_meta(zone: List[List[str]]) -> Dict[str, Any]:
     text = " ".join(row_text(r) for r in zone)
@@ -579,16 +573,28 @@ def extract_aux_meta(zone: List[List[str]]) -> Dict[str, Any]:
 
     return out
 
-def extract_aux(rows: List[List[str]], aux_start: Optional[int], dg_start: Optional[int]) -> Tuple[List[Dict[str, Any]], Dict[str, Any], List[str]]:
+def find_aux_header_in_zone(zone: List[List[str]]) -> Optional[int]:
+    for i, row in enumerate(zone):
+        joined = " | ".join(norm_row(row))
+        if "DESCRIPTION" in joined and "1" in joined and "2" in joined and ("PERIODICITY" in joined or "PERIODICTLY" in joined):
+            return i
+    return None
+
+def extract_aux(rows: List[List[str]], aux_start: Optional[int], dg_start: Optional[int], review: List[Dict[str, str]]) -> Tuple[List[Dict[str, Any]], Dict[str, Any], List[str]]:
     if aux_start is None:
         return [], {"aux_total_hours": None, "aux_this_month": None}, AUX_COMPONENTS.copy()
 
     end = dg_start if dg_start is not None and dg_start > aux_start else len(rows)
     zone = rows[aux_start:end]
     meta = extract_aux_meta(zone)
-
     header_idx = find_aux_header_in_zone(zone)
     if header_idx is None:
+        review.append({
+            "Section": "Aux Engine",
+            "Item": "Header",
+            "Issue": "AUX detail header not found",
+            "Raw Value": "DESCRIPTION | PERIODICITY | 1 | 2"
+        })
         return [], meta, AUX_COMPONENTS.copy()
 
     body = zone[header_idx + 1:]
@@ -596,29 +602,52 @@ def extract_aux(rows: List[List[str]], aux_start: Optional[int], dg_start: Optio
     i = 0
 
     while i < len(body) - 1:
-        r1 = body[i]
-        r2 = body[i + 1]
-
+        r1, r2 = body[i], body[i + 1]
         comp = normalize_token(r1[0] if len(r1) > 0 else "")
         marker1 = normalize_token(r1[2] if len(r1) > 2 else "")
         marker2 = normalize_token(r2[2] if len(r2) > 2 else "")
 
         if comp in AUX_COMPONENTS and marker1 == "1" and marker2 == "2":
-            period = parse_num(r1[1] if len(r1) > 1 else "")
+            raw_period = r1[1] if len(r1) > 1 else ""
+            period = parse_num(raw_period)
             raw_date = r1[3] if len(r1) > 3 else ""
             raw_hrs = r2[3] if len(r2) > 3 else ""
 
-            iso, raw_date_keep = parse_date(raw_date)
+            iso, raw_text, invalid = parse_date(raw_date)
             hrs = parse_num(raw_hrs)
-            used = (hrs / period * 100) if (hrs is not None and period and period > 0) else None
 
+            if invalid:
+                review.append({
+                    "Section": "Aux Engine",
+                    "Item": comp,
+                    "Issue": "Invalid date",
+                    "Raw Value": raw_text or ""
+                })
+
+            if raw_text in TEXTUAL_VALUES:
+                review.append({
+                    "Section": "Aux Engine",
+                    "Item": comp,
+                    "Issue": "Textual date value kept",
+                    "Raw Value": raw_text
+                })
+
+            if raw_hrs and parse_num(raw_hrs) is None and normalize_token(raw_hrs) not in {"", "2"}:
+                review.append({
+                    "Section": "Aux Engine",
+                    "Item": comp,
+                    "Issue": "Non-numeric running hours",
+                    "Raw Value": fl(raw_hrs)
+                })
+
+            used = (hrs / period * 100) if (hrs is not None and period and period > 0) else None
             out.append({
                 "Status": get_status(hrs, period),
                 "Component": comp,
                 "Engine": "AUX",
                 "Unit": "Engine",
                 "Periodicity": int(period) if period and float(period).is_integer() else (period if period is not None else "—"),
-                "Last O/H": iso or raw_date_keep or "—",
+                "Last O/H": iso or raw_text or "—",
                 "Hrs Since": format_hours(hrs),
                 "Used %": format_percent(used)
             })
@@ -627,12 +656,20 @@ def extract_aux(rows: List[List[str]], aux_start: Optional[int], dg_start: Optio
 
         i += 1
 
-    out.sort(key=lambda x: component_sort_key(x["Component"], AUX_COMPONENTS))
     found = {x["Component"] for x in out}
     missing = [x for x in AUX_COMPONENTS if x not in found]
+    for m in missing:
+        review.append({
+            "Section": "Aux Engine",
+            "Item": m,
+            "Issue": "Expected AUX component not found",
+            "Raw Value": ""
+        })
+
+    out.sort(key=lambda x: component_sort_key(x["Component"], AUX_COMPONENTS))
     return out, meta, missing
 
-def extract_other_simple_zone(rows: List[List[str]]) -> List[Dict[str, Any]]:
+def extract_other_simple_zone(rows: List[List[str]], review: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     out = []
     for row in rows:
         cells = [fl(c) for c in row]
@@ -645,34 +682,55 @@ def extract_other_simple_zone(rows: List[List[str]]) -> List[Dict[str, Any]]:
             raw_date = cells[idx + 2] if idx + 2 < len(cells) else ""
             raw_hrs = cells[idx + 3] if idx + 3 < len(cells) else ""
 
-            iso, raw_date_keep = parse_date(raw_date)
+            iso, raw_text, invalid = parse_date(raw_date)
             hrs = parse_num(raw_hrs)
-            used = (hrs / period * 100) if (hrs is not None and period and period > 0) else None
 
+            if invalid:
+                review.append({
+                    "Section": "Other Equipment",
+                    "Item": comp,
+                    "Issue": "Invalid date",
+                    "Raw Value": raw_text or ""
+                })
+
+            if raw_text in TEXTUAL_VALUES:
+                review.append({
+                    "Section": "Other Equipment",
+                    "Item": comp,
+                    "Issue": "Textual date value kept",
+                    "Raw Value": raw_text
+                })
+
+            if raw_hrs and parse_num(raw_hrs) is None and normalize_token(raw_hrs) not in {"", "1", "2"}:
+                review.append({
+                    "Section": "Other Equipment",
+                    "Item": comp,
+                    "Issue": "Non-numeric running hours",
+                    "Raw Value": fl(raw_hrs)
+                })
+
+            used = (hrs / period * 100) if (hrs is not None and period and period > 0) else None
             out.append({
                 "Status": get_status(hrs, period),
                 "Description": comp,
                 "Unit": "—",
                 "Periodicity": int(period) if period and float(period).is_integer() else (period if period is not None else "—"),
-                "Last Date": iso or raw_date_keep or "—",
+                "Last Date": iso or raw_text or "—",
                 "Run Hrs": format_hours(hrs),
                 "Used %": format_percent(used)
             })
     return out
 
-def extract_other_status_zone(rows: List[List[str]]) -> List[Dict[str, Any]]:
+def extract_dg_zone(rows: List[List[str]], review: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     out = []
     for i in range(len(rows) - 1):
-        r1 = rows[i]
-        r2 = rows[i + 1]
-
+        r1, r2 = rows[i], rows[i + 1]
         comp = normalize_token(r1[0] if len(r1) > 0 else "")
-        if comp not in OTHER_STATUS_COMPONENTS:
+        if comp not in DG_COMPONENTS:
             continue
 
         marker1 = normalize_token(r1[2] if len(r1) > 2 else "")
         marker2 = normalize_token(r2[2] if len(r2) > 2 else "")
-
         if marker1 != "1" or marker2 != "2":
             continue
 
@@ -682,50 +740,72 @@ def extract_other_status_zone(rows: List[List[str]]) -> List[Dict[str, Any]]:
             c = 3 + unit_idx
             raw_date = r1[c] if c < len(r1) else ""
             raw_hrs = r2[c] if c < len(r2) else ""
-            iso, raw_date_keep = parse_date(raw_date)
-            hrs = parse_num(raw_hrs)
-            used = (hrs / period * 100) if (hrs is not None and period and period > 0) else None
 
-            if iso or raw_date_keep or hrs is not None:
+            iso, raw_text, invalid = parse_date(raw_date)
+            hrs = parse_num(raw_hrs)
+
+            if invalid:
+                review.append({
+                    "Section": "Other Equipment",
+                    "Item": f"{comp} / DG {unit_idx+1}",
+                    "Issue": "Invalid date",
+                    "Raw Value": raw_text or ""
+                })
+
+            if raw_text in TEXTUAL_VALUES:
+                review.append({
+                    "Section": "Other Equipment",
+                    "Item": f"{comp} / DG {unit_idx+1}",
+                    "Issue": "Textual date value kept",
+                    "Raw Value": raw_text
+                })
+
+            if raw_hrs and parse_num(raw_hrs) is None and normalize_token(raw_hrs) not in {"", "1", "2"}:
+                review.append({
+                    "Section": "Other Equipment",
+                    "Item": f"{comp} / DG {unit_idx+1}",
+                    "Issue": "Non-numeric running hours",
+                    "Raw Value": fl(raw_hrs)
+                })
+
+            if iso or raw_text or hrs is not None:
+                used = (hrs / period * 100) if (hrs is not None and period and period > 0) else None
                 out.append({
                     "Status": get_status(hrs, period),
                     "Description": comp,
-                    "Unit": f"Unit {unit_idx+1}",
+                    "Unit": f"DG {unit_idx+1}",
                     "Periodicity": int(period) if period and float(period).is_integer() else (period if period is not None else "—"),
-                    "Last Date": iso or raw_date_keep or "—",
+                    "Last Date": iso or raw_text or "—",
                     "Run Hrs": format_hours(hrs),
                     "Used %": format_percent(used)
                 })
     return out
 
-def dedupe_other(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def dedupe_records(records: List[Dict[str, Any]], keys: List[str]) -> List[Dict[str, Any]]:
     seen = set()
     out = []
     for r in records:
-        key = (
-            r["Description"], r["Unit"], str(r["Periodicity"]),
-            r["Last Date"], r["Run Hrs"]
-        )
-        if key not in seen:
-            seen.add(key)
+        k = tuple(r.get(x) for x in keys)
+        if k not in seen:
+            seen.add(k)
             out.append(r)
     return out
 
-def extract_other(rows: List[List[str]], other_start: Optional[int], aux_start: Optional[int], dg_start: Optional[int]) -> List[Dict[str, Any]]:
+def extract_other(rows: List[List[str]], other_start: Optional[int], aux_start: Optional[int], dg_start: Optional[int], review: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     parts = []
 
     if other_start is not None:
         end_a = aux_start if aux_start is not None and aux_start > other_start else len(rows)
         zone_a = rows[other_start:end_a]
-        parts.extend(extract_other_simple_zone(zone_a))
+        parts.extend(extract_other_simple_zone(zone_a, review))
 
     if dg_start is not None:
         zone_b = rows[dg_start:]
-        parts.extend(extract_other_status_zone(zone_b))
+        parts.extend(extract_dg_zone(zone_b, review))
 
-    parts = dedupe_other(parts)
+    parts = dedupe_records(parts, ["Description", "Unit", "Periodicity", "Last Date", "Run Hrs"])
     parts.sort(key=lambda x: (
-        component_sort_key(x["Description"], OTHER_SIMPLE_COMPONENTS + OTHER_STATUS_COMPONENTS),
+        component_sort_key(x["Description"], OTHER_SIMPLE_COMPONENTS + DG_COMPONENTS),
         999 if x["Unit"] == "—" else int(re.search(r"\d+", x["Unit"]).group())
     ))
     return parts
@@ -763,8 +843,8 @@ def render_html_table(df: pd.DataFrame, cols: List[str], numeric_cols: Optional[
             safe = "—" if pd.isna(val) else str(val)
             html.append(f"<td{cls}>{safe}</td>")
         html.append("</tr>")
-
     html.append("</tbody></table></div>")
+
     st.markdown("".join(html), unsafe_allow_html=True)
 
 st.markdown("""
@@ -776,25 +856,27 @@ st.markdown("""
 uploaded = st.file_uploader("Upload TEC04 / TEC-004 report (.doc)", type=["doc"])
 
 if uploaded:
-    with st.spinner("Executing anchored extraction..."):
+    with st.spinner("Executing extraction with validation..."):
         try:
             docx_data = convert_doc_to_docx(uploaded.read())
             paragraphs, tables = read_docx_structure(docx_data)
             rows = all_rows(paragraphs, tables)
 
-            header = extract_header(rows)
+            review: List[Dict[str, str]] = []
 
+            header = extract_header(rows, review)
             me_start = find_me_start(rows)
             other_start = find_other_start(rows)
             aux_start = find_aux_start(rows)
             dg_start = find_dg_start(rows)
 
-            me_data = extract_me(rows, me_start, other_start)
-            aux_data, aux_meta, aux_missing = extract_aux(rows, aux_start, dg_start)
-            other_data = extract_other(rows, other_start, aux_start, dg_start)
+            me_data = extract_me(rows, me_start, other_start, review)
+            aux_data, aux_meta, aux_missing = extract_aux(rows, aux_start, dg_start, review)
+            other_data = extract_other(rows, other_start, aux_start, dg_start, review)
 
-            n_od = sum(1 for r in (me_data + aux_data + other_data) if r["Status"] == "OVERDUE")
-            n_hp = sum(1 for r in (me_data + aux_data + other_data) if r["Status"] == "HIGH PRIORITY")
+            n_overdue = sum(1 for r in (me_data + aux_data + other_data) if r["Status"] == "OVERDUE")
+            n_high = sum(1 for r in (me_data + aux_data + other_data) if r["Status"] == "HIGH PRIORITY")
+            n_review = len(review)
 
             st.markdown(f"""
             <div class="metric-grid">
@@ -802,27 +884,36 @@ if uploaded:
               <div class="metric"><div class="metric-v">{header.get('report_date') or '—'}</div><div class="metric-l">Report Date</div></div>
               <div class="metric"><div class="metric-v">{format_hours(header.get('me_total_hours'))}</div><div class="metric-l">ME Total Hrs</div></div>
               <div class="metric"><div class="metric-v">{format_hours(header.get('me_this_month'))}</div><div class="metric-l">ME This Month</div></div>
-              <div class="metric"><div class="metric-v">{n_od}</div><div class="metric-l">Overdue</div></div>
-              <div class="metric"><div class="metric-v">{n_hp}</div><div class="metric-l">High Priority</div></div>
+              <div class="metric"><div class="metric-v">{n_overdue}</div><div class="metric-l">Overdue</div></div>
+              <div class="metric"><div class="metric-v">{n_review}</div><div class="metric-l">Review Items</div></div>
             </div>
             """, unsafe_allow_html=True)
 
             if aux_missing:
                 st.markdown(
-                    f'<div class="banner banner-warn"><div class="kicker">Aux extraction incomplete.</div>'
-                    f'<div class="small">Missing components: {", ".join(aux_missing)}</div></div>',
+                    f'<div class="banner banner-warn"><strong>Aux parsed as the visible 9-component block.</strong> '
+                    f'Missing expected items: {", ".join(aux_missing)}</div>',
                     unsafe_allow_html=True
                 )
             else:
                 st.markdown(
-                    '<div class="banner banner-ok"><div class="kicker">Aux extraction completed successfully.</div></div>',
+                    '<div class="banner banner-ok"><strong>Aux extracted successfully.</strong> '
+                    'The app treats AUX as the single 9-component list shown in the report.</div>',
                     unsafe_allow_html=True
                 )
 
-            tab1, tab2, tab3 = st.tabs([
+            if review:
+                st.markdown(
+                    f'<div class="banner banner-note"><strong>Validation active.</strong> '
+                    f'{len(review)} item(s) were flagged for operator review instead of being silently discarded.</div>',
+                    unsafe_allow_html=True
+                )
+
+            tab1, tab2, tab3, tab4 = st.tabs([
                 f"Main Engine ({len(me_data)})",
                 f"Aux Engine ({len(aux_data)})",
-                f"Other Equipment ({len(other_data)})"
+                f"Other Equipment ({len(other_data)})",
+                f"Review Queue ({len(review)})"
             ])
 
             with tab1:
@@ -851,6 +942,13 @@ if uploaded:
                         center_cols=["Engine", "Unit"]
                     )
 
+                    st.markdown(
+                        f'<div class="banner banner-note"><strong>Aux Meta:</strong> '
+                        f'Total Hours = {format_hours(aux_meta.get("aux_total_hours"))}, '
+                        f'Hours This Month = {format_hours(aux_meta.get("aux_this_month"))}</div>',
+                        unsafe_allow_html=True
+                    )
+
             with tab3:
                 if not other_data:
                     st.info("No Other Equipment records found.")
@@ -862,6 +960,16 @@ if uploaded:
                         ["Status", "Description", "Unit", "Periodicity", "Last Date", "Run Hrs", "Used %"],
                         numeric_cols=["Run Hrs", "Used %"],
                         center_cols=["Unit"]
+                    )
+
+            with tab4:
+                if not review:
+                    st.success("No flagged issues found.")
+                else:
+                    df_review = pd.DataFrame(review).drop_duplicates()
+                    render_html_table(
+                        df_review,
+                        ["Section", "Item", "Issue", "Raw Value"]
                     )
 
         except Exception as e:
