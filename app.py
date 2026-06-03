@@ -326,14 +326,14 @@ AUX_COMPONENTS = {
     "MAIN BEARING", "ADJUST VALVE HEAD CLEARANCE"
 }
 
-DG_COMPONENTS = {
+OTHER_STATUS_COMPONENTS = {
     "TURBOCHARGER (2)", "TURBOCHARGER (3)", "COOLING WATER PUMP",
     "COOL WATER THERMOSTAT VALVE", "L.O. THERMOSTAT VALVE",
     "THRUST BEARING", "AIR COOLER", "L.O. COOLER CLEAN",
     "F.W. COOLER CLEAN", "L.O. RENEWAL", "ALTERNATOR CLEANING"
 }
 
-OE_COMPONENTS = {
+OTHER_SIMPLE_COMPONENTS = {
     "GENERAL O/H", "BALANCING OF ROTOR SHAFT", "AIR COOLER CLEANING",
     "M/E L.O.", "JACKET FW", "JACKET FW NO.1", "PISTON L.O.",
     "ATMOSPHERIC CONDENSER", "AIR COND. COMPRESSOR NO.1",
@@ -361,11 +361,21 @@ AUX_ORDER = [
     "MAIN BEARING", "ADJUST VALVE HEAD CLEARANCE"
 ]
 
-DG_ORDER = [
-    "TURBOCHARGER (2)", "TURBOCHARGER (3)", "COOLING WATER PUMP",
-    "COOL WATER THERMOSTAT VALVE", "L.O. THERMOSTAT VALVE",
-    "THRUST BEARING", "AIR COOLER", "L.O. COOLER CLEAN",
-    "F.W. COOLER CLEAN", "L.O. RENEWAL", "ALTERNATOR CLEANING"
+OTHER_ORDER = [
+    "GENERAL O/H", "BALANCING OF ROTOR SHAFT", "AIR COOLER CLEANING",
+    "AIR COND. COMPRESSOR NO.1", "AIR COND. COMPRESSOR NO.2",
+    "AIR. COND. COOLER CLEANING", "REFRIGERATION COMPRESSOR NO.1",
+    "REFRIGERATION COMPRESSOR NO.2", "FURNACE INSPECTION",
+    "BURNER ATOMIZER", "FORCED DRAFT FAN", "FEED PUMPS NO.1",
+    "FEED PUMPS NO.2", "WASHING THE TUBES", "O/H CIRC. PUMP NO.1",
+    "O/H CIRC. PUMP NO.2", "STARTING MAIN AIR COMPRESSOR NO.1",
+    "STARTING MAIN AIR COMPRESSOR NO.2", "SERVICE AIR COMPRESSOR",
+    "EMERGENCY AIR COMPRESSOR NO.", "TURBOCHARGER (2)",
+    "TURBOCHARGER (3)", "COOLING WATER PUMP", "COOL WATER THERMOSTAT VALVE",
+    "L.O. THERMOSTAT VALVE", "THRUST BEARING", "AIR COOLER",
+    "L.O. COOLER CLEAN", "F.W. COOLER CLEAN", "L.O. RENEWAL",
+    "ALTERNATOR CLEANING", "M/E L.O.", "JACKET FW", "JACKET FW NO.1",
+    "PISTON L.O.", "ATMOSPHERIC CONDENSER"
 ]
 
 ALIASES = {
@@ -382,13 +392,6 @@ ALIASES = {
 
 KNOWN_TEXT_STATES = {
     "N/A", "NO RECORD", "NOT WORKING", "CENTRAL", "COOLER"
-}
-
-SECTION_COMPONENTS = {
-    "ME": ME_COMPONENTS,
-    "AUX": AUX_COMPONENTS,
-    "DG": DG_COMPONENTS,
-    "OE": OE_COMPONENTS,
 }
 
 @dataclass
@@ -488,8 +491,7 @@ def get_status(hrs: Optional[float], period: Optional[float]) -> str:
         return "HIGH PRIORITY"
     return "OK"
 
-def guarded_component_match(token: str, section: str) -> Tuple[str, bool, bool]:
-    valid_components = SECTION_COMPONENTS.get(section, set())
+def guarded_component_match(token: str, valid_components: set) -> Tuple[str, bool, bool]:
     if token in valid_components:
         return token, False, False
 
@@ -510,10 +512,7 @@ def guarded_component_match(token: str, section: str) -> Tuple[str, bool, bool]:
 def convert_doc_to_docx(raw: bytes) -> bytes:
     soffice = shutil.which("soffice") or "/usr/bin/soffice"
     if not os.path.isfile(soffice):
-        raise RuntimeError(
-            "LibreOffice not found in runtime environment. "
-            "Install soffice for .doc support or upload .docx files."
-        )
+        raise RuntimeError("LibreOffice not found. Install soffice for .doc support.")
 
     with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as t:
         t.write(raw)
@@ -580,48 +579,17 @@ def doc_to_grid(docx_bytes: bytes) -> Dict[str, Any]:
 
 def classify_table(rows: List[List[str]]) -> str:
     blob = " ".join(" ".join(r) for r in rows).upper()
-    row_blob = [" ".join(r).upper() for r in rows]
 
-    scores = {"ME": 0, "AUX": 0, "DG": 0, "OE": 0}
+    if "MAIN ENGINE" in blob and "CYL. NO." in blob:
+        return "ME"
 
-    if "MAIN ENGINE" in blob:
-        scores["ME"] += 3
-    if "CYL. NO." in blob or "CYL NO." in blob:
-        scores["ME"] += 2
-    if "DATE OF LAST O/H" in blob and "RUNNING HOURS SINCE LAST O/H" in blob:
-        scores["ME"] += 2
-    if any(comp in blob for comp in ["CYLINDER COVER", "PISTON ASSEMBLY", "EXHAUST VALVE", "EXAUST VALVE"]):
-        scores["ME"] += 2
+    if "AUX. ENGINE MAKER / TYPE" in blob and "HOURS THIS MONTH" in blob:
+        return "AUX"
 
-    if "AUX. ENGINE MAKER / TYPE" in blob or "AUXILIARY ENGINE" in blob:
-        scores["AUX"] += 4
-    if "TOTAL HOURS" in blob and "HOURS THIS MONTH" in blob:
-        scores["AUX"] += 2
-    if any("DESCRIPTION PERIODICITY 1 2" in re.sub(r"\s+", " ", rb) for rb in row_blob):
-        scores["AUX"] += 2
-
-    if "D/G NO1" in blob or "D/G NO.1" in blob or "DIESEL GENERATOR" in blob:
-        scores["DG"] += 4
-    if "ALTERNATOR CLEANING" in blob:
-        scores["DG"] += 2
-    if any(comp in blob for comp in ["TURBOCHARGER (2)", "TURBOCHARGER (3)", "COOLING WATER PUMP"]):
-        scores["DG"] += 2
-
-    if any(h in blob for h in ["TURBOCHARGER", "COOLERS", "A/C & REFR. COMPRESSORS", "AUXILIARY BOILER", "MAIN AIR COMPRESSORS"]):
-        scores["OE"] += 3
-    if any(comp in blob for comp in ["GENERAL O/H", "BALANCING OF ROTOR SHAFT", "SERVICE AIR COMPRESSOR"]):
-        scores["OE"] += 2
-
-    best = max(scores, key=scores.get)
-
-    if best == "DG" and scores["DG"] < 4:
-        return "OTHER"
-    if best == "AUX" and scores["AUX"] < 4:
-        return "OTHER"
-    if scores[best] == 0:
+    if any(x in blob for x in ["TURBOCHARGER", "COOLERS", "A/C & REFR. COMPRESSORS", "AUXILIARY BOILER", "MAIN AIR COMPRESSORS", "D/G NO1", "D/G NO.1"]):
         return "OTHER"
 
-    return best
+    return "OTHER"
 
 def extract_header(model: Dict[str, Any], warnings: List[WarningItem]) -> Dict[str, Any]:
     text = " ".join(
@@ -679,8 +647,8 @@ def extract_me(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
         if not row1 or not row2:
             continue
 
-        comp_raw = normalize_token(row1[0]) if len(row1) > 0 else ""
-        comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, "ME")
+        comp_raw = normalize_token(row1[0] if len(row1) > 0 else "")
+        comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, ME_COMPONENTS)
 
         if ambiguous:
             add_warning(warnings, "Main Engine", "warning", f"Ambiguous component label: {comp_raw}", comp_raw)
@@ -712,9 +680,6 @@ def extract_me(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
             if bad_date:
                 add_warning(warnings, "Main Engine", "warning", f"Invalid date for {comp} cyl {j+1}: {bad_date}", raw_date)
 
-            if fl(raw_hrs) and hrs is None and normalize_token(raw_hrs) not in KNOWN_TEXT_STATES:
-                add_warning(warnings, "Main Engine", "warning", f"Non-numeric hours for {comp} cyl {j+1}", raw_hrs)
-
             if iso or state or hrs is not None or fl(raw_date) or fl(raw_hrs):
                 ratio = (hrs / periodicity) if (hrs is not None and periodicity and periodicity > 0) else None
                 records.append({
@@ -726,7 +691,6 @@ def extract_me(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
                     "Last O/H": iso or state or (raw_date if fl(raw_date) else "—"),
                     "Hrs Since": hrs,
                     "Hrs Since Display": format_hours(hrs),
-                    "Used Ratio": ratio if ratio is not None else 0.0,
                     "Used %": round(ratio * 100, 1) if ratio is not None else None,
                 })
 
@@ -772,7 +736,7 @@ def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tup
         row2 = table_rows[i + 1]
 
         comp_raw = normalize_token(row1[0] if len(row1) > 0 else "")
-        comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, "AUX")
+        comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, AUX_COMPONENTS)
 
         marker1 = normalize_token(row1[2] if len(row1) > 2 else "")
         marker2 = normalize_token(row2[2] if len(row2) > 2 else "")
@@ -803,7 +767,6 @@ def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tup
                 "Last O/H": iso or state or (raw_date if fl(raw_date) else "—"),
                 "Hrs Since": hrs,
                 "Hrs Since Display": format_hours(hrs),
-                "Used Ratio": ratio if ratio is not None else 0.0,
                 "Used %": round(ratio * 100, 1) if ratio is not None else None,
             })
 
@@ -819,92 +782,59 @@ def extract_aux(table_rows: List[List[str]], warnings: List[WarningItem]) -> Tup
 
     return records, meta
 
-def extract_dg(table_rows: List[List[str]], warnings: List[WarningItem]) -> List[Dict[str, Any]]:
+def extract_other_equipment(table_rows: List[List[str]], warnings: List[WarningItem]) -> List[Dict[str, Any]]:
     records = []
-    start = None
 
-    for idx, row in enumerate(table_rows):
-        joined = re.sub(r"\s+", " ", " ".join(normalize_token(c) for c in row)).strip()
-        if "DESCRIPTION PERIODICITY D/G NO1" in joined or "DESCRIPTION PERIODICITY D/G NO.1" in joined:
-            start = idx + 1
-            break
-
-    if start is None:
-        return records
-
-    for i in range(start, len(table_rows) - 1):
+    for i in range(len(table_rows) - 1):
         row1 = table_rows[i]
         row2 = table_rows[i + 1]
 
         if not row1 or not row2:
             continue
 
-        comp_raw = normalize_token(row1[0]) if len(row1) > 0 else ""
-        comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, "DG")
+        comp_raw = normalize_token(row1[0] if len(row1) > 0 else "")
+        comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, OTHER_STATUS_COMPONENTS)
 
-        if ambiguous:
-            add_warning(warnings, "D/G Equipment", "warning", f"Ambiguous component label: {comp_raw}", comp_raw)
-            continue
+        marker1 = normalize_token(row1[2] if len(row1) > 2 else "")
+        marker2 = normalize_token(row2[2] if len(row2) > 2 else "")
 
-        marker_1 = normalize_token(row1[2] if len(row1) > 2 else "")
-        marker_2 = normalize_token(row2[2] if len(row2) > 2 else "")
+        if comp in OTHER_STATUS_COMPONENTS and marker1 == "1" and marker2 == "2":
+            periodicity = parse_num(row1[1] if len(row1) > 1 else "")
 
-        if comp not in DG_COMPONENTS or marker_1 != "1" or marker_2 != "2":
-            continue
+            for unit_idx in range(3):
+                col_idx = 3 + unit_idx
+                raw_date = row1[col_idx] if col_idx < len(row1) else ""
+                raw_hrs = row2[col_idx] if col_idx < len(row2) else ""
 
-        if was_fuzzy:
-            add_warning(warnings, "D/G Equipment", "warning", f"Fuzzy-matched component '{comp_raw}' -> '{comp}'", comp_raw)
+                iso, state, bad_date = parse_date(raw_date)
+                hrs = parse_num(raw_hrs)
 
-        periodicity = parse_num(row1[1] if len(row1) > 1 else "")
+                if bad_date:
+                    add_warning(warnings, "Other Equipment", "warning", f"Invalid date for {comp} unit {unit_idx+1}: {bad_date}", raw_date)
 
-        for gen_idx in range(3):
-            col_idx = 3 + gen_idx
-            raw_date = row1[col_idx] if col_idx < len(row1) else ""
-            raw_hrs = row2[col_idx] if col_idx < len(row2) else ""
-
-            iso, state, bad_date = parse_date(raw_date)
-            hrs = parse_num(raw_hrs)
-
-            if bad_date:
-                add_warning(warnings, "D/G Equipment", "warning", f"Invalid date for {comp} generator {gen_idx+1}: {bad_date}", raw_date)
-
-            if fl(raw_hrs) and hrs is None and normalize_token(raw_hrs) not in KNOWN_TEXT_STATES:
-                add_warning(warnings, "D/G Equipment", "warning", f"Non-numeric hours for {comp} generator {gen_idx+1}", raw_hrs)
-
-            if iso or state or hrs is not None or fl(raw_date) or fl(raw_hrs):
-                ratio = (hrs / periodicity) if (hrs is not None and periodicity and periodicity > 0) else None
-                records.append({
-                    "Status": get_status(hrs, periodicity),
-                    "Component": comp,
-                    "Engine": f"D/G {gen_idx+1}",
-                    "Unit": "Engine",
-                    "Periodicity": int(periodicity) if periodicity and float(periodicity).is_integer() else periodicity or "—",
-                    "Last O/H": iso or state or (raw_date if fl(raw_date) else "—"),
-                    "Hrs Since": hrs,
-                    "Hrs Since Display": format_hours(hrs),
-                    "Used Ratio": ratio if ratio is not None else 0.0,
-                    "Used %": round(ratio * 100, 1) if ratio is not None else None,
-                })
-
-    return records
-
-def extract_oe(table_rows: List[List[str]], warnings: List[WarningItem]) -> List[Dict[str, Any]]:
-    records = []
+                if iso or state or hrs is not None or fl(raw_date) or fl(raw_hrs):
+                    ratio = (hrs / periodicity) if (hrs is not None and periodicity and periodicity > 0) else None
+                    records.append({
+                        "Status": get_status(hrs, periodicity),
+                        "Description": comp,
+                        "Unit": f"Unit {unit_idx+1}",
+                        "Periodicity": int(periodicity) if periodicity and float(periodicity).is_integer() else periodicity or "—",
+                        "Last Date": iso or state or (raw_date if fl(raw_date) else "—"),
+                        "Run Hrs": hrs,
+                        "Run Hrs Display": format_hours(hrs),
+                        "Used %": round(ratio * 100, 1) if ratio is not None else None,
+                    })
 
     for row in table_rows:
         cells = [fl(c) for c in row]
-
         for idx, cell in enumerate(cells):
             comp_raw = normalize_token(cell)
-            comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, "OE")
+            comp, was_fuzzy, ambiguous = guarded_component_match(comp_raw, OTHER_SIMPLE_COMPONENTS)
 
             if ambiguous:
                 continue
-            if comp not in OE_COMPONENTS:
+            if comp not in OTHER_SIMPLE_COMPONENTS:
                 continue
-
-            if was_fuzzy:
-                add_warning(warnings, "Other Equipment", "warning", f"Fuzzy-matched component '{comp_raw}' -> '{comp}'", comp_raw)
 
             periodicity = parse_num(cells[idx + 1]) if idx + 1 < len(cells) else None
             raw_date = cells[idx + 2] if idx + 2 < len(cells) else ""
@@ -916,23 +846,28 @@ def extract_oe(table_rows: List[List[str]], warnings: List[WarningItem]) -> List
             if bad_date:
                 add_warning(warnings, "Other Equipment", "warning", f"Invalid date for {comp}: {bad_date}", raw_date)
 
-            if fl(raw_hrs) and hrs is None and normalize_token(raw_hrs) not in KNOWN_TEXT_STATES:
-                add_warning(warnings, "Other Equipment", "warning", f"Non-numeric hours for {comp}", raw_hrs)
-
             if iso or state or hrs is not None or fl(raw_date) or fl(raw_hrs):
                 records.append({
-                    "Section": "Other Equipment",
+                    "Status": "NO DATA" if hrs is None or periodicity is None else get_status(hrs, periodicity),
                     "Description": comp,
+                    "Unit": "—",
                     "Periodicity": int(periodicity) if periodicity and float(periodicity).is_integer() else periodicity or "—",
                     "Last Date": iso or state or (raw_date if fl(raw_date) else "—"),
                     "Run Hrs": hrs,
                     "Run Hrs Display": format_hours(hrs),
+                    "Used %": round((hrs / periodicity) * 100, 1) if (hrs is not None and periodicity and periodicity > 0) else None,
                 })
 
     dedup = []
     seen = set()
     for r in records:
-        key = tuple(r.items())
+        key = (
+            r["Description"],
+            r["Unit"],
+            r["Periodicity"],
+            r["Last Date"],
+            r["Run HrsDisplay"] if "Run HrsDisplay" in r else r["Run Hrs Display"]
+        )
         if key not in seen:
             seen.add(key)
             dedup.append(r)
@@ -947,8 +882,7 @@ def extract_telemetry(docx_bytes: bytes) -> Dict[str, Any]:
 
     me_rows = []
     aux_rows = []
-    dg_rows = []
-    oe_rows = []
+    other_rows = []
 
     for table in model["tables"]:
         rows = table["rows"]
@@ -963,41 +897,32 @@ def extract_telemetry(docx_bytes: bytes) -> Dict[str, Any]:
                 header["aux_total_hours"] = aux_meta.get("aux_total_hours")
             if header.get("aux_this_month") is None:
                 header["aux_this_month"] = aux_meta.get("aux_this_month")
-        elif table_type == "DG":
-            dg_rows.extend(extract_dg(rows, warnings))
-        elif table_type == "OE":
-            oe_rows.extend(extract_oe(rows, warnings))
+        else:
+            other_rows.extend(extract_other_equipment(rows, warnings))
 
     return {
         "header": header,
         "me_rows": me_rows,
         "aux_rows": aux_rows,
-        "dg_rows": dg_rows,
-        "oe_rows": oe_rows,
+        "other_rows": other_rows,
         "warnings": warnings,
     }
 
-def apply_report_sort(df: pd.DataFrame, order_list: List[str], unit_col: str = "Unit", engine_col: str = "Engine") -> pd.DataFrame:
+def apply_component_sort(df: pd.DataFrame, comp_col: str, order_list: List[str], unit_col: Optional[str] = None) -> pd.DataFrame:
     if df.empty:
         return df.copy()
 
     order_map = {name: idx for idx, name in enumerate(order_list)}
     out = df.copy()
-    out["_component_order"] = out["Component"].map(order_map).fillna(9999)
+    out["_component_order"] = out[comp_col].map(order_map).fillna(9999)
 
-    if unit_col in out.columns:
-        out["_unit_num"] = out[unit_col].astype(str).str.extract(r"(\d+)").fillna(999).astype(int)
-    else:
-        out["_unit_num"] = 999
+    if unit_col and unit_col in out.columns:
+        out["_unit_num"] = out[unit_col].astype(str).str.extract(r"(\\d+)").fillna(999).astype(int)
+        out = out.sort_values(by=["_component_order", "_unit_num"])
+        return out.drop(columns=["_component_order", "_unit_num"])
 
-    if engine_col in out.columns:
-        out["_engine_num"] = out[engine_col].astype(str).str.extract(r"(\d+)").fillna(1).astype(int)
-    else:
-        out["_engine_num"] = 1
-
-    return out.sort_values(by=["_component_order", "_engine_num", "_unit_num"]).drop(
-        columns=["_component_order", "_engine_num", "_unit_num"]
-    )
+    out = out.sort_values(by=["_component_order"])
+    return out.drop(columns=["_component_order"])
 
 def render_status_chip(status: str) -> str:
     s = (status or "").upper()
@@ -1025,7 +950,7 @@ def render_warning_summary(warnings: List[WarningItem]):
     cls = "banner-bad" if n_err else "banner-warn"
     st.markdown(
         f'<div class="banner {cls}"><div class="kicker">Validation notes: {n_err} errors, {n_warn} warnings.</div>'
-        f'<div class="small">The parser kept extraction conservative where labels or values were ambiguous.</div></div>',
+        f'<div class="small">Parser is kept conservative to avoid inventing values.</div></div>',
         unsafe_allow_html=True
     )
 
@@ -1079,11 +1004,10 @@ if uploaded:
             header = payload["header"]
             me_data = payload["me_rows"]
             aux_data = payload["aux_rows"]
-            dg_data = payload["dg_rows"]
-            oe_data = payload["oe_rows"]
+            other_data = payload["other_rows"]
             warnings = payload["warnings"]
 
-            combined_critical = me_data + aux_data + dg_data
+            combined_critical = me_data + aux_data + [r for r in other_data if r.get("Status") in {"OVERDUE", "HIGH PRIORITY", "OK", "NO DATA"}]
             n_od = sum(1 for c in combined_critical if c["Status"] == "OVERDUE")
             n_hp = sum(1 for c in combined_critical if c["Status"] == "HIGH PRIORITY")
 
@@ -1100,11 +1024,10 @@ if uploaded:
 
             render_warning_summary(warnings)
 
-            tab1, tab2, tab3, tab4 = st.tabs([
+            tab1, tab2, tab3 = st.tabs([
                 f"Main Engine ({len(me_data)})",
                 f"Aux Engine ({len(aux_data)})",
-                f"D/G Equipment ({len(dg_data)})",
-                f"Other Equipment ({len(oe_data)})"
+                f"Other Equipment ({len(other_data)})"
             ])
 
             with tab1:
@@ -1112,7 +1035,7 @@ if uploaded:
                     st.info("No Main Engine records found.")
                 else:
                     df_me = pd.DataFrame(me_data)
-                    df_me = apply_report_sort(df_me, ME_ORDER)
+                    df_me = apply_component_sort(df_me, "Component", ME_ORDER, "Unit")
                     df_me["Status"] = df_me["Status"].apply(render_status_chip)
                     df_me["Used %"] = df_me["Used %"].apply(format_percent)
                     render_html_table(
@@ -1127,7 +1050,7 @@ if uploaded:
                     st.info("No Auxiliary Engine records found.")
                 else:
                     df_aux = pd.DataFrame(aux_data)
-                    df_aux = apply_report_sort(df_aux, AUX_ORDER)
+                    df_aux = apply_component_sort(df_aux, "Component", AUX_ORDER)
                     df_aux["Status"] = df_aux["Status"].apply(render_status_chip)
                     df_aux["Used %"] = df_aux["Used %"].apply(format_percent)
                     render_html_table(
@@ -1138,29 +1061,18 @@ if uploaded:
                     )
 
             with tab3:
-                if not dg_data:
-                    st.info("No D/G equipment records found.")
-                else:
-                    df_dg = pd.DataFrame(dg_data)
-                    df_dg = apply_report_sort(df_dg, DG_ORDER)
-                    df_dg["Status"] = df_dg["Status"].apply(render_status_chip)
-                    df_dg["Used %"] = df_dg["Used %"].apply(format_percent)
-                    render_html_table(
-                        df_dg,
-                        ["Status", "Component", "Engine", "Unit", "Periodicity", "Last O/H", "Hrs Since Display", "Used %"],
-                        numeric_cols=["Hrs Since Display", "Used %"],
-                        center_cols=["Engine", "Unit"]
-                    )
-
-            with tab4:
-                if not oe_data:
+                if not other_data:
                     st.info("No Other Equipment records found.")
                 else:
-                    df_oe = pd.DataFrame(oe_data).sort_values(by=["Description", "Last Date"], na_position="last")
+                    df_other = pd.DataFrame(other_data)
+                    df_other = apply_component_sort(df_other, "Description", OTHER_ORDER, "Unit")
+                    df_other["Status"] = df_other["Status"].apply(render_status_chip)
+                    df_other["Used %"] = df_other["Used %"].apply(format_percent)
                     render_html_table(
-                        df_oe,
-                        ["Description", "Periodicity", "Last Date", "Run Hrs Display"],
-                        numeric_cols=["Run Hrs Display"]
+                        df_other,
+                        ["Status", "Description", "Unit", "Periodicity", "Last Date", "Run Hrs Display", "Used %"],
+                        numeric_cols=["Run Hrs Display", "Used %"],
+                        center_cols=["Unit"]
                     )
 
         except Exception as e:
