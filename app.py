@@ -398,39 +398,31 @@ def _parse_me(grid: List[List[str]]) -> List[Dict]:
 # ══════════════════════════════════════════════════════════════════════════
 #  AUX PARSER
 # ══════════════════════════════════════════════════════════════════════════
-def _find_aux_groups(grid: List[List[str]]) -> Tuple[int, List[Tuple[str, int, int]]]:
-    dr = None
-    for i, row in enumerate(grid):
-        rt = ' | '.join(_fl(c) for c in row).upper()
-        if 'DESCRIPTION' in rt and ('PERIODICTLY' in rt or 'PERIODICITY' in rt):
-            dr = i
-            break
-    if dr is None:
-        return -1, []
-    nums = [(c, int(_fl(grid[dr][c]))) for c in range(2, len(grid[dr])) if re.fullmatch(r'\d+', _fl(grid[dr][c]))]
-    starts = [c for c, n in nums if n == 1]
-    groups = []
-    for i, s in enumerate(starts[:3]):
-        ds = s + 1
-        de = (starts[i + 1] + 1) if i + 1 < len(starts) else len(grid[dr])
-        groups.append((['AUX-1', 'AUX-2', 'AUX-3'][i], ds, de))
-    return dr, groups
-
 def _parse_aux(grid: List[List[str]]) -> List[Dict]:
     if not grid:
         return []
-    dr, groups = _find_aux_groups(grid)
-    if dr < 0 or not groups:
+    
+    # Locate the start row dynamically
+    dr = next((i for i, row in enumerate(grid) if 'DESCRIPTION' in ' | '.join(_fl(c) for c in row).upper() and ('PERIODICTLY' in ' | '.join(_fl(c) for c in row).upper() or 'PERIODICITY' in ' | '.join(_fl(c) for c in row).upper())), -1)
+    if dr < 0:
         return []
+        
     result = []
     r = dr + 1
+    
+    # Hard-anchor the column groups to bypass Word cell merging issues
+    # AUX-1: Cols 3 to 8, AUX-2: Cols 9 to 14, AUX-3: Cols 15 to 20
+    groups = [('AUX-1', 3, 9), ('AUX-2', 9, 15), ('AUX-3', 15, 21)]
+
     while r < len(grid) - 1:
         nm = _normalize_label(grid[r][0] if grid[r] else '')
         period = _parse_number(grid[r][1] if len(grid[r]) > 1 else '')
         marker = _fl(grid[r][2] if len(grid[r]) > 2 else '').strip()
+        
         if nm in AUX_COMPONENTS and marker == '1':
             nxt = grid[r + 1] if r + 1 < len(grid) else []
             row_records = []
+            
             for eng, start, end in groups:
                 cyl_no = 1
                 for ci in range(start, min(end, len(grid[r]))):
@@ -525,6 +517,7 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
         def gc1(i, _row=r1): return _fl(_row[i]) if i < len(_row) else ''
         def gc2(i, _row=r2): return _fl(_row[i]) if i < len(_row) else ''
 
+        # Left side of the table
         dl = _clean_name(gc1(0))
         if _is_oe_comp(dl) and _norm_spaces(dl) not in _DG_SKIP and gc1(2) == '1':
             per = _parse_number(gc1(1))
@@ -535,11 +528,12 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
                                  'periodicity': per, 'last_date': _fmt_date(dt), 'run_hrs': hrs,
                                  'status': _status(hrs, per)})
 
-        dr = _clean_name(gc1(9))
-        if _is_oe_comp(dr) and _norm_spaces(dr) not in _DG_SKIP and gc1(11) == '1':
-            per = _parse_number(gc1(10))
+        # Right side of the table (Shifted indices to account for actual document structure)
+        dr = _clean_name(gc1(7))
+        if _is_oe_comp(dr) and _norm_spaces(dr) not in _DG_SKIP and gc1(9) == '1':
+            per = _parse_number(gc1(8))
             for gi, gl in enumerate(['D/G 1', 'D/G 2', 'D/G 3']):
-                dt = _parse_date(gc1(12 + gi)); hrs = _parse_number(gc2(12 + gi))
+                dt = _parse_date(gc1(10 + gi)); hrs = _parse_number(gc2(10 + gi))
                 if dt or hrs > 0:
                     rows.append({'section': 'D/G Equipment', 'description': dr, 'engine_label': gl,
                                  'periodicity': per, 'last_date': _fmt_date(dt), 'run_hrs': hrs,
@@ -591,18 +585,21 @@ def _parse_me_text(lines: List[str]) -> List[Dict]:
             if _fl(data[i + 2] if i + 2 < len(data) else '') == '1':
                 dates = []
                 j = i + 3
-                while j < len(data) and len(dates) < 8 and _fl(data[j]) != '2':
+                while j < len(data) and len(dates) < 10 and _fl(data[j]) != '2':
                     dates.append(_fl(data[j]))
                     j += 1
                 if j < len(data) and _fl(data[j]) == '2':
                     j += 1
                     hv = []
-                    while j < len(data) and len(hv) < 8:
+                    while j < len(data) and len(hv) < len(dates):
                         if _is_comp(_fl(data[j])):
                             break
                         hv.append(_fl(data[j]))
                         j += 1
-                    for k in range(8):
+                    
+                    # Dynamically use the number of extracted dates
+                    actual_cyls = len(dates) 
+                    for k in range(actual_cyls):
                         d = _parse_date(dates[k]) if k < len(dates) else ''
                         h = _parse_number(hv[k]) if k < len(hv) else 0.0
                         if d or h > 0:
@@ -734,7 +731,9 @@ def parse_docx(docx_bytes: bytes) -> Dict:
     for table in doc.tables:
         rg = _raw_grid(table)
         dg = _dedup_grid(table)
-        full = ' '.join(_fl(c) for row in rg[:3] for c in row).upper()
+        
+        # Flatten the entire table to ensure we don't miss blocks pushed further down
+        full_table_text = ' '.join(_fl(c) for row in rg for c in row).upper()
 
         if mt is None:
             for row in rg[:4]:
@@ -748,9 +747,9 @@ def parse_docx(docx_bytes: bytes) -> Dict:
 
         me_g.extend(_parse_me(rg))
         aux_g.extend(_parse_aux(dg))
-        if 'TURBOCHARGER' in full and 'A/C & REFR' in full and 'COOLERS' in full:
+        if 'TURBOCHARGER' in full_table_text and 'A/C & REFR' in full_table_text and 'COOLERS' in full_table_text:
             oe_rows.extend(_parse_oe(dg))
-        if 'D/G NO' in full.replace(' ', '').replace('.', ''):
+        if 'D/G NO' in full_table_text.replace(' ', '').replace('.', ''):
             dg_rows.extend(_parse_dg(dg))
 
     all_lines = _lines_from_doc(doc)
