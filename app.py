@@ -1,1097 +1,1190 @@
+import re
+import io
+import math
+import json
+from dataclasses import dataclass, asdict, field
+from datetime import datetime
+from difflib import get_close_matches
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
 import streamlit as st
 
+
+# =========================================================
+# PAGE CONFIG
+# =========================================================
+
 st.set_page_config(
-    page_title="Fleet Running Hours",
-    page_icon="⚓",
+    page_title="TEC-004 Running Hours Analyzer",
+    page_icon="⚙️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
-import os
-import re
-import html
-import shutil
-import tempfile
-import subprocess
-import hashlib
-from pathlib import Path
-from datetime import datetime
-from typing import Any, Dict, List, Tuple
 
+# =========================================================
+# STYLES
+# =========================================================
 
-# ══════════════════════════════════════════════════════════════════════════
-#  DESIGN SYSTEM  —  Animated Glassmorphism & Corporate Dark Theme
-# ══════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
-:root{
-  --bg:#080d12; --bg2:#0d141c; --bg3:#111a24; --bg4:#16222f;
-  --panel:rgba(17, 26, 36, 0.75); --line:#1e3040; --line2:#2a4460;
-  --ink:#f0f4f8; --muted:#94aabf; --soft:#607888;
-  --gold:#b89460; --gold2:#d4b07a; --gold3:#e8cc94;
-  --blue:#466b99; --green:#4f7a62; --amber:#99734d; --red:#8c5353;
+.block-container {
+    padding-top: 1.2rem;
+    padding-bottom: 2rem;
+    max-width: 1500px;
 }
-*{box-sizing:border-box}
-html,body,[class*="css"]{
-  background:var(--bg)!important;color:var(--muted)!important;
-  font-family:'Inter',sans-serif!important;-webkit-font-smoothing:antialiased;
+.metric-card {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 16px 18px;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
 }
-.main,.main>div{background:var(--bg)!important}
-.block-container{max-width:100%!important;padding:0 2.1rem 5rem!important}
-[data-testid="stSidebar"],[data-testid="collapsedControl"]{display:none!important}
-
-/* Background Ambient Glow */
-.main::before{
-  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(circle 800px at 0% 0%,rgba(184,148,96,.04),transparent 100%),
-             radial-gradient(circle 600px at 100% 100%,rgba(70,107,153,.04),transparent 100%);
+.metric-label {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
 }
-.block-container>*{position:relative;z-index:1}
-
-/* Dropzone Styling */
-[data-testid="stFileUploadDropzone"]{
-  background:rgba(184,148,96,.03)!important;
-  border:1.5px dashed var(--gold)!important;border-radius:16px!important;
-  padding:2.5rem 2rem!important;transition:all .3s cubic-bezier(0.4,0,0.2,1)!important;
+.metric-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+    margin-top: 4px;
 }
-[data-testid="stFileUploadDropzone"]:hover{
-  background:rgba(184,148,96,.08)!important;border-color:var(--gold2)!important;
-  transform:translateY(-2px);box-shadow:0 8px 24px rgba(184,148,96,.1);
+.metric-sub {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 6px;
 }
-[data-testid="stFileUploadDropzone"] p,[data-testid="stFileUploadDropzone"] span{
-  color:var(--gold2)!important;font-family:'IBM Plex Sans',sans-serif!important;
-  font-size:.95rem!important;font-weight:600!important;
+.section-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-top: 10px;
+    margin-bottom: 8px;
 }
-
-/* Inputs & Buttons */
-div[data-baseweb="select"]>div{
-  background:var(--bg3)!important;border:1px solid var(--line)!important;
-  border-radius:10px!important;color:var(--ink)!important;transition:border-color .2s;
+.soft-note {
+    color: #475569;
+    font-size: 14px;
 }
-div[data-baseweb="select"]>div:hover{border-color:var(--gold)!important;}
-.stSelectbox label,.stRadio label{
-  color:var(--soft)!important;font-size:.65rem!important;font-weight:600!important;
-  text-transform:uppercase!important;letter-spacing:.15em!important;
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
 }
-.stButton>button{
-  background:linear-gradient(135deg,var(--gold2),var(--gold))!important;color:#080d12!important;
-  border:none!important;border-radius:10px!important;padding:.65rem 1.5rem!important;
-  font-family:'IBM Plex Sans',sans-serif!important;font-weight:700!important;
-  font-size:.78rem!important;letter-spacing:.08em!important;text-transform:uppercase!important;
-  box-shadow:0 4px 14px rgba(184,148,96,.25)!important;transition:all .2s ease!important;
+.badge-ok { background: #dcfce7; color: #166534; }
+.badge-hp { background: #fef3c7; color: #92400e; }
+.badge-od { background: #fee2e2; color: #991b1b; }
+.badge-nd { background: #e2e8f0; color: #334155; }
+.badge-val { background: #dbeafe; color: #1d4ed8; }
+.badge-review { background: #fef3c7; color: #92400e; }
+.small-muted {
+    color: #64748b;
+    font-size: 12px;
 }
-.stButton>button:hover{
-  background:linear-gradient(135deg,var(--gold3),var(--gold2))!important;
-  box-shadow:0 6px 24px rgba(184,148,96,.4)!important;transform:translateY(-2px)!important;
+hr {
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
 }
-
-/* Animations */
-@keyframes slideDown { from{opacity:0;transform:translateY(-15px)} to{opacity:1;transform:translateY(0)} }
-@keyframes fadeUp    { from{opacity:0;transform:translateY(15px)}  to{opacity:1;transform:translateY(0)} }
-@keyframes growWidth { from{width:0;opacity:0}                     to{opacity:1} }
-@keyframes popIn     { 0%{transform:scale(.9);opacity:0} 60%{transform:scale(1.03)} 100%{transform:scale(1);opacity:1} }
-
-/* Matrix Row Staggered Entrance */
-.stagger-row {
-    opacity: 0;
-    animation: fadeUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-/* Overdue Pulse Effect */
-.pulse-tag {
-    animation: alert-pulse 2s infinite cubic-bezier(0.4, 0, 0.2, 1);
-}
-@keyframes alert-pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(200, 128, 128, 0.5); }
-    70%  { box-shadow: 0 0 0 6px rgba(200, 128, 128, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(200, 128, 128, 0); }
-}
-
-/* Scrollbars */
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:var(--bg2);border-radius:10px}
-::-webkit-scrollbar-thumb{background:var(--line2);border-radius:10px}
-::-webkit-scrollbar-thumb:hover{background:var(--soft)}
 </style>
 """, unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════
-#  STATUS COLOUR MAP
-# ══════════════════════════════════════════════════════════════════════════
-_SC = {
-    "OVERDUE":       {"row":"#1a1111","tag_bg":"#361d1d","tag_fg":"#d98c8c",
-                      "comp":"#f2e6e6","dim":"#b38f8f","num":"#e6c3c3",
-                      "bar_f":"#b35959","bar_e":"#2d1717","bord":"#402323", "class":"pulse-tag"},
-    "HIGH PRIORITY": {"row":"#1a1610","tag_bg":"#362816","tag_fg":"#d9a66c",
-                      "comp":"#f2ead9","dim":"#b39c7d","num":"#e6d1ad",
-                      "bar_f":"#b38640","bar_e":"#2d2112","bord":"#40311a", "class":""},
-    "OK":            {"row":"#0d1a14","tag_bg":"#1a3326","tag_fg":"#7cb393",
-                      "comp":"#d9ebd9","dim":"#8ca699","num":"#b3cca3",
-                      "bar_f":"#528c6a","bar_e":"#172e22","bord":"#234030", "class":""},
-    "NO DATA":       {"row":"#111824","tag_bg":"#1d2a3d","tag_fg":"#7aa1c7",
-                      "comp":"#e6edf5","dim":"#8ca1b3","num":"#b3c8db",
-                      "bar_f":"#537799","bar_e":"#1a2536","bord":"#26384f", "class":""},
+# =========================================================
+# CONFIG / CANONICAL MAPS
+# =========================================================
+
+SECTION_ALIASES = {
+    "ME": {
+        "MAIN ENGINE", "M/E", "ME", "MAIN ENGINE COMPONENTS"
+    },
+    "AUX": {
+        "AUXILIARY ENGINES", "AUX ENGINES", "A/E", "AUX", "GENERATOR ENGINES"
+    },
+    "OE": {
+        "OTHER EQUIPMENT", "TURBOCHARGER", "BOILER EQUIPMENT", "COMPRESSORS",
+        "COOLING", "COOLERS / WATER SYSTEMS", "AIR CONDITIONING", "COOLING SYSTEMS"
+    },
+    "DG": {
+        "D/G EQUIPMENT", "DG EQUIPMENT", "DIESEL GENERATOR", "DIESEL GENERATORS",
+        "D/G", "DG"
+    },
 }
-_ORD = {"OVERDUE": 0, "HIGH PRIORITY": 1, "OK": 2, "NO DATA": 3}
+
+COMPONENT_ALIASES = {
+    "CYLINDER COVER": {"CYLINDER COVER"},
+    "PISTON ASSEMBLY": {"PISTON ASSEMBLY"},
+    "STUFFING BOX": {"STUFFING BOX"},
+    "PISTON CROWN": {"PISTON CROWN"},
+    "CYLINDER LINER": {"CYLINDER LINER", "CYLINDER LINERS"},
+    "EXHAUST VALVE": {"EXHAUST VALVE", "EXHAUST VALVES"},
+    "STARTING VALVE": {"STARTING VALVE", "STARTING VALVES"},
+    "SAFETY VALVE": {"SAFETY VALVE", "SAFETY VALVES"},
+    "FUEL VALVES": {"FUEL VALVES", "FUEL VALVE", "FUEL VALVES (1)", "FUEL VALVES 1"},
+    "FUEL PUMP": {"FUEL PUMP", "FUEL PUMPS"},
+    "PLUNGER AND BARREL": {"PLUNGER AND BARREL", "PLUNGER & BARREL"},
+    "FUEL PUMP SUCTION VALVE": {"FUEL PUMP SUCTION VALVE", "SUCTION VALVE"},
+    "FUEL PUMP PUNCTURE VALVE": {"FUEL PUMP PUNCTURE VALVE", "PUNCTURE VALVE"},
+    "CROSSHEAD BEARINGS": {"CROSSHEAD BEARINGS", "CROSSHEAD BEARING"},
+    "BOTTOM END BEARINGS": {"BOTTOM END BEARINGS", "BOTTOM END BEARING"},
+    "MAIN BEARING": {"MAIN BEARING", "MAIN BEARINGS"},
+    "CYLINDER HEAD": {"CYLINDER HEAD", "CYLINDER HEADS"},
+    "PISTON": {"PISTON", "PISTONS"},
+    "CONNECTING ROD": {"CONNECTING ROD", "CONNECTING RODS"},
+    "CRANK PIN BEARING": {"CRANK PIN BEARING", "CRANKPIN BEARING"},
+    "ADJUST VALVE HEAD CLEARANCE": {"ADJUST VALVE HEAD CLEARANCE"},
+    "GENERAL O/H": {"GENERAL O/H", "GENERAL OVERHAUL"},
+    "BALANCING OF ROTOR SHAFT": {"BALANCING OF ROTOR SHAFT"},
+    "AIR COOLER CLEANING": {"AIR COOLER CLEANING"},
+    "AIR COND. COMPRESSOR NO.1": {"AIR COND. COMPRESSOR NO.1", "AIR COND COMPRESSOR NO.1", "AIR COND COMPRESSOR NO 1"},
+    "AIR COND. COMPRESSOR NO.2": {"AIR COND. COMPRESSOR NO.2", "AIR COND COMPRESSOR NO.2", "AIR COND COMPRESSOR NO 2"},
+    "REFRIGERATION COMPRESSOR NO.1": {"REFRIGERATION COMPRESSOR NO.1"},
+    "REFRIGERATION COMPRESSOR NO.2": {"REFRIGERATION COMPRESSOR NO.2"},
+    "STARTING MAIN AIR COMPRESSOR NO.1": {"STARTING MAIN AIR COMPRESSOR NO.1"},
+    "STARTING MAIN AIR COMPRESSOR NO.2": {"STARTING MAIN AIR COMPRESSOR NO.2"},
+    "SERVICE AIR COMPRESSOR": {"SERVICE AIR COMPRESSOR"},
+    "EMERGENCY AIR COMPRESSOR NO.": {"EMERGENCY AIR COMPRESSOR NO.", "EMERGENCY AIR COMPRESSOR"},
+    "FURNACE INSPECTION": {"FURNACE INSPECTION"},
+    "BURNER ATOMIZER": {"BURNER ATOMIZER"},
+    "FORCED DRAFT FAN": {"FORCED DRAFT FAN"},
+    "FEED PUMPS NO.1": {"FEED PUMPS NO.1", "FEED PUMP NO.1"},
+    "FEED PUMPS NO.2": {"FEED PUMPS NO.2", "FEED PUMP NO.2"},
+    "WASHING THE TUBES": {"WASHING THE TUBES"},
+    "O/H CIRC. PUMP NO.1": {"O/H CIRC. PUMP NO.1"},
+    "O/H CIRC. PUMP NO.2": {"O/H CIRC. PUMP NO.2"},
+    "M/E L.O.": {"M/E L.O."},
+    "AIR. COND. COOLER CLEANING": {"AIR. COND. COOLER CLEANING"},
+    "ATMOSPHERIC CONDENSER": {"ATMOSPHERIC CONDENSER"},
+}
+
+OE_SECTION_BY_COMPONENT = {
+    "GENERAL O/H": "Turbocharger",
+    "BALANCING OF ROTOR SHAFT": "Turbocharger",
+    "AIR COOLER CLEANING": "Turbocharger",
+    "M/E L.O.": "Coolers / Water Systems",
+    "WASHING THE TUBES": "Coolers / Water Systems",
+    "O/H CIRC. PUMP NO.1": "Coolers / Water Systems",
+    "O/H CIRC. PUMP NO.2": "Coolers / Water Systems",
+    "AIR COND. COMPRESSOR NO.1": "Compressors",
+    "AIR COND. COMPRESSOR NO.2": "Compressors",
+    "REFRIGERATION COMPRESSOR NO.1": "Compressors",
+    "REFRIGERATION COMPRESSOR NO.2": "Compressors",
+    "STARTING MAIN AIR COMPRESSOR NO.1": "Compressors",
+    "STARTING MAIN AIR COMPRESSOR NO.2": "Compressors",
+    "SERVICE AIR COMPRESSOR": "Compressors",
+    "EMERGENCY AIR COMPRESSOR NO.": "Compressors",
+    "FURNACE INSPECTION": "Boiler Equipment",
+    "BURNER ATOMIZER": "Boiler Equipment",
+    "FORCED DRAFT FAN": "Boiler Equipment",
+    "FEED PUMPS NO.1": "Boiler Equipment",
+    "FEED PUMPS NO.2": "Boiler Equipment",
+    "AIR. COND. COOLER CLEANING": "Air Conditioning",
+    "ATMOSPHERIC CONDENSER": "Cooling Systems",
+}
+
+EXPECTED_SECTION_ORDER = ["ME", "AUX", "OE", "DG"]
 
 
-# ══════════════════════════════════════════════════════════════════════════
-#  CONVERSION
-# ══════════════════════════════════════════════════════════════════════════
-def convert_doc_to_docx(raw: bytes) -> bytes:
-    soffice = shutil.which("soffice") or "/usr/bin/soffice"
-    if not os.path.isfile(soffice):
-        raise RuntimeError("LibreOffice not found — packages.txt must contain: libreoffice")
-    
-    with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as t:
-        t.write(raw)
-        src = t.name
-        
-    outdir = tempfile.mkdtemp(prefix="lo_")
-    out = os.path.join(outdir, Path(src).stem + ".docx")
-    pf = f"file:///tmp/lo_{os.getpid()}_{os.urandom(4).hex()}"
-    
+# =========================================================
+# DATA MODEL
+# =========================================================
+
+@dataclass
+class ParsedRow:
+    source_text: str = ""
+    raw_section: Optional[str] = None
+    section: Optional[str] = None
+    component_raw: Optional[str] = None
+    component: Optional[str] = None
+    engine_raw: Optional[str] = None
+    engine: Optional[str] = None
+    unit_raw: Optional[str] = None
+    unit: Optional[str] = None
+    periodicity_raw: Optional[str] = None
+    periodicity: Optional[int] = None
+    last_oh_raw: Optional[str] = None
+    last_oh_iso: Optional[str] = None
+    hrs_since_raw: Optional[str] = None
+    hrs_since: Optional[int] = None
+    pct_used: Optional[float] = None
+    status: Optional[str] = None
+    source_method: str = "text"
+    confidence: float = 0.0
+    validation_status: str = "review_needed"
+    issues: List[str] = field(default_factory=list)
+    row_key: Optional[str] = None
+    display_order: int = 0
+
+
+# =========================================================
+# LOW LEVEL HELPERS
+# =========================================================
+
+def clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    s = str(value).replace("\u00a0", " ").strip()
+    s = s.replace("DEC.22", "DEC 22").replace("OCT.", "OCT").replace("JAN.", "JAN")
+    s = s.replace("NO 1", "NO.1").replace("NO 2", "NO.2")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+def normalize_token(value: Any) -> str:
+    s = clean_text(value).upper()
+    s = s.replace("’", "'")
+    s = re.sub(r"[(),]", " ", s)
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+def parse_int(value: Any) -> Optional[int]:
+    s = clean_text(value)
+    if not s or s in {"—", "-", "N/A"}:
+        return None
+    s = s.replace(",", "")
+    m = re.search(r"\d+", s)
+    if not m:
+        return None
     try:
-        r = subprocess.run(
-            [soffice, "--headless", "--norestore", "--nofirststartwizard",
-             f"-env:UserInstallation={pf}", "--convert-to", "docx", src, "--outdir", outdir],
-            capture_output=True, timeout=120)
-        
-        if not os.path.exists(out):
-            raise RuntimeError(r.stderr.decode("utf-8", "ignore")[:400])
-            
-        with open(out, "rb") as f: 
-            return f.read()
-    finally:
-        for p in [src, out]:
-            try:
-                if os.path.exists(p): 
-                    os.unlink(p)
-            except Exception: 
-                pass
-        shutil.rmtree(outdir, ignore_errors=True)
+        return int(m.group())
+    except:
+        return None
+
+def parse_float_pct(value: Any) -> Optional[float]:
+    s = clean_text(value)
+    if not s or s in {"—", "-", "N/A"}:
+        return None
+    s = s.replace("%", "").strip()
+    try:
+        return float(s)
+    except:
+        return None
+
+def normalize_date(value: Any) -> Optional[str]:
+    s = clean_text(value).upper()
+    if not s or s in {"—", "-", "N/A"}:
+        return None
+
+    replacements = {
+        "SEPT": "SEP",
+        "MARCH": "MAR",
+        "JUNE": "JUN",
+        "JULY": "JUL",
+    }
+    for old, new in replacements.items():
+        s = re.sub(rf"\b{old}\b", new, s)
+
+    s = s.replace(".", " ")
+    s = re.sub(r"\s+", " ", s).strip()
+
+    fmts = [
+        "%d %b %y", "%d %b %Y",
+        "%d/%m/%y", "%d/%m/%Y",
+        "%d %m %y", "%d %m %Y",
+    ]
+
+    for fmt in fmts:
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except:
+            pass
+
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{2,4})$", s)
+    if m:
+        d, mth, y = m.groups()
+        d = int(d)
+        mth = int(mth)
+        y = int(y)
+        if y < 100:
+            y += 2000
+        try:
+            dt = datetime(y, mth, d)
+            return dt.strftime("%Y-%m-%d")
+        except:
+            return None
+
+    return None
+
+def format_display_date(iso_str: Optional[str]) -> str:
+    if not iso_str:
+        return "—"
+    try:
+        return datetime.strptime(iso_str, "%Y-%m-%d").strftime("%d %b %Y").upper()
+    except:
+        return iso_str
+
+def canon_section(raw: str) -> Optional[str]:
+    token = normalize_token(raw)
+    alias_map = {}
+    for canon, aliases in SECTION_ALIASES.items():
+        for alias in aliases:
+            alias_map[normalize_token(alias)] = canon
+    if token in alias_map:
+        return alias_map[token]
+    return None
+
+def canon_component(raw: str) -> Tuple[Optional[str], bool]:
+    token = normalize_token(raw)
+    alias_lookup = {}
+    for canon, aliases in COMPONENT_ALIASES.items():
+        for alias in aliases:
+            alias_lookup[normalize_token(alias)] = canon
+
+    if token in alias_lookup:
+        return alias_lookup[token], True
+
+    close = get_close_matches(token, list(alias_lookup.keys()), n=1, cutoff=0.92)
+    if close:
+        return alias_lookup[close[0]], False
+
+    return None, False
+
+def infer_oe_subsection(component: Optional[str]) -> Optional[str]:
+    if not component:
+        return None
+    return OE_SECTION_BY_COMPONENT.get(component)
+
+def normalize_engine(section: Optional[str], raw_engine: str, raw_unit: str) -> Tuple[Optional[str], Optional[str]]:
+    e = clean_text(raw_engine).upper()
+    u = clean_text(raw_unit)
+
+    if section == "ME":
+        if not u and re.search(r"CYL\s*\d+", e):
+            u = re.sub(r"\s+", " ", e.title()).replace("Cyl", "Cyl")
+        return "ME", (u if u else None)
+
+    if section == "AUX":
+        if e:
+            e = e.replace(" ", "-")
+        return (e if e else None), (u if u else None)
+
+    if section == "DG":
+        if e:
+            e = e.replace("/", "").replace(" ", "-")
+        return (e if e else None), (u if u else None)
+
+    return (e if e else None), (u if u else None)
+
+def compute_pct_used(periodicity: Optional[int], hrs_since: Optional[int]) -> Optional[float]:
+    if not periodicity or periodicity <= 0 or hrs_since is None:
+        return None
+    return round((hrs_since / periodicity) * 100.0, 1)
+
+def compute_status(periodicity: Optional[int], hrs_since: Optional[int]) -> str:
+    if not periodicity or hrs_since is None:
+        return "NO DATA"
+    pct = (hrs_since / periodicity) * 100.0
+    if pct >= 100:
+        return "OVERDUE"
+    if pct >= 80:
+        return "HIGH PRIORITY"
+    return "OK"
+
+def safe_str(value: Any) -> str:
+    return "" if value is None else str(value)
+
+def row_key_from_parts(section, engine, unit, component, periodicity, last_oh_iso):
+    return "|".join([
+        safe_str(section),
+        safe_str(engine),
+        safe_str(unit),
+        safe_str(component),
+        safe_str(periodicity),
+        safe_str(last_oh_iso),
+    ])
 
 
-# ══════════════════════════════════════════════════════════════════════════
-#  GRID BUILDERS
-# ══════════════════════════════════════════════════════════════════════════
-def _raw_grid(table) -> List[List[str]]:
-    grid = []
-    mc = 0
-    for row in table.rows:
-        cells = []
-        for cell in row.cells:
-            raw = re.sub(r'[\x0b\r]', '\n', cell.text).replace('\x07', '')
-            lines = [ln.replace('\xa0', ' ').replace('\t', ' ').strip() for ln in raw.split('\n') if ln.strip()]
-            cells.append(lines[0] if lines else '')
-        mc = max(mc, len(cells))
-        grid.append(cells)
-    for row in grid:
-        while len(row) < mc: row.append('')
-    return grid
+# =========================================================
+# RAW TEXT PARSER
+# =========================================================
 
-def _dedup_grid(table) -> List[List[str]]:
-    grid = []
-    mc = 0
-    for row in table.rows:
-        cells = []
-        prior = None
-        for cell in row.cells:
-            if cell._tc is prior: 
-                continue
-            prior = cell._tc
-            raw = re.sub(r'[\x0b\r]', '\n', cell.text).replace('\x07', '')
-            lines = [ln.replace('\xa0', ' ').replace('\t', ' ').strip() for ln in raw.split('\n') if ln.strip()]
-            cells.append(lines[0] if lines else '')
-        mc = max(mc, len(cells))
-        grid.append(cells)
-    for row in grid:
-        while len(row) < mc: row.append('')
-    return grid
+def extract_document_header(text: str) -> Dict[str, Any]:
+    vessel = None
+    report_date = None
+    me_total_hrs = None
+    me_this_month = None
 
+    vessel_match = re.search(r"\b(?:Vessel)\s*\n?([A-Z][A-Z0-9 .\-]+)", text, re.IGNORECASE)
+    if vessel_match:
+        vessel = clean_text(vessel_match.group(1))
 
-# ══════════════════════════════════════════════════════════════════════════
-#  TEXT & NUMBER HELPERS
-# ══════════════════════════════════════════════════════════════════════════
-def _fl(t: Any) -> str:
-    raw = str(t or "").replace('\x07', '').replace('\xa0', ' ').replace('\t', ' ')
-    for p in re.split(r'[\r\n\x0b]+', raw):
-        s = re.sub(r'\s+', ' ', p).strip()
-        if s: return s
-    return ''
+    date_match = re.search(r"\b(\d{1,2}\s+[A-Z]+\s+\d{4})\s*\n?\s*Report Date", text, re.IGNORECASE)
+    if date_match:
+        report_date = clean_text(date_match.group(1))
 
-def _clean_name(t: Any) -> str:
-    s = _fl(t)
-    s = re.sub(r'(?i)^MV\s+', '', s)
-    s = re.sub(r'(?i)Page\s*\d+\s*of\s*\d+', '', s)
-    return re.sub(r'  +', ' ', s).strip(" -:")
+    total_match = re.search(r"\b([\d,]+)\s*\n?\s*M/E Total Hrs", text, re.IGNORECASE)
+    if total_match:
+        me_total_hrs = parse_int(total_match.group(1))
 
-def _parse_number(t: Any) -> float:
-    s = _fl(t).strip().upper()
-    if not s or s in ('', '-', 'N/A', 'CENTRAL', 'COOLER'): return 0.0
-    s = s.replace('[', '').replace(']', '')
-    
-    if any(w in s for w in ('MONTH', 'YEAR', 'WEEK', 'DAY', 'OBS', 'NO RECORD', 'BASED ON', 'OBSERVATION')): 
-        return 0.0
-        
-    m = re.search(r'\d[\d,\.]*', s)
-    if not m: return 0.0
-        
-    b = m.group()
-    sep = max(b.rfind('.'), b.rfind(','))
-    
-    if sep > 0 and len(b) - sep == 4: 
-        b = re.sub(r'[,\.]', '', b)
-    elif sep > 0: 
-        b = re.sub(r'[,\.]', '', b[:sep])
-    else: 
-        b = re.sub(r'[,\.]', '', b)
-        
-    try: return float(b)
-    except: return 0.0
+    month_match = re.search(r"\b([\d,]+)\s*\n?\s*M/E This Month", text, re.IGNORECASE)
+    if month_match:
+        me_this_month = parse_int(month_match.group(1))
 
-def _parse_date(t: Any) -> str:
-    s = _fl(t).strip()
-    if not s: return ''
-    s = s.replace('[', '').replace(']', '').strip()
-    
-    if s in ('-', '1', '2', 'N/A', 'n/a', 'NA', 'Central', 'CENTRAL', 'COOLER', 'NO RECORD', 'NOT WORKING', 'N.A.'): 
-        return ''
-    if re.fullmatch(r'^\d+$', s): return ''
-    if re.fullmatch(r'^\d{1,3}[.,]\d{3}$', s): return ''
-    if len(s) > 32: return ''
-        
-    return s if re.search(r'[A-Za-z0-9/]', s) else ''
-
-def _status(hrs: float, period: float) -> str:
-    if hrs <= 0 or period <= 0: return 'NO DATA'
-    r = hrs / period
-    if r >= 1.0: return 'OVERDUE'
-    if r >= 0.8: return 'HIGH PRIORITY'
-    return 'OK'
-
-def _pct(hrs: float, period: float) -> float:
-    return round(hrs / period, 4) if hrs and period else 0.0
-
-def _is_comp(n: str) -> bool:
-    u = _fl(n).upper()
-    if not u or len(u) < 2: return False
-        
-    BAD = ('DESCRIPTION', 'REMARKS', 'COMPONENT', 'PERIODICITY', 'PERIODICTLY', 'DATE OF LAST',
-           'RUNNING HOURS', 'MAIN ENGINE', 'AUX. ENGINE', 'TYPE:', '1-DATE OF LAST',
-           'TOTAL RUNNING', 'THIS MONTH', 'CYL. NO', 'NOTE 1', 'BASED ON', 'SERIAL NR',
-           'HOURS THIS MONTH', 'AUX. ENGINE MAKER')
-           
-    if any(b in u for b in BAD): return False
-    if re.fullmatch(r'[\d./ ,:\-\[\]()]+', u): return False
-    return bool(re.search(r'[A-Za-z]', u))
-
-def _mk(cat, eng, unit, nm, per, dt, hrs, doc_idx=0) -> Dict:
-    # doc_idx is injected later to preserve true document order
-    return {'category': cat, 'engine_label': eng, 'unit': unit, 'description': nm,
-            'periodicity': per, 'last_oh_date': dt, 'hrs_since': hrs,
-            'pct_used': _pct(hrs, per), 'status': _status(hrs, per), 'doc_idx': doc_idx}
-
-def _get_unique_ordered(records: List[Dict], key: str) -> List[str]:
-    """Returns a list of unique values preserving original document order."""
-    seen = set()
-    out = []
-    # Sort strictly by doc_idx first
-    for r in sorted(records, key=lambda x: x.get('doc_idx', 0)):
-        val = r.get(key)
-        if val and val not in seen:
-            seen.add(val)
-            out.append(val)
-    return out
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  ME PARSER
-# ══════════════════════════════════════════════════════════════════════════
-def _parse_me(grid: List[List[str]]) -> List[Dict]:
-    if not grid: return []
-    if not any('MAIN ENGINE' in (_fl(grid[r][c]).upper() if c < len(grid[r]) else '')
-               for r in range(min(4, len(grid))) for c in range(min(16, len(grid[r])))): 
-        return []
-
-    rem_col = None
-    for r in range(min(8, len(grid))):
-        for ci, txt in enumerate(grid[r]):
-            if 'REMARK' in _fl(txt).upper() and ci > 3: 
-                rem_col = ci
-                break
-        if rem_col: break
-    if rem_col is None: rem_col = 12
-
-    MARKER = 2; PERIOD = 1; FIRST = 3
-    actual_cyls = max(1, min(8, rem_col - FIRST))
-
-    end = len(grid)
-    for r, row in enumerate(grid):
-        j = ' '.join(_fl(x) for x in row).upper()
-        if 'NOTE 1' in j or 'TURBOCHARGER' in j or 'AUX. ENGINE MAKER' in j: 
-            end = r; break
-
-    result = []
-    r = 0
-    while r < end - 1:
-        nm     = _clean_name(grid[r][0] if grid[r] else '')
-        period = _parse_number(grid[r][PERIOD] if PERIOD < len(grid[r]) else '')
-        marker = _fl(grid[r][MARKER] if MARKER < len(grid[r]) else '').strip()
-        
-        if _is_comp(nm) and marker == '1':
-            nxt = grid[r + 1] if r + 1 < len(grid) else []
-            for cyl in range(1, actual_cyls + 1):
-                ci = FIRST + cyl - 1
-                d = _parse_date(grid[r][ci] if ci < len(grid[r]) else '')
-                h = _parse_number(nxt[ci] if ci < len(nxt) else '')
-                if d or h > 0: 
-                    result.append(_mk('MAIN_ENGINE', 'ME', f'Cyl {cyl}', nm, period, d, h))
-            r += 2
-        else: r += 1
-            
-    return result
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  AUX PARSER
-# ══════════════════════════════════════════════════════════════════════════
-def _find_aux_groups(grid: List[List[str]]) -> Tuple[int, List[Tuple]]:
-    dr = None
-    for i, row in enumerate(grid):
-        rt = ' | '.join(_fl(c) for c in row).upper()
-        if 'DESCRIPTION' in rt and ('PERIODICTLY' in rt or 'PERIODICITY' in rt): 
-            dr = i; break
-    if dr is None: return -1, []
-        
-    nums = [(c, int(_fl(grid[dr][c])))
-            for c in range(2, len(grid[dr]))
-            if re.fullmatch(r'\d+', _fl(grid[dr][c]))]
-            
-    if nums:
-        starts = [c for c, n in nums if n == 1]
-        groups = []
-        for i, s in enumerate(starts[:3]):
-            ds = s + 1   
-            de = (starts[i + 1] + 1) if i + 1 < len(starts) else len(grid[dr])
-            groups.append((['AUX-1', 'AUX-2', 'AUX-3'][i], ds, de))
-        if groups: return dr, groups
-    return dr, []
-
-def _parse_aux(grid: List[List[str]]) -> List[Dict]:
-    if not grid: return []
-    dr, groups = _find_aux_groups(grid)
-    if dr < 0 or not groups: return []
-        
-    result = []
-    r = dr + 1
-    while r < len(grid) - 1:
-        nm     = _clean_name(grid[r][0] if grid[r] else '')
-        period = _parse_number(grid[r][1] if len(grid[r]) > 1 else '')
-        marker = _fl(grid[r][2] if len(grid[r]) > 2 else '').strip()
-        
-        if _is_comp(nm) and marker == '1':
-            nxt = grid[r + 1] if r + 1 < len(grid) else []
-            for eng, start, end in groups:
-                for ci_idx, ci in enumerate(range(start, min(end, len(grid[r])))):
-                    d = _parse_date(grid[r][ci] if ci < len(grid[r]) else '')
-                    h = _parse_number(nxt[ci] if ci < len(nxt) else '')
-                    if d or h > 0:
-                        result.append(_mk('AUX_ENGINE', eng, f'Cyl {ci_idx + 1}', nm, period, d, h))
-            r += 2
-        else: r += 1
-    return result
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  OE PARSER
-# ══════════════════════════════════════════════════════════════════════════
-_OE_HEADER = {
-    'TURBOCHARGER','AUXILIARY BOILER','COOLERS','EXH GAS BOILER','EXH GAS  BOILER',
-    'A/C & REFR. COMPRESSORS','MAIN AIR COMPRESSORS','PERIODICTLY','PERIODICITY',
-    'DATE OF LAST INSPECTION','DATE OF LAST O/H','RUN HRS','DATE OF LAST CLEANING',
-    'DATE','DESCRIPTION','',
-}
-
-def _is_oe_comp(n: str) -> bool:
-    u = _fl(n).upper().strip()
-    if not u or len(u) < 2 or u in _OE_HEADER: return False
-    if re.fullmatch(r'[\d./ ,:\-\[\]()]+', u): return False
-    return bool(re.search(r'[A-Za-z]', u))
-
-def _oe_section(desc: str, zone: str) -> str:
-    d = _fl(desc).upper()
-    if zone == 'A':
-        if any(k in d for k in ('TURBOCHARGER','AIR COOLER CLEANING','GENERAL O/H','ROTOR','BALANCING')): return 'Turbocharger'
-        if any(k in d for k in ('BOILER','BURNER','FEED PUMPS','FORCED DRAFT','FURNACE')): return 'Boiler Equipment'
-        return 'Machinery Services'
-    if zone in ('B'):
-        if any(k in d for k in ('L.O.','JACKET','WASHING','CIRC. PUMP','PISTON L.O.')): return 'Coolers / Water Systems'
-        return 'Cooling Systems'
-    if zone in ('C', 'F'):
-        if 'COMPRESSOR' in d: return 'Compressors'
-        if any(k in d for k in ('CONDENSER','A/C','AIR. COND','AIR COND')): return 'Air Conditioning'
-        return 'Other Equipment'
-    if zone == 'D':
-        # FIXED: Zone D explicitly mapped to Boiler Equipment
-        return 'Boiler Equipment'
-    return 'Other Equipment'
-
-def _parse_oe(grid: List[List[str]]) -> List[Dict]:
-    rows = []
-    in_boiler_section = False
-
-    for row in grid:
-        r = row
-        def gc(i, _r=r): return _fl(_r[i]) if i < len(_r) else ''
-
-        if _fl(gc(1)).upper() in ('DATE OF LAST INSPECTION', 'DATE OF LAST O/H', 'DATE'):
-            in_boiler_section = True
-            continue
-
-        if not in_boiler_section:
-            da = _clean_name(gc(0))
-            if _is_oe_comp(da):
-                per = _parse_number(gc(1)); dt = _parse_date(gc(2)); hrs = _parse_number(gc(3))
-                if dt or hrs > 0 or per > 0: rows.append({'section': _oe_section(da, 'A'), 'description': da, 'periodicity': per, 'last_date': dt, 'run_hrs': hrs})
-
-            db = _clean_name(gc(5))
-            if _is_oe_comp(db):
-                dt = _parse_date(gc(6)); hrs = _parse_number(gc(7))
-                if dt or hrs > 0: rows.append({'section': _oe_section(db, 'B'), 'description': db, 'periodicity': 0, 'last_date': dt, 'run_hrs': hrs})
-
-            dc = _clean_name(gc(10))
-            if _is_oe_comp(dc):
-                dt = _parse_date(gc(11)); hrs = _parse_number(gc(12))
-                if dt or hrs > 0: rows.append({'section': _oe_section(dc, 'C'), 'description': dc, 'periodicity': 0, 'last_date': dt, 'run_hrs': hrs})
-
-        else:
-            dd = _clean_name(gc(0))
-            if _is_oe_comp(dd):
-                dt = _parse_date(gc(1))
-                if dt: rows.append({'section': _oe_section(dd, 'D'), 'description': dd, 'periodicity': 0, 'last_date': dt, 'run_hrs': 0})
-
-            de = _clean_name(gc(5))
-            if _is_oe_comp(de):
-                dt = _parse_date(gc(6))
-                if dt: rows.append({'section': _oe_section(de, 'B'), 'description': de, 'periodicity': 0, 'last_date': dt, 'run_hrs': 0})
-
-            df = _clean_name(gc(10))
-            if _is_oe_comp(df):
-                dt = _parse_date(gc(11)); hrs = _parse_number(gc(12))
-                if dt or hrs > 0: rows.append({'section': _oe_section(df, 'F'), 'description': df, 'periodicity': 0, 'last_date': dt, 'run_hrs': hrs})
-                    
-    return rows
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  DG PARSER
-# ══════════════════════════════════════════════════════════════════════════
-_DG_SKIP = {'DESCRIPTION', 'PERIODICTLY', 'PERIODICITY', 'D/G NO1', 'D/G NO2', 'D/G NO3', ''}
-
-def _is_dg_comp(n: str) -> bool:
-    u = _fl(n).upper().strip()
-    if not u or len(u) < 2 or u in _DG_SKIP: return False
-    if re.fullmatch(r'[\d./ ,\-\[\]()]+', u): return False
-    return bool(re.search(r'[A-Za-z]', u))
-
-def _parse_dg(grid: List[List[str]]) -> List[Dict]:
-    rows = []
-    r = 0
-    while r < len(grid) - 1:
-        r1 = grid[r]
-        r2 = grid[r + 1] if r + 1 < len(grid) else []
-
-        left_col = -1
-        for i in range(min(5, len(r1))):
-            if _is_dg_comp(r1[i]): left_col = i; break
-        
-        if left_col != -1 and left_col + 5 < len(r1):
-            if _fl(r1[left_col + 2]) == '1':
-                per = _parse_number(r1[left_col + 1])
-                for gi, gl in enumerate(['D/G 1', 'D/G 2', 'D/G 3']):
-                    dt = _parse_date(r1[left_col + 3 + gi])
-                    h = _parse_number(r2[left_col + 3 + gi] if left_col + 3 + gi < len(r2) else '')
-                    if dt or h > 0: rows.append({'section': 'D/G Equipment', 'description': _clean_name(r1[left_col]), 'engine_label': gl, 'periodicity': per, 'last_date': dt, 'run_hrs': h, 'status': _status(h, per)})
-        
-        right_col = -1
-        search_start = left_col + 6 if left_col != -1 else 4
-        for i in range(search_start, min(15, len(r1))):
-            if _is_dg_comp(r1[i]): right_col = i; break
-
-        if right_col != -1 and right_col + 5 < len(r1):
-            if _fl(r1[right_col + 2]) == '1':
-                per = _parse_number(r1[right_col + 1])
-                for gi, gl in enumerate(['D/G 1', 'D/G 2', 'D/G 3']):
-                    dt = _parse_date(r1[right_col + 3 + gi])
-                    h = _parse_number(r2[right_col + 3 + gi] if right_col + 3 + gi < len(r2) else '')
-                    if dt or h > 0: rows.append({'section': 'D/G Equipment', 'description': _clean_name(r1[right_col]), 'engine_label': gl, 'periodicity': per, 'last_date': dt, 'run_hrs': h, 'status': _status(h, per)})
-        r += 1
-    return rows
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  TEXT FALLBACK
-# ══════════════════════════════════════════════════════════════════════════
-def _lines_from_doc(doc) -> List[str]:
-    lines = []
-    for p in doc.paragraphs:
-        t = _fl(p.text)
-        if t: lines.append(t)
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                t = _fl(cell.text)
-                if t: lines.append(t)
-    return lines
-
-def _between(lines, starts, ends):
-    s = e = None
-    for i, ln in enumerate(lines):
-        u = ln.upper()
-        if s is None and any(m in u for m in starts): s = i; continue
-        if s is not None and any(m in u for m in ends): e = i; break
-    return lines[s:e] if s is not None else []
-
-def _parse_me_text(lines: List[str]) -> List[Dict]:
-    rows = []
-    seg = _between(lines, ['MAIN ENGINE', 'CYL. NO.1'], ['NOTE 1', 'TURBOCHARGER', 'AUX. ENGINE MAKER / TYPE'])
-    if not seg: return rows
-        
-    data = [x for x in seg if _fl(x)]
-    i = 0
-    while i < len(data):
-        nm = _clean_name(data[i])
-        if _is_comp(nm):
-            period = _parse_number(data[i + 1]) if i + 1 < len(data) else 0.0
-            if _fl(data[i + 2] if i + 2 < len(data) else '') == '1':
-                dates = []
-                j = i + 3
-                while j < len(data) and len(dates) < 8 and _fl(data[j]) != '2':
-                    val = _fl(data[j])
-                    if _is_comp(val): break
-                    if not re.fullmatch(r'^\d{1,3}[.,]\d{3}$', val) and 'OBSERV' not in val.upper() and 'NOTE' not in val.upper():
-                        dates.append(val)
-                    j += 1
-                
-                if j < len(data) and _fl(data[j]) == '2':
-                    j += 1
-                    hv = []
-                    while j < len(data) and len(hv) < len(dates):
-                        if _is_comp(_fl(data[j])): break
-                        hv.append(_fl(data[j]))
-                        j += 1
-                        
-                    for k in range(len(dates)):
-                        d = _parse_date(dates[k]) if k < len(dates) else ''
-                        h = _parse_number(hv[k]) if k < len(hv) else 0.0
-                        if d or h > 0: rows.append(_mk('MAIN_ENGINE', 'ME', f'Cyl {k + 1}', nm, period, d, h))
-                    i = j
-                    continue
-        i += 1
-    return rows
-
-def _parse_aux_text(lines: List[str]) -> List[Dict]:
-    rows = []
-    seg = _between(lines, ['AUX. ENGINE MAKER / TYPE', 'AUX. ENGINE NO.1'], ['D/G NO1', 'TURBOCHARGER (2)', '1ST COPY'])
-    if not seg: seg = _between(lines, ['AUX. ENGINE NO.1'], ['D/G NO1', 'TURBOCHARGER (2)', '1ST COPY'])
-        
-    si = None
-    for i, ln in enumerate(seg):
-        if 'DESCRIPTION' in ln.upper() and ('PERIODICTLY' in ln.upper() or 'PERIODICITY' in ln.upper()): si = i; break
-            
-    if si is None: return rows
-        
-    data = [_fl(x) for x in seg[si + 1:] if _fl(x)]
-    i = 0
-    while i < len(data):
-        nm = _clean_name(data[i])
-        if _is_comp(nm):
-            period = _parse_number(data[i + 1]) if i + 1 < len(data) else 0.0
-            if _fl(data[i + 2] if i + 2 < len(data) else '') == '1':
-                dates = []
-                j = i + 3
-                while j < len(data) and len(dates) < 18 and _fl(data[j]) != '2':
-                    if _is_comp(_fl(data[j])): break
-                    dates.append(_fl(data[j]))
-                    j += 1
-                    
-                if j < len(data) and _fl(data[j]) == '2':
-                    j += 1
-                    hv = []
-                    while j < len(data) and len(hv) < 18:
-                        if _is_comp(_fl(data[j])): break
-                        hv.append(_fl(data[j]))
-                        j += 1
-                        
-                    for ei, elbl in enumerate(['AUX-1', 'AUX-2', 'AUX-3']):
-                        for cyl in range(6):
-                            idx = ei * 6 + cyl
-                            d = _parse_date(dates[idx]) if idx < len(dates) else ''
-                            h = _parse_number(hv[idx]) if idx < len(hv) else 0.0
-                            if d or h > 0: rows.append(_mk('AUX_ENGINE', elbl, f'Cyl {cyl + 1}', nm, period, d, h))
-                    i = j
-                    continue
-        i += 1
-    return rows
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  MASTER PARSER & DEDUPLICATION (Preserving Document Order)
-# ══════════════════════════════════════════════════════════════════════════
-def _dedupe(records: List[Dict]) -> List[Dict]:
-    best = {}
-    for r in records:
-        key = (r.get('category'), r.get('description'), r.get('engine_label'), r.get('unit'))
-        score = (1 if r.get('last_oh_date') else 0) + (1 if r.get('hrs_since', 0) > 0 else 0)
-        prev = best.get(key)
-        if prev is None or score > prev[0]: best[key] = (score, r)
-    return [v[1] for v in best.values()]
-
-def parse_docx(docx_bytes: bytes) -> Dict:
-    from docx import Document
-    warns = []
-    with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as t:
-        t.write(docx_bytes)
-        tp = t.name
-        
-    try: doc = Document(tp)
-    except Exception as e: raise ValueError(f"Cannot open: {e}")
-    finally:
-        try: os.unlink(tp)
-        except Exception: pass
-
-    if not doc.tables: raise ValueError("No tables — not a TEC-004 report?")
-
-    vn = 'UNKNOWN'
-    rd = None
-    for para in doc.paragraphs:
-        txt = para.text.strip()
-        if not txt: continue
-        if m := re.search(r"Vessel[\u2019\u2018']?s?\s+Name\s*:\s*(?:MV\s+)?([A-Z][A-Z0-9 \-]+?)(?:\s{2,}|\t|Date:|$)", txt, re.I): vn = _clean_name(m.group(1))
-        if m := re.search(r"Date\s*:\s*(.+)", txt, re.I): rd = _parse_date(m.group(1).strip())
-        if vn != 'UNKNOWN' and rd: break
-    if vn == 'UNKNOWN': warns.append("Could not extract vessel name.")
-
-    mt = mo = None
-    me_g: List[Dict] = []; aux_g: List[Dict] = []
-    oe_rows: List[Dict] = []; dg_rows: List[Dict] = []
-
-    for table in doc.tables:
-        rg = _raw_grid(table)
-        dg = _dedup_grid(table)
-        full_table_text = ' '.join(_fl(c) for row in rg for c in row).upper()
-
-        if mt is None:
-            for row in rg[:4]:
-                line = ' '.join(str(x) for x in row)
-                if mt is None:
-                    if m := re.search(r'Total Running Hours[\s:ǀ|]+([\d,]+)', line, re.I): mt = int(_parse_number(m.group(1)))
-                if mo is None:
-                    if m := re.search(r'This Month[\s:]+([\d,]+)', line, re.I): mo = int(_parse_number(m.group(1)))
-
-        me_g.extend(_parse_me(rg))
-        aux_g.extend(_parse_aux(dg))
-        if 'TURBOCHARGER' in full_table_text and 'A/C & REFR' in full_table_text and 'COOLERS' in full_table_text: oe_rows.extend(_parse_oe(dg))
-        if 'D/G NO' in full_table_text.replace(' ','').replace('.',''): dg_rows.extend(_parse_dg(dg))
-
-    all_lines = _lines_from_doc(doc)
-    me = _dedupe(me_g + _parse_me_text(all_lines))
-    aux = _dedupe(aux_g + _parse_aux_text(all_lines))
-    oe = _dedupe(oe_rows)
-    dg_rows = _dedupe(dg_rows)
-
-    # Assign Document Order Indices (Preserving natural extraction sequence)
-    for i, r in enumerate(me): r['doc_idx'] = i
-    for i, r in enumerate(aux): r['doc_idx'] = i
-    for i, r in enumerate(oe): r['doc_idx'] = i
-    for i, r in enumerate(dg_rows): r['doc_idx'] = i
-
-    if not me and not aux: warns.append("No components extracted.")
+    if not vessel:
+        m = re.search(r"\bALEXIS\b", text, re.IGNORECASE)
+        if m:
+            vessel = "ALEXIS"
 
     return {
-        'vessel_name': vn, 'report_date': rd,
-        'me_total_hrs': mt, 'me_this_month': mo,
-        'me': me, 'aux': aux, 'oe': oe, 'dg': dg_rows,
-        'warnings': warns, 'parsed_at': datetime.utcnow().isoformat(),
+        "vessel": vessel,
+        "report_date": report_date,
+        "me_total_hrs": me_total_hrs,
+        "me_this_month": me_this_month,
+    }
+
+def split_sections(lines: List[str]) -> Dict[str, List[str]]:
+    sections = {"ME": [], "AUX": [], "OE": [], "DG": []}
+    current = None
+
+    for line in lines:
+        n = normalize_token(line)
+
+        if n == "MAIN ENGINE":
+            current = "ME"
+            continue
+        elif n == "AUXILIARY ENGINES":
+            current = "AUX"
+            continue
+        elif n == "OTHER EQUIPMENT":
+            current = "OE"
+            continue
+        elif n == "D/G EQUIPMENT":
+            current = "DG"
+            continue
+
+        if current:
+            sections[current].append(line)
+
+    return sections
+
+def group_me_or_aux_rows(lines: List[str], section: str) -> List[Dict[str, Any]]:
+    rows = []
+    i = 0
+
+    statuses = {"OK", "OVERDUE", "HIGH PRIORITY", "NO DATA"}
+
+    while i < len(lines):
+        line = clean_text(lines[i])
+        if line in statuses:
+            status_line = line
+            if i + 7 < len(lines):
+                component = clean_text(lines[i + 1])
+                engine = clean_text(lines[i + 2])
+                unit = clean_text(lines[i + 3])
+                periodicity = clean_text(lines[i + 4])
+                last_oh = clean_text(lines[i + 5])
+                hrs_since = clean_text(lines[i + 6])
+                pct = clean_text(lines[i + 7])
+
+                looks_valid = (
+                    component and
+                    ((section == "ME" and engine == "ME") or (section == "AUX" and engine.startswith("AUX")))
+                )
+
+                if looks_valid:
+                    rows.append({
+                        "section": "MAIN ENGINE" if section == "ME" else "AUXILIARY ENGINES",
+                        "component": component,
+                        "engine": engine,
+                        "unit": unit,
+                        "periodicity": periodicity,
+                        "last_oh": last_oh,
+                        "hrs_since": hrs_since,
+                        "pct_used_raw": pct,
+                        "status_raw": status_line,
+                        "source_method": "text_block",
+                        "source_text": " | ".join(lines[i:i+8]),
+                    })
+                    i += 8
+                    continue
+        i += 1
+
+    return rows
+
+def group_oe_rows(lines: List[str]) -> List[Dict[str, Any]]:
+    rows = []
+    i = 0
+
+    while i < len(lines):
+        component = clean_text(lines[i])
+
+        if i + 3 < len(lines):
+            maybe_section = clean_text(lines[i + 1])
+            periodicity = clean_text(lines[i + 2])
+            last_date = clean_text(lines[i + 3])
+            run_hrs = clean_text(lines[i + 4]) if i + 4 < len(lines) else ""
+
+            recognized_section = maybe_section in {
+                "Turbocharger", "Boiler Equipment", "Compressors",
+                "Cooling", "Coolers / Water Systems", "Air Conditioning",
+                "Cooling Systems"
+            }
+
+            if recognized_section:
+                rows.append({
+                    "section": "OTHER EQUIPMENT",
+                    "component": component,
+                    "engine": maybe_section,
+                    "unit": "",
+                    "periodicity": periodicity,
+                    "last_oh": last_date,
+                    "hrs_since": run_hrs,
+                    "pct_used_raw": "",
+                    "status_raw": "",
+                    "source_method": "text_block",
+                    "source_text": " | ".join(lines[i:i+5]),
+                })
+                i += 5
+                continue
+
+        i += 1
+
+    return rows
+
+def parse_text_to_raw_rows(text: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    lines = [clean_text(x) for x in text.splitlines()]
+    lines = [x for x in lines if x]
+    header = extract_document_header(text)
+    sections = split_sections(lines)
+
+    raw_rows = []
+    raw_rows.extend(group_me_or_aux_rows(sections["ME"], "ME"))
+    raw_rows.extend(group_me_or_aux_rows(sections["AUX"], "AUX"))
+    raw_rows.extend(group_oe_rows(sections["OE"]))
+
+    return raw_rows, header
+
+
+# =========================================================
+# NORMALIZATION / VALIDATION
+# =========================================================
+
+def normalize_row(raw: Dict[str, Any], display_order: int) -> ParsedRow:
+    r = ParsedRow(
+        source_text=clean_text(raw.get("source_text")),
+        raw_section=clean_text(raw.get("section")),
+        component_raw=clean_text(raw.get("component")),
+        engine_raw=clean_text(raw.get("engine")),
+        unit_raw=clean_text(raw.get("unit")),
+        periodicity_raw=clean_text(raw.get("periodicity")),
+        last_oh_raw=clean_text(raw.get("last_oh")),
+        hrs_since_raw=clean_text(raw.get("hrs_since")),
+        source_method=clean_text(raw.get("source_method")) or "unknown",
+        display_order=display_order,
+    )
+
+    r.section = canon_section(r.raw_section) if r.raw_section else None
+    if not r.section:
+        r.issues.append("unknown_section")
+
+    r.component, exact = canon_component(r.component_raw)
+    if not r.component:
+        r.issues.append("unmapped_component")
+    elif not exact:
+        r.issues.append("fuzzy_component_match")
+
+    r.engine, r.unit = normalize_engine(r.section, r.engine_raw, r.unit_raw)
+    r.periodicity = parse_int(r.periodicity_raw)
+    r.last_oh_iso = normalize_date(r.last_oh_raw)
+    r.hrs_since = parse_int(r.hrs_since_raw)
+
+    if r.section == "OE" and not r.engine:
+        inferred = infer_oe_subsection(r.component)
+        if inferred:
+            r.engine = inferred
+
+    if r.last_oh_raw and not r.last_oh_iso and r.last_oh_raw not in {"—", "-"}:
+        r.issues.append("invalid_date")
+
+    r.pct_used = compute_pct_used(r.periodicity, r.hrs_since)
+    r.status = compute_status(r.periodicity, r.hrs_since)
+
+    status_raw = clean_text(raw.get("status_raw")).upper()
+    if status_raw and status_raw != r.status:
+        r.issues.append(f"status_mismatch:{status_raw}->{r.status}")
+
+    if r.section in {"ME", "AUX", "DG"} and not r.engine:
+        r.issues.append("missing_engine")
+    if r.section in {"ME", "AUX", "DG"} and not r.unit:
+        r.issues.append("missing_unit")
+
+    if r.periodicity is None and r.hrs_since is not None:
+        r.issues.append("hrs_since_without_periodicity")
+
+    confidence = 1.0
+    confidence -= 0.25 if "unknown_section" in r.issues else 0
+    confidence -= 0.20 if "unmapped_component" in r.issues else 0
+    confidence -= 0.10 if "fuzzy_component_match" in r.issues else 0
+    confidence -= 0.15 if "invalid_date" in r.issues else 0
+    confidence -= 0.10 if "missing_engine" in r.issues else 0
+    confidence -= 0.10 if "missing_unit" in r.issues else 0
+    confidence -= 0.08 if any(x.startswith("status_mismatch:") for x in r.issues) else 0
+    confidence -= 0.08 if "hrs_since_without_periodicity" in r.issues else 0
+    confidence -= 0.05 if r.source_method == "text_block" else 0
+
+    r.confidence = max(0.0, round(confidence, 2))
+    critical = {"unknown_section", "unmapped_component"} & set(r.issues)
+    r.validation_status = "validated" if r.confidence >= 0.85 and not critical else "review_needed"
+    r.row_key = row_key_from_parts(r.section, r.engine, r.unit, r.component, r.periodicity, r.last_oh_iso)
+
+    return r
+
+def dedupe_rows(rows: List[ParsedRow]) -> Tuple[List[ParsedRow], List[Dict[str, Any]]]:
+    best_by_key: Dict[str, ParsedRow] = {}
+    conflicts: List[Dict[str, Any]] = []
+
+    for row in rows:
+        key = row.row_key or f"__row__{row.display_order}"
+        if key not in best_by_key:
+            best_by_key[key] = row
+            continue
+
+        existing = best_by_key[key]
+        same_payload = (
+            existing.periodicity == row.periodicity and
+            existing.last_oh_iso == row.last_oh_iso and
+            existing.hrs_since == row.hrs_since and
+            existing.status == row.status
+        )
+
+        if same_payload:
+            if row.confidence > existing.confidence:
+                best_by_key[key] = row
+        else:
+            conflicts.append({
+                "row_key": key,
+                "reason": "duplicate_key_conflict",
+                "existing_component": existing.component,
+                "incoming_component": row.component,
+                "existing_engine": existing.engine,
+                "incoming_engine": row.engine,
+                "existing_last_oh": existing.last_oh_iso,
+                "incoming_last_oh": row.last_oh_iso,
+                "existing_hrs_since": existing.hrs_since,
+                "incoming_hrs_since": row.hrs_since,
+            })
+            if row.confidence > existing.confidence:
+                best_by_key[key] = row
+
+    out = sorted(best_by_key.values(), key=lambda x: x.display_order)
+    return out, conflicts
+
+def audit_expected_sections(raw_text: str, rows: List[ParsedRow]) -> List[str]:
+    warnings = []
+    text = normalize_token(raw_text)
+
+    found_in_source = set()
+    for canon, aliases in SECTION_ALIASES.items():
+        for a in aliases:
+            if normalize_token(a) in text:
+                found_in_source.add(canon)
+                break
+
+    found_in_output = {r.section for r in rows if r.section}
+
+    for sec in found_in_source:
+        if sec not in found_in_output:
+            warnings.append(f"section_present_but_not_extracted:{sec}")
+
+    if "DG" in found_in_source and not any(r.section == "DG" for r in rows):
+        warnings.append("dg_section_missing")
+
+    return warnings
+
+def harden_parser_output(raw_rows: List[Dict[str, Any]], raw_document_text: str) -> Dict[str, Any]:
+    normalized = [normalize_row(r, i+1) for i, r in enumerate(raw_rows)]
+    deduped, conflicts = dedupe_rows(normalized)
+    section_warnings = audit_expected_sections(raw_document_text, deduped)
+
+    validated_rows = [r for r in deduped if r.validation_status == "validated"]
+    review_rows = [r for r in deduped if r.validation_status != "validated"]
+
+    summary = {
+        "total_raw_rows": len(raw_rows),
+        "total_normalized_rows": len(normalized),
+        "total_deduped_rows": len(deduped),
+        "validated_rows": len(validated_rows),
+        "review_needed_rows": len(review_rows),
+        "conflict_count": len(conflicts),
+        "section_warnings": section_warnings,
+        "counts_by_section": {sec: sum(1 for r in deduped if r.section == sec) for sec in EXPECTED_SECTION_ORDER},
+        "overdue_count": sum(1 for r in deduped if r.status == "OVERDUE"),
+        "high_priority_count": sum(1 for r in deduped if r.status == "HIGH PRIORITY"),
+    }
+
+    return {
+        "summary": summary,
+        "validated_rows": [asdict(r) for r in validated_rows],
+        "review_rows": [asdict(r) for r in review_rows],
+        "conflicts": conflicts,
+        "all_rows": [asdict(r) for r in deduped],
     }
 
 
-# ══════════════════════════════════════════════════════════════════════════
-#  HTML MATRICES (Animated, Protected, Ordered)
-# ══════════════════════════════════════════════════════════════════════════
-def _sort_recs(records: List[Dict], mode: str) -> List[Dict]:
-    if mode == 'Document Order':
-        return sorted(records, key=lambda c: c.get('doc_idx', 0))
-    elif mode == 'Component → Cylinder':
-        return sorted(records, key=lambda c: (c['engine_label'], c['description'].upper(), _cyl_n(c.get('unit', ''))))
-    else: # Priority
-        return sorted(records, key=lambda c: (_ORD.get(c['status'], 4), -(c.get('pct_used') or 0)))
+# =========================================================
+# DATAFRAME / RENDER HELPERS
+# =========================================================
 
-def _matrix_html(records: List[Dict], mode: str = 'Document Order') -> str:
-    if not records: return ''
-        
-    HEADS = ['Status', 'Component', 'Engine', 'Unit', 'Periodicity', 'Last O/H', 'Hrs Since', '% Used']
-    TH = ("padding:14px 16px;font-family:'Inter',sans-serif;font-size:.62rem;font-weight:700;"
-          "text-transform:uppercase;letter-spacing:.12em;color:#607888;text-align:left;"
-          "white-space:nowrap;border-bottom:1px solid var(--line);background:var(--bg3)")
-          
-    header = '<tr>' + ''.join(f'<th style="{TH}">{h}</th>' for h in HEADS) + '</tr>'
-    body = ''
-    
-    for row_idx, rec in enumerate(_sort_recs(records, mode)):
-        s = str(rec.get('status', 'NO DATA'))
-        c = _SC.get(s, _SC['NO DATA'])
-        
-        pct = float(rec.get('pct_used') or 0)
-        hrs = float(rec.get('hrs_since') or 0)
-        per = float(rec.get('periodicity') or 0)
-        
-        pct_s = f"{pct*100:.1f}%" if pct > 0 else '—'
-        hrs_s = f"{int(hrs):,}" if hrs > 0 else '—'
-        per_s = f"{int(per):,}" if per > 0 else '—'
-        dt_s = html.escape(str(rec.get('last_oh_date') or '—') or '—')
-        desc_s = html.escape(str(rec.get('description', '')))
-        
-        bw = min(100, pct * 100)
-        
-        # Add tooltips and pulse classes
-        tag = (f'<span class="{c["class"]}" title="Component is {s}" style="display:inline-block;padding:5px 12px;border-radius:999px;'
-               f'background:{c["tag_bg"]};color:{c["tag_fg"]};font-family:JetBrains Mono,monospace;'
-               f'font-size:.63rem;font-weight:700;white-space:nowrap;transition:all .2s">{s}</span>')
-               
-        # Animated progress bar
-        bar = (f'<div style="display:flex;align-items:center;gap:10px;min-width:130px">'
-               f'<div style="flex:1;height:5px;background:{c["bar_e"]};border-radius:999px;overflow:hidden">'
-               f'<div style="width:{bw:.1f}%;height:100%;background:{c["bar_f"]};border-radius:999px;'
-               f'animation: growWidth 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;"></div>'
-               f'</div><span style="font-family:JetBrains Mono,monospace;font-size:.71rem;font-weight:700;'
-               f'color:{c["num"]};min-width:46px;text-align:right">{pct_s}</span></div>')
-               
-        def td(v, fg, fw='400', align='left', ff="'Inter',sans-serif", fs='.81rem', mw=''):
-            mw_s = f'max-width:{mw};overflow:hidden;text-overflow:ellipsis;' if mw else ''
-            return (f'<td style="padding:14px 16px;color:{fg};font-family:{ff};font-size:{fs};'
-                    f'font-weight:{fw};text-align:{align};white-space:nowrap;{mw_s}">{v}</td>')
-                    
-        # Inject staggering delay directly into the row
-        anim_delay = min(row_idx * 0.02, 1.5) # Cap delay at 1.5s
-        body += (
-            f'<tr class="stagger-row" style="background:{c["row"]};border-bottom:1px solid {c["bord"]};'
-            f'animation-delay: {anim_delay}s; transition: background .2s" '
-            f'onmouseover="this.style.background=\'var(--bg3)\'" '
-            f'onmouseout="this.style.background=\'{c["row"]}\'">'
-            f'<td style="padding:14px 16px">{tag}</td>'
-            + td(desc_s, c['comp'], '600', 'left', "'IBM Plex Sans',sans-serif", '.83rem', '310px')
-            + td(rec.get('engine_label', ''), c['dim'])
-            + td(rec.get('unit', ''), c['dim'], '500', 'left', 'JetBrains Mono,monospace', '.76rem')
-            + td(per_s, c['dim'], '500', 'right', 'JetBrains Mono,monospace', '.76rem')
-            + td(dt_s, c['dim'], '500', 'left', 'JetBrains Mono,monospace', '.76rem')
-            + td(hrs_s, c['num'], '700', 'right', 'JetBrains Mono,monospace', '.77rem')
-            + f'<td style="padding:14px 16px">{bar}</td></tr>'
+def build_df(rows: List[Dict[str, Any]]) -> pd.DataFrame:
+    if not rows:
+        return pd.DataFrame(columns=[
+            "section", "component", "engine", "unit", "periodicity", "last_oh_iso",
+            "hrs_since", "pct_used", "status", "confidence", "issues"
+        ])
+    df = pd.DataFrame(rows)
+    for col in ["periodicity", "hrs_since", "pct_used", "confidence"]:
+        if col in df.columns:
+            df[col] = df[col]
+    return df
+
+def status_badge(status: str) -> str:
+    status = clean_text(status).upper()
+    if status == "OK":
+        return '<span class="badge badge-ok">OK</span>'
+    if status == "HIGH PRIORITY":
+        return '<span class="badge badge-hp">HIGH PRIORITY</span>'
+    if status == "OVERDUE":
+        return '<span class="badge badge-od">OVERDUE</span>'
+    return '<span class="badge badge-nd">NO DATA</span>'
+
+def val_badge(status: str) -> str:
+    if status == "validated":
+        return '<span class="badge badge-val">VALIDATED</span>'
+    return '<span class="badge badge-review">REVIEW NEEDED</span>'
+
+def render_metrics(header: Dict[str, Any], summary: Dict[str, Any]):
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Vessel</div>
+            <div class="metric-value">{header.get("vessel") or "—"}</div>
+            <div class="metric-sub">Parsed document header</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Report Date</div>
+            <div class="metric-value" style="font-size:22px;">{header.get("report_date") or "—"}</div>
+            <div class="metric-sub">Source date found in document</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c3:
+        me_total = f'{header.get("me_total_hrs"):,}' if header.get("me_total_hrs") else "—"
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">M/E Total Hrs</div>
+            <div class="metric-value">{me_total}</div>
+            <div class="metric-sub">Main engine total hours</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c4:
+        me_month = f'{header.get("me_this_month"):,}' if header.get("me_this_month") else "—"
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">M/E This Month</div>
+            <div class="metric-value">{me_month}</div>
+            <div class="metric-sub">Current month running hours</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.write("")
+    c5, c6, c7, c8 = st.columns(4)
+
+    with c5:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Validated Rows</div>
+            <div class="metric-value">{summary["validated_rows"]}</div>
+            <div class="metric-sub">Rows safe for dashboard display</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c6:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Review Needed</div>
+            <div class="metric-value">{summary["review_needed_rows"]}</div>
+            <div class="metric-sub">Rows needing audit attention</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c7:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Overdue</div>
+            <div class="metric-value">{summary["overdue_count"]}</div>
+            <div class="metric-sub">Validated + deduped rows only</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c8:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">High Priority</div>
+            <div class="metric-value">{summary["high_priority_count"]}</div>
+            <div class="metric-sub">Validated + deduped rows only</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+def apply_filters(df: pd.DataFrame, section_name: str) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+
+    st.markdown(f'<div class="section-title">{section_name}</div>', unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns([1.2, 1.2, 1.2, 1.2])
+
+    with col1:
+        component_values = ["All"] + sorted([x for x in df["component"].dropna().unique().tolist() if x])
+        component_filter = st.selectbox(f"{section_name} Component", component_values, key=f"{section_name}_component")
+
+    with col2:
+        engine_values = ["All"] + sorted([x for x in df["engine"].dropna().unique().tolist() if x])
+        engine_filter = st.selectbox(f"{section_name} Engine", engine_values, key=f"{section_name}_engine")
+
+    with col3:
+        status_values = ["All", "OK", "HIGH PRIORITY", "OVERDUE", "NO DATA"]
+        status_filter = st.selectbox(f"{section_name} Status", status_values, key=f"{section_name}_status")
+
+    with col4:
+        sort_mode = st.selectbox(
+            f"{section_name} Sort",
+            ["Document Order", "Priority → % Used", "Component → Unit"],
+            key=f"{section_name}_sort"
         )
-        
-    return (f'<div style="overflow-x:auto;border-radius:14px;border:1px solid var(--line);'
-            f'background:var(--bg2);overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.3)">'
-            f'<table style="width:100%;border-collapse:collapse">'
-            f'<thead>{header}</thead><tbody>{body}</tbody></table></div>')
 
-def _oe_html(rows: List[Dict], show_status: bool = False) -> str:
-    if not rows: return ''
-        
-    HEADS = (['Component', 'Engine', 'Period', 'Last Date', 'Run Hrs', 'Status']
-             if show_status else ['Component', 'Section', 'Period', 'Last Date', 'Run Hrs'])
-             
-    TH = ("padding:14px 16px;font-family:'Inter',sans-serif;font-size:.62rem;font-weight:700;"
-          "text-transform:uppercase;letter-spacing:.12em;color:#607888;text-align:left;"
-          "border-bottom:1px solid var(--line);background:var(--bg3)")
-          
-    header = '<tr>' + ''.join(f'<th style="{TH}">{h}</th>' for h in HEADS) + '</tr>'
-    body = ''
-    
-    # Preserve document order in OE
-    for row_idx, row in enumerate(sorted(rows, key=lambda x: x.get('doc_idx', 0))):
-        bg = 'var(--bg2)'; fm = 'var(--ink)'; fd = 'var(--muted)'
-        
-        if show_status:
-            s = str(row.get('status', 'NO DATA'))
-            cc = _SC.get(s, _SC['NO DATA'])
-            bg = cc['row']; fm = cc['comp']; fd = cc['dim']
-            
-        per = float(row.get('periodicity', 0) or 0)
-        per_s = f"{int(per):,}" if per > 0 else '—'
-        dt_s = html.escape(str(row.get('last_date') or '—') or '—')
-        desc_s = html.escape(str(row.get('description', '')))
-        hrs = float(row.get('run_hrs', 0) or 0)
-        hrs_s = f"{int(hrs):,}" if hrs > 0 else '—'
-        
-        st_cell = ''
-        if show_status:
-            s = str(row.get('status', 'NO DATA'))
-            cc = _SC.get(s, _SC['NO DATA'])
-            st_cell = (f'<td style="padding:14px 16px"><span class="{cc["class"]}" style="display:inline-block;padding:5px 12px;'
-                       f'border-radius:999px;background:{cc["tag_bg"]};color:{cc["tag_fg"]};'
-                       f'font-family:JetBrains Mono,monospace;font-size:.63rem;font-weight:700">{s}</span></td>')
-                       
-        def td(v, fg, ff="'Inter',sans-serif", fw='400', align='left'):
-            return (f'<td style="padding:14px 16px;color:{fg};font-family:{ff};font-size:.81rem;'
-                    f'font-weight:{fw};text-align:{align};white-space:nowrap">{v}</td>')
-                    
-        anim_delay = min(row_idx * 0.02, 1.5)
-        body += (f'<tr class="stagger-row" style="background:{bg};border-bottom:1px solid var(--line);'
-                 f'animation-delay: {anim_delay}s; transition: background .2s" '
-                 f'onmouseover="this.style.background=\'var(--bg3)\'" '
-                 f'onmouseout="this.style.background=\'{bg}\'">'
-                 + td(desc_s, fm, "'IBM Plex Sans',sans-serif", '600')
-                 + (td(row.get('engine_label', ''), fd, 'JetBrains Mono,monospace') if show_status else td(row.get('section', ''), fd))
-                 + f'<td style="padding:14px 16px;color:{fd};font-family:JetBrains Mono,monospace;font-size:.78rem;text-align:right">{per_s}</td>'
-                 + td(dt_s, fd, 'JetBrains Mono,monospace')
-                 + f'<td style="padding:14px 16px;color:var(--ink);font-family:JetBrains Mono,monospace;font-size:.78rem;font-weight:700;text-align:right">{hrs_s}</td>'
-                 + st_cell + '</tr>')
-                 
-    return (f'<div style="overflow-x:auto;border-radius:14px;border:1px solid var(--line);'
-            f'background:var(--bg2);overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.3)">'
-            f'<table style="width:100%;border-collapse:collapse">'
-            f'<thead>{header}</thead><tbody>{body}</tbody></table></div>')
+    out = df.copy()
+
+    if component_filter != "All":
+        out = out[out["component"] == component_filter]
+
+    if engine_filter != "All":
+        out = out[out["engine"] == engine_filter]
+
+    if status_filter != "All":
+        out = out[out["status"] == status_filter]
+
+    if sort_mode == "Priority → % Used":
+        status_rank = {"OVERDUE": 0, "HIGH PRIORITY": 1, "OK": 2, "NO DATA": 3}
+        out["__status_rank"] = out["status"].map(status_rank).fillna(99)
+        out["__pct_sort"] = out["pct_used"].fillna(-1)
+        out = out.sort_values(["__status_rank", "__pct_sort"], ascending=[True, False]).drop(columns=["__status_rank", "__pct_sort"])
+    elif sort_mode == "Component → Unit":
+        out = out.sort_values(["component", "unit"], ascending=[True, True])
+    else:
+        if "display_order" in out.columns:
+            out = out.sort_values("display_order", ascending=True)
+
+    return out
+
+def show_table(df: pd.DataFrame, columns: List[str]):
+    if df.empty:
+        st.info("No rows to display.")
+        return
+
+    show_df = df.copy()
+    if "last_oh_iso" in show_df.columns:
+        show_df["last_oh"] = show_df["last_oh_iso"].apply(format_display_date)
+    if "pct_used" in show_df.columns:
+        show_df["pct_used"] = show_df["pct_used"].apply(lambda x: f"{x:.1f}%" if pd.notnull(x) else "—")
+    if "periodicity" in show_df.columns:
+        show_df["periodicity"] = show_df["periodicity"].apply(lambda x: f"{int(x):,}" if pd.notnull(x) else "—")
+    if "hrs_since" in show_df.columns:
+        show_df["hrs_since"] = show_df["hrs_since"].apply(lambda x: f"{int(x):,}" if pd.notnull(x) else "—")
+    if "confidence" in show_df.columns:
+        show_df["confidence"] = show_df["confidence"].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "—")
+    if "issues" in show_df.columns:
+        show_df["issues"] = show_df["issues"].apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
+
+    st.dataframe(
+        show_df[columns],
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
-# ══════════════════════════════════════════════════════════════════════════
-#  UI DASHBOARD COMPONENTS
-# ══════════════════════════════════════════════════════════════════════════
-def _kpi(val: Any, lbl: str, accent: str, delay: float = 0.0) -> str:
-    return (f'<div style="background:var(--panel); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);'
-            f'border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.1rem 1rem;'
-            f'box-shadow:0 8px 32px rgba(0,0,0,.2);position:relative;overflow:hidden;'
-            f'animation:fadeUp .4s {delay}s cubic-bezier(0.2, 0.8, 0.2, 1) both;'
-            f'transition:transform .2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow .2s" '
-            f'onmouseover="this.style.transform=\'translateY(-4px)\';this.style.boxShadow=\'0 12px 40px rgba(184,148,96,.08)\'" '
-            f'onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 8px 32px rgba(0,0,0,.2)\'">'
-            f'<div style="width:36px;height:3px;background:linear-gradient(90deg, {accent}, transparent);border-radius:999px;margin-bottom:1rem;'
-            f'animation:growWidth .6s {delay+.1}s ease both"></div>'
-            f'<div style="font-family:IBM Plex Sans,sans-serif;font-size:1.3rem;font-weight:700;'
-            f'line-height:1.15;letter-spacing:-.02em;color:var(--ink);white-space:nowrap;'
-            f'overflow:hidden;text-overflow:ellipsis;">{val}</div>'
-            f'<div style="font-family:Inter,sans-serif;font-size:.62rem;font-weight:600;'
-            f'text-transform:uppercase;letter-spacing:.15em;color:var(--soft);margin-top:.6rem">{lbl}</div>'
-            f'</div>')
+# =========================================================
+# SIDEBAR
+# =========================================================
 
-def _section(title: str, sub: str, badge: str, accent: str = '#b89460') -> str:
-    return (f'<div style="display:flex;align-items:flex-end;gap:.9rem;margin:2.5rem 0 1rem;'
-            f'animation:slideDown .4s ease both">'
-            f'<div style="flex:1">'
-            f'<div style="font-family:IBM Plex Sans,sans-serif;font-size:1.1rem;font-weight:700;'
-            f'color:var(--ink);letter-spacing:-.01em;line-height:1">{title}</div>'
-            f'<div style="font-family:Inter,sans-serif;font-size:.74rem;color:var(--soft);'
-            f'margin-top:.35rem">{sub}</div></div>'
-            f'<div style="font-family:JetBrains Mono,monospace;font-size:.63rem;font-weight:600;'
-            f'padding:6px 12px;border-radius:999px;background:var(--bg3);border:1px solid var(--line);'
-            f'color:var(--muted);white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.15)">{badge}</div>'
-            f'</div>'
-            f'<div style="height:1px;background:linear-gradient(90deg,{accent},var(--line) 40%,transparent);'
-            f'margin-bottom:1.2rem;animation:growWidth .6s ease both"></div>')
+st.sidebar.title("TEC-004 Analyzer")
+st.sidebar.markdown("Paste the extracted report text below or upload a `.txt` file.")
+example_mode = st.sidebar.checkbox("Load demo sample", value=False)
+
+uploaded_file = st.sidebar.file_uploader("Upload text file", type=["txt"])
+manual_text = st.sidebar.text_area("Paste report text", height=300)
+
+run_btn = st.sidebar.button("Analyze Report", type="primary", use_container_width=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════
-#  SESSION STATE
-# ══════════════════════════════════════════════════════════════════════════
-if 'data' not in st.session_state:
-    st.session_state.data = None
+# =========================================================
+# DEMO DATA
+# =========================================================
+
+DEMO_TEXT = """
+ALEXIS
+Vessel
+30 APRIL 2026
+Report Date
+71,984
+M/E Total Hrs
+516
+M/E This Month
+
+Main Engine
+OK
+CYLINDER COVER
+ME
+Cyl 1
+16,000
+12 JAN 26
+1,308
+8.2%
+OVERDUE
+CYLINDER COVER
+ME
+Cyl 2
+16,000
+16 DEC 22
+17,560
+109.7%
+OK
+PISTON ASSEMBLY
+ME
+Cyl 1
+16,000
+12 JAN 26
+1,308
+8.2%
+OVERDUE
+FUEL PUMP
+ME
+Cyl 1
+16,000
+22 DEC 22
+17,560
+109.7%
+HIGH PRIORITY
+FUEL PUMP SUCTION VALVE
+ME
+Cyl 6
+8,000
+02 DEC 24
+7,858
+98.2%
+
+Auxiliary Engines
+OK
+Cylinder Head
+AUX-1
+Cyl 1
+12,000
+27/09/25
+4,271
+35.6%
+HIGH PRIORITY
+Piston
+AUX-2
+Cyl 3
+10,000
+14/11/24
+9,707
+97.1%
+OVERDUE
+Fuel Pumps
+AUX-1
+Cyl 2
+5,000
+11/1/25
+7,250
+145.0%
+OK
+Adjust Valve Head Clearance
+AUX-3
+Cyl 2
+1,200
+03/01/26
+569
+47.4%
+
+Other Equipment
+GENERAL O/H
+Turbocharger
+16,000
+26 NOV 21
+23,610
+AIR COND. COMPRESSOR NO.1
+Compressors
+—
+28 MAR 26
+5,340
+M/E L.O.
+Coolers / Water Systems
+—
+30 DEC 23
+—
+
+D/G Equipment
+0 records
+No D/G equipment data found.
+"""
 
 
-# ══════════════════════════════════════════════════════════════════════════
-#  PAGE HEADER
-# ══════════════════════════════════════════════════════════════════════════
-st.markdown(
-    '<div style="padding:1.7rem 0 0;animation:slideDown .4s cubic-bezier(0.2, 0.8, 0.2, 1) both">'
-    '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap">'
-    '<div>'
-    '<div style="font-family:Inter,sans-serif;font-size:.62rem;font-weight:700;letter-spacing:.3em;'
-    'text-transform:uppercase;color:var(--gold);margin-bottom:.35rem;text-shadow:0 2px 10px rgba(184,148,96,.3)">Fleet Technical Operations</div>'
-    '<div style="font-family:IBM Plex Sans,sans-serif;font-size:2.1rem;font-weight:700;'
-    'color:var(--ink);letter-spacing:-.03em;line-height:1.05">Running Hours Control Panel</div>'
-    '</div>'
-    '<div style="font-family:JetBrains Mono,monospace;font-size:.65rem;color:var(--soft);'
-    'padding:.6rem .9rem;border:1px solid var(--line);border-radius:999px;background:var(--bg3);'
-    'white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.15)">TEC-004 · Executive Build</div>'
-    '</div></div>'
-    '<div style="height:1px;margin:1rem 0 1.8rem;'
-    'background:linear-gradient(90deg,var(--gold),var(--line) 40%,transparent);'
-    'animation:growWidth .6s .1s ease both"></div>',
-    unsafe_allow_html=True)
+# =========================================================
+# MAIN EXECUTION
+# =========================================================
 
+st.title("⚙️ TEC-004 Running Hours Analyzer")
+st.markdown('<div class="soft-note">Hardened parser shell with validation, dedupe, confidence scoring, and audit-first review.</div>', unsafe_allow_html=True)
+st.write("")
 
-# ══════════════════════════════════════════════════════════════════════════
-#  UPLOAD
-# ══════════════════════════════════════════════════════════════════════════
-with st.expander("Upload TEC-004 Report", expanded=(st.session_state.data is None)):
-    uc, ic = st.columns([2.2, 1.0], gap='large')
-    with uc:
-        uploaded = st.file_uploader('Drop TEC-004 .doc', type=['doc'], label_visibility='collapsed')
-    with ic:
-        st.markdown(
-            '<div style="background:var(--bg3);border:1px solid var(--line);border-radius:14px;'
-            'padding:1.1rem 1.2rem;font-family:Inter,sans-serif;font-size:.78rem;color:var(--muted);line-height:1.9">'
-            '<div style="font-family:IBM Plex Sans,sans-serif;color:var(--ink);font-weight:700;font-size:.9rem;margin-bottom:.5rem">Document Profile</div>'
-            '<b style="color:var(--ink)">Format:</b> TEC-004 Running Hours Report (.doc)<br>'
-            '<b style="color:var(--ink)">Parser:</b> Dynamic Slide · Hard Anchors · Strict Ceilings<br>'
-            '<b style="color:var(--ink)">Output:</b> Absolute True Document Order Preserved<br>'
-            '<b style="color:var(--ink)">Security:</b> Full XSS Escaping Deployed'
-            '</div>', unsafe_allow_html=True)
+input_text = ""
+if example_mode:
+    input_text = DEMO_TEXT
+elif uploaded_file is not None:
+    input_text = uploaded_file.read().decode("utf-8", errors="ignore")
+elif manual_text.strip():
+    input_text = manual_text
 
-    if uploaded:
-        raw = uploaded.read()
-        # CACHE BUSTER
-        fh = hashlib.md5(raw).hexdigest() + "_FINAL" 
-        
-        if st.session_state.data is None or st.session_state.data.get('_hash') != fh:
-            with st.spinner('Converting .doc → .docx via LibreOffice…'):
-                try: docx = convert_doc_to_docx(raw)
-                except Exception as e: st.error(f'Conversion failed: {e}'); st.stop()
-                    
-            with st.spinner('Parsing TEC-004 architecture…'):
-                try: result = parse_docx(docx)
-                except ValueError as e: st.error(f'Parse failed: {e}'); st.stop()
-                    
-            for w in result['warnings']: st.warning(f'⚠ {w}')
-                
-            if not result['me'] and not result['aux']:
-                st.error('No components extracted. Verify this is a TEC-004 report.')
-                st.stop()
-                
-            result['_hash'] = fh
-            result['_filename'] = uploaded.name
-            st.session_state.data = result
-            
-            ac = result['me'] + result['aux']
-            od = sum(1 for c in ac if c['status'] == 'OVERDUE')
-            hp = sum(1 for c in ac if c['status'] == 'HIGH PRIORITY')
-            
-            st.markdown(
-                f'<div style="background:linear-gradient(135deg,#132018,#101720);'
-                f'border:1px solid #1e3828;border-radius:14px;padding:1rem 1.2rem;'
-                f'color:#a8c4b0;font-family:IBM Plex Sans,sans-serif;font-size:.85rem;font-weight:500;'
-                f'animation:popIn .5s cubic-bezier(.34,1.56,.64,1) both;box-shadow:0 8px 24px rgba(0,0,0,.2)">'
-                f'<span style="color:#7cb393;font-weight:700">Validated:</span> '
-                f'<span style="color:var(--ink);font-weight:700">{result["vessel_name"]}</span> — '
-                f'{len(ac)} components · {od} overdue · {hp} high priority</div>',
-                unsafe_allow_html=True)
+if run_btn:
+    if not input_text.strip():
+        st.error("Please upload a text file or paste report text before analyzing.")
+        st.stop()
 
+    raw_rows, header = parse_text_to_raw_rows(input_text)
+    hardened = harden_parser_output(raw_rows, input_text)
 
-# ── Empty state ──────────────────────────────────────────────────────────
-if st.session_state.data is None:
-    st.markdown(
-        '<div style="display:flex;align-items:center;justify-content:center;'
-        'height:40vh;flex-direction:column;gap:1.2rem;animation:fadeUp .5s ease">'
-        '<svg width="56" height="56" viewBox="0 0 64 64" fill="none" '
-        'xmlns="http://www.w3.org/2000/svg" style="opacity:.15">'
-        '<path d="M32 8v48M32 8L20 20M32 8l12 12M8 32h48" '
-        'stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'
-        '<circle cx="32" cy="48" r="8" stroke="var(--muted)" stroke-width="2.5"/></svg>'
-        '<div style="font-family:Inter,sans-serif;font-size:.85rem;font-weight:500;color:var(--soft);letter-spacing:.05em">'
-        'Awaiting TEC-004 Document Upload</div></div>',
-        unsafe_allow_html=True)
-    st.stop()
+    summary = hardened["summary"]
+    validated_df = build_df(hardened["validated_rows"])
+    review_df = build_df(hardened["review_rows"])
+    all_df = build_df(hardened["all_rows"])
+    conflicts_df = pd.DataFrame(hardened["conflicts"]) if hardened["conflicts"] else pd.DataFrame()
 
+    render_metrics(header, summary)
 
-# ══════════════════════════════════════════════════════════════════════════
-#  DATA READY
-# ══════════════════════════════════════════════════════════════════════════
-d = st.session_state.data
-me = d['me']; aux = d['aux']; oe = d['oe']; dg = d['dg']
+    if summary["section_warnings"]:
+        st.warning("Section warnings detected:")
+        for warning in summary["section_warnings"]:
+            st.write(f"- {warning}")
 
-ac = me + aux
-n_od = sum(1 for c in ac if c['status'] == 'OVERDUE')
-n_hp = sum(1 for c in ac if c['status'] == 'HIGH PRIORITY')
-mt = d.get('me_total_hrs')
-mo = d.get('me_this_month')
+    st.write("")
+    overview_tab, me_tab, aux_tab, oe_tab, dg_tab, audit_tab = st.tabs(
+        ["Overview", "Main Engine", "Auxiliary Engines", "Other Equipment", "D/G", "Audit"]
+    )
 
-cols = st.columns(8)
-for col, (val, lbl, acc, dly) in zip(cols, [
-    (d['vessel_name'],         'Vessel',         '#b89460', 0.00),
-    (d['report_date'] or '—',  'Report Date',    '#466b99', 0.05),
-    (f"{mt:,}" if mt else '—', 'M/E Total Hrs',  '#4f7a62', 0.10),
-    (f"{mo:,}" if mo else '—', 'M/E This Month', '#4f7a62', 0.15),
-    (len(me),                  'ME Records',     '#b89460', 0.20),
-    (len(aux),                 'AUX Records',    '#466b99', 0.25),
-    (n_od,                     'Overdue',        '#8c5353', 0.30),
-    (n_hp,                     'High Priority',  '#99734d', 0.35),
-]):
-    with col: st.markdown(_kpi(val, lbl, acc, dly), unsafe_allow_html=True)
+    with overview_tab:
+        st.subheader("Validated Output")
+        st.caption("Only validated rows are treated as trusted dashboard data.")
+        ov = validated_df.copy()
+        if not ov.empty:
+            show_table(
+                ov.sort_values("display_order"),
+                ["section", "component", "engine", "unit", "periodicity", "last_oh_iso", "hrs_since", "pct_used", "status", "confidence"]
+            )
+        else:
+            st.info("No validated rows found.")
 
+    with me_tab:
+        me_df = validated_df[validated_df["section"] == "ME"].copy() if not validated_df.empty else pd.DataFrame()
+        me_df = apply_filters(me_df, "Main Engine")
+        show_table(
+            me_df,
+            ["component", "engine", "unit", "periodicity", "last_oh_iso", "hrs_since", "pct_used", "status", "confidence"]
+        )
 
-# ══════════════════════════════════════════════════════════════════════════
-#  MATRIX 1 — MAIN ENGINE
-# ══════════════════════════════════════════════════════════════════════════
-me_od = sum(1 for c in me if c['status'] == 'OVERDUE')
-me_hp = sum(1 for c in me if c['status'] == 'HIGH PRIORITY')
-st.markdown(_section('Main Engine', f'{len(me)} component records', f'{me_od} OD · {me_hp} HP'), unsafe_allow_html=True)
+    with aux_tab:
+        aux_df = validated_df[validated_df["section"] == "AUX"].copy() if not validated_df.empty else pd.DataFrame()
+        aux_df = apply_filters(aux_df, "Auxiliary Engines")
+        show_table(
+            aux_df,
+            ["component", "engine", "unit", "periodicity", "last_oh_iso", "hrs_since", "pct_used", "status", "confidence"]
+        )
 
-f1, f2, f3 = st.columns([2, 2, 3])
-with f1: mc_sel = st.selectbox('Component', ['All'] + _get_unique_ordered(me, 'description'), key='mc')
-with f2: ms_sel = st.selectbox('Status', ['All', 'Overdue only', 'High Priority +', 'OK only'], key='ms')
-with f3: mr_sel = st.radio('Sort', ['Document Order', 'Component → Cylinder', 'Priority → % Used'], horizontal=True, key='mr')
+    with oe_tab:
+        oe_df = validated_df[validated_df["section"] == "OE"].copy() if not validated_df.empty else pd.DataFrame()
+        oe_df = apply_filters(oe_df, "Other Equipment")
+        show_table(
+            oe_df,
+            ["component", "engine", "periodicity", "last_oh_iso", "hrs_since", "status", "confidence"]
+        )
 
-v = me[:]
-if mc_sel != 'All':               v = [c for c in v if c['description'] == mc_sel]
-if ms_sel == 'Overdue only':      v = [c for c in v if c['status'] == 'OVERDUE']
-elif ms_sel == 'High Priority +': v = [c for c in v if c['status'] in ('OVERDUE', 'HIGH PRIORITY')]
-elif ms_sel == 'OK only':         v = [c for c in v if c['status'] == 'OK']
+    with dg_tab:
+        dg_df = validated_df[validated_df["section"] == "DG"].copy() if not validated_df.empty else pd.DataFrame()
+        if dg_df.empty:
+            st.info("No validated D/G rows.")
+        else:
+            dg_df = apply_filters(dg_df, "D/G Equipment")
+            show_table(
+                dg_df,
+                ["component", "engine", "unit", "periodicity", "last_oh_iso", "hrs_since", "pct_used", "status", "confidence"]
+            )
 
-if not v: st.markdown('<div style="color:var(--soft);padding:1rem;">No records match filter.</div>', unsafe_allow_html=True)
-else: st.markdown(_matrix_html(v, mode=mr_sel), unsafe_allow_html=True)
+    with audit_tab:
+        st.subheader("Audit / Review Needed")
+        st.caption("Anything uncertain is surfaced here instead of silently contaminating the trusted dashboard.")
 
+        a1, a2, a3 = st.columns(3)
+        a1.metric("Review Needed", summary["review_needed_rows"])
+        a2.metric("Conflicts", summary["conflict_count"])
+        a3.metric("Raw Rows", summary["total_raw_rows"])
 
-# ══════════════════════════════════════════════════════════════════════════
-#  MATRIX 2 — AUX ENGINES
-# ══════════════════════════════════════════════════════════════════════════
-ax_od = sum(1 for c in aux if c['status'] == 'OVERDUE')
-ax_hp = sum(1 for c in aux if c['status'] == 'HIGH PRIORITY')
-st.markdown(_section('Auxiliary Engines', f'{len(aux)} component records · AUX-1 · AUX-2 · AUX-3', f'{ax_od} OD · {ax_hp} HP', '#466b99'), unsafe_allow_html=True)
+        st.markdown("### Review Needed Rows")
+        if review_df.empty:
+            st.success("No review-needed rows.")
+        else:
+            show_table(
+                review_df.sort_values("display_order"),
+                [
+                    "raw_section", "section", "component_raw", "component", "engine_raw", "engine", "unit_raw", "unit",
+                    "periodicity_raw", "periodicity", "last_oh_raw", "last_oh_iso", "hrs_since_raw", "hrs_since",
+                    "status", "confidence", "issues"
+                ]
+            )
 
-g1, g2, g3, g4 = st.columns([1.3, 2, 2, 3])
-with g1: ae_sel = st.selectbox('Engine', ['All'] + _get_unique_ordered(aux, 'engine_label'), key='ae')
-with g2: ac_sel = st.selectbox('Component', ['All'] + _get_unique_ordered(aux, 'description'), key='ac')
-with g3: as_sel = st.selectbox('Status', ['All', 'Overdue only', 'High Priority +', 'OK only'], key='axs')
-with g4: ar_sel = st.radio('Sort', ['Document Order', 'Component → Cylinder', 'Priority → % Used'], horizontal=True, key='ar')
+        st.markdown("### Conflicts")
+        if conflicts_df.empty:
+            st.success("No dedupe conflicts detected.")
+        else:
+            st.dataframe(conflicts_df, use_container_width=True, hide_index=True)
 
-v = aux[:]
-if ae_sel != 'All':               v = [c for c in v if c['engine_label'] == ae_sel]
-if ac_sel != 'All':               v = [c for c in v if c['description'] == ac_sel]
-if as_sel == 'Overdue only':      v = [c for c in v if c['status'] == 'OVERDUE']
-elif as_sel == 'High Priority +': v = [c for c in v if c['status'] in ('OVERDUE', 'HIGH PRIORITY')]
-elif as_sel == 'OK only':         v = [c for c in v if c['status'] == 'OK']
+        st.markdown("### All Rows Export Preview")
+        if all_df.empty:
+            st.info("No rows parsed.")
+        else:
+            export_df = all_df.copy()
+            if "issues" in export_df.columns:
+                export_df["issues"] = export_df["issues"].apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
+            st.dataframe(export_df, use_container_width=True, hide_index=True)
 
-if not v: st.markdown('<div style="color:var(--soft);padding:1rem;">No records match filter.</div>', unsafe_allow_html=True)
-else: st.markdown(_matrix_html(v, mode=ar_sel), unsafe_allow_html=True)
+            csv_bytes = export_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Download CSV",
+                data=csv_bytes,
+                file_name="tec004_hardened_output.csv",
+                mime="text/csv",
+                use_container_width=False,
+            )
 
-
-# ══════════════════════════════════════════════════════════════════════════
-#  MATRIX 3 — OTHER EQUIPMENT
-# ══════════════════════════════════════════════════════════════════════════
-st.markdown(_section('Other Equipment', 'Turbocharger · Boiler Equipment · Compressors · Cooling', f'{len(oe)} records', '#4f7a62'), unsafe_allow_html=True)
-
-if not oe:
-    st.markdown('<div style="background:var(--bg3);border:1px solid var(--line);border-radius:14px;padding:1.5rem;'
-                'text-align:center;color:var(--muted);font-family:IBM Plex Sans,sans-serif;font-size:.85rem;font-weight:500">'
-                'No other equipment data found.</div>', unsafe_allow_html=True)
 else:
-    secs = _get_unique_ordered(oe, 'section')
-    os_sel = st.selectbox('Section', ['All'] + secs, key='oe_s')
-    ov = oe if os_sel == 'All' else [r for r in oe if r['section'] == os_sel]
-    st.markdown(_oe_html(ov, show_status=False), unsafe_allow_html=True)
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  MATRIX 4 — D/G EQUIPMENT
-# ══════════════════════════════════════════════════════════════════════════
-st.markdown(_section('D/G Equipment', 'Diesel Generator components · D/G 1 · D/G 2 · D/G 3', f'{len(dg)} records', '#8c5353'), unsafe_allow_html=True)
-
-if not dg:
-    st.markdown('<div style="background:var(--bg3);border:1px solid var(--line);border-radius:14px;padding:1.5rem;'
-                'text-align:center;color:var(--muted);font-family:IBM Plex Sans,sans-serif;font-size:.85rem;font-weight:500">'
-                'No D/G equipment data found.</div>', unsafe_allow_html=True)
-else:
-    dg_sel = st.selectbox('D/G Unit', ['All'] + _get_unique_ordered(dg, 'engine_label'), key='dge')
-    dv = dg if dg_sel == 'All' else [r for r in dg if r.get('engine_label') == dg_sel]
-    st.markdown(_oe_html(dv, show_status=True), unsafe_allow_html=True)
+    st.info("Upload a `.txt` extraction or paste the report text, then click **Analyze Report**.")
+    st.markdown("""
+### What this version fixes
+- Strict section normalization for **ME**, **AUX**, **OE**, and **DG**
+- Canonical component matching to reduce label drift
+- Date normalization to ISO internally
+- Dedupe with conflict detection
+- Confidence scoring and `review_needed` quarantine
+- Audit-first UI so bad rows never silently become trusted rows
+""")
