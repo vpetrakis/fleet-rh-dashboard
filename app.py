@@ -336,7 +336,7 @@ def _mk(cat, eng, unit, nm, per, dt, hrs) -> Dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  MAIN ENGINE PARSER
+#  MAIN ENGINE PARSER (CEILING LOCK IMPLEMENTED)
 # ══════════════════════════════════════════════════════════════════════════
 def _find_me_header(grid: List[List[str]]) -> Tuple[int, int]:
     rem_col = None
@@ -396,7 +396,7 @@ def _parse_me(grid: List[List[str]]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  AUX PARSER
+#  AUX PARSER (HARD-ANCHORED COORDINATES)
 # ══════════════════════════════════════════════════════════════════════════
 def _parse_aux(grid: List[List[str]]) -> List[Dict]:
     if not grid:
@@ -410,7 +410,7 @@ def _parse_aux(grid: List[List[str]]) -> List[Dict]:
     result = []
     r = dr + 1
     
-    # Hard-anchor the column groups to bypass Word cell merging issues
+    # HARD-ANCHORED COORDINATES: Bypassing merged cells completely.
     # AUX-1: Cols 3 to 8, AUX-2: Cols 9 to 14, AUX-3: Cols 15 to 20
     groups = [('AUX-1', 3, 9), ('AUX-2', 9, 15), ('AUX-3', 15, 21)]
 
@@ -503,9 +503,18 @@ def _parse_oe(grid: List[List[str]]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  D/G PARSER
+#  D/G PARSER (ISOLATED RULES & ALIGNED COLUMNS)
 # ══════════════════════════════════════════════════════════════════════════
 _DG_SKIP = {'DESCRIPTION', 'PERIODICTLY', 'PERIODICITY', 'D/G NO1', 'D/G NO2', 'D/G NO3', ''}
+
+def _is_dg_comp(n: str) -> bool:
+    """Isolated rulebook for D/G to allow 'Turbocharger' through."""
+    u = _norm_spaces(n)
+    if not u or len(u) < 2 or u in _DG_SKIP:
+        return False
+    if re.fullmatch(r'[\d./ ,\-\[\]()]+', u):
+        return False
+    return bool(re.search(r'[A-Z]', u))
 
 def _parse_dg(grid: List[List[str]]) -> List[Dict]:
     rows = []
@@ -519,7 +528,7 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
 
         # Left side of the table
         dl = _clean_name(gc1(0))
-        if _is_oe_comp(dl) and _norm_spaces(dl) not in _DG_SKIP and gc1(2) == '1':
+        if _is_dg_comp(dl) and gc1(2) == '1':
             per = _parse_number(gc1(1))
             for gi, gl in enumerate(['D/G 1', 'D/G 2', 'D/G 3']):
                 dt = _parse_date(gc1(3 + gi)); hrs = _parse_number(gc2(3 + gi))
@@ -528,9 +537,9 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
                                  'periodicity': per, 'last_date': _fmt_date(dt), 'run_hrs': hrs,
                                  'status': _status(hrs, per)})
 
-        # Right side of the table (Shifted indices to account for actual document structure)
+        # Right side of the table (Shifted indices to bypass the visual spacer in Word)
         dr = _clean_name(gc1(7))
-        if _is_oe_comp(dr) and _norm_spaces(dr) not in _DG_SKIP and gc1(9) == '1':
+        if _is_dg_comp(dr) and gc1(9) == '1':
             per = _parse_number(gc1(8))
             for gi, gl in enumerate(['D/G 1', 'D/G 2', 'D/G 3']):
                 dt = _parse_date(gc1(10 + gi)); hrs = _parse_number(gc2(10 + gi))
@@ -543,7 +552,7 @@ def _parse_dg(grid: List[List[str]]) -> List[Dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  TEXT FALLBACK
+#  TEXT FALLBACK (CEILING LOCK INCORPORATED)
 # ══════════════════════════════════════════════════════════════════════════
 def _lines_from_doc(doc) -> List[str]:
     lines = []
@@ -585,6 +594,7 @@ def _parse_me_text(lines: List[str]) -> List[Dict]:
             if _fl(data[i + 2] if i + 2 < len(data) else '') == '1':
                 dates = []
                 j = i + 3
+                # Read until we hit the '2' marker (hours row)
                 while j < len(data) and len(dates) < 10 and _fl(data[j]) != '2':
                     dates.append(_fl(data[j]))
                     j += 1
@@ -597,7 +607,7 @@ def _parse_me_text(lines: List[str]) -> List[Dict]:
                         hv.append(_fl(data[j]))
                         j += 1
                     
-                    # Dynamically use the number of extracted dates
+                    # CEILING LOCK: Dynamically count extracted dates to prevent 'ghost' cylinders
                     actual_cyls = len(dates) 
                     for k in range(actual_cyls):
                         d = _parse_date(dates[k]) if k < len(dates) else ''
@@ -732,7 +742,7 @@ def parse_docx(docx_bytes: bytes) -> Dict:
         rg = _raw_grid(table)
         dg = _dedup_grid(table)
         
-        # Flatten the entire table to ensure we don't miss blocks pushed further down
+        # Flatten the ENTIRE table to defeat pushed-down/split D/G blocks
         full_table_text = ' '.join(_fl(c) for row in rg for c in row).upper()
 
         if mt is None:
